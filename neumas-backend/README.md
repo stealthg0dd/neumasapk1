@@ -305,6 +305,49 @@ pip install pre-commit
 pre-commit install
 ```
 
+## Production (Railway)
+
+Neumas is deployed to Railway at `https://neumas-production.up.railway.app`.
+
+### Required environment variables
+
+Set these in Railway → your app service → **Variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `ENV` | `prod` |
+| `DEV_MODE` | `false` |
+| `BASE_URL` | `https://neumas-production.up.railway.app` |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `REDIS_URL` | Railway Redis internal URL (e.g. `redis://redis.railway.internal:6379/0`) |
+
+> `ENV=prod` is baked into the Docker image via the Dockerfile, but can be overridden here.
+
+### Running the smoke test against Railway
+
+```bash
+BASE_URL=https://neumas-production.up.railway.app python -m scripts.smoke_test
+```
+
+### Celery workers on Railway
+
+Deploy a second Railway service from the same repo with the start command:
+
+```bash
+celery -A app.core.celery_app worker \
+    --loglevel=info \
+    --queues=neumas.default,scans,neumas.predictions,neumas.agents
+```
+
+Set the same environment variables as the API service.
+
+---
+
 ## Deployment
 
 ### Production

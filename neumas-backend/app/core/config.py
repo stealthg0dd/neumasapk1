@@ -21,11 +21,17 @@ class Settings(BaseSettings):
     )
 
     # Environment
-    ENV: Literal["dev", "staging", "prod"] = Field(
-        default="dev",
+    ENV: Literal["local", "dev", "staging", "prod"] = Field(
+        default="local",
         description="Application environment",
     )
     DEBUG: bool = Field(default=False, description="Debug mode")
+
+    # Base URL — used by smoke_test and any outbound links (e.g. emails)
+    BASE_URL: str = Field(
+        default="http://localhost:8000",
+        description="Public base URL of this deployment (no trailing slash)",
+    )
     DEV_MODE: bool = Field(
         default=False,
         description=(
@@ -136,7 +142,7 @@ class Settings(BaseSettings):
 
     @property
     def is_development(self) -> bool:
-        return self.ENV == "dev"
+        return self.ENV in ("local", "dev")
 
 
 @lru_cache

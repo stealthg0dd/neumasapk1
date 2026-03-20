@@ -203,11 +203,9 @@ async def get_openapi_schema(request: Request):
 
 @app.get("/docs", include_in_schema=False)
 async def get_docs(request: Request):
-    """
-    Swagger UI docs.
-
-    In production, requires admin authentication.
-    """
+    """Swagger UI — disabled in production."""
+    if settings.is_production:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await verify_admin_for_docs(request)
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
@@ -217,11 +215,9 @@ async def get_docs(request: Request):
 
 @app.get("/redoc", include_in_schema=False)
 async def get_redoc(request: Request):
-    """
-    ReDoc documentation.
-
-    In production, requires admin authentication.
-    """
+    """ReDoc — disabled in production."""
+    if settings.is_production:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await verify_admin_for_docs(request)
     return get_redoc_html(
         openapi_url="/openapi.json",

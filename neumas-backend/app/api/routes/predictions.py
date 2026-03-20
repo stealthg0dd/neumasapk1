@@ -21,7 +21,7 @@ _URGENCY_ORDER = {"critical": 0, "urgent": 1, "soon": 2, "later": 3}
 
 
 class ForecastRequest(BaseModel):
-    property_id: UUID
+    property_id: UUID | None = None
     forecast_days: int = 7
 
 
@@ -48,7 +48,7 @@ async def forecast(
     2. agents.recompute_predictions_for_property
     Returns the task ID of the prediction task.
     """
-    property_id = str(body.property_id)
+    property_id = str(body.property_id or tenant.property_id)
 
     # Step 1 — recompute consumption patterns
     celery_app.send_task(

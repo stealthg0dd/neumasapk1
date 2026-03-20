@@ -11,10 +11,12 @@ Usage (from repo root):
     docker exec -it <app-container> python -m scripts.smoke_test
 
     # Override base URL:
-    API_URL=http://app:8000 python -m scripts.smoke_test
+    BASE_URL=https://neumas-production.up.railway.app python -m scripts.smoke_test
+    API_URL=http://app:8000 python -m scripts.smoke_test  # legacy alias
 
 Environment variables (all optional — falls back to .env):
-    API_URL            Base URL of the running API  (default: http://localhost:8000)
+    BASE_URL           Base URL of the running API  (default: http://localhost:8000)
+    API_URL            Alias for BASE_URL (BASE_URL takes precedence)
     SMOKE_EMAIL        Test account e-mail          (default: smoke-<ts>@example.com)
     SMOKE_PASSWORD     Test account password        (default: SmokeTest!999)
     SMOKE_SCAN_POLLS   Max polling iterations for scan completion  (default: 12)
@@ -42,7 +44,7 @@ if os.path.exists(_env_file):
     except ImportError:
         pass
 
-API_URL     = os.getenv("API_URL",     "http://localhost:8000").rstrip("/")
+API_URL     = (os.getenv("BASE_URL") or os.getenv("API_URL") or "http://localhost:8000").rstrip("/")
 _ts_suffix  = str(int(time.time()))[-6:]
 EMAIL       = os.getenv("SMOKE_EMAIL",    f"neumas-smoke-{_ts_suffix}@example.com")
 PASSWORD    = os.getenv("SMOKE_PASSWORD", "SmokeTest!999")
@@ -296,22 +298,18 @@ async def run(client) -> bool:
         {"property_id": property_id, "forecast_days": 7},
         headers=_auth_header(jwt),
     )
-    if code == 404:
-        _skip("POST /api/predictions/forecast", "endpoint not yet implemented")
-    else:
-        pred_ok = code in (200, 202)
-        _record("POST /api/predictions/forecast", pred_ok, f"http={code}")
-        if not pred_ok:
-            print(f"  Response: {body}")
+    pred_ok = code in (200, 202)
+    _record("POST /api/predictions/forecast", pred_ok, f"http={code} job_id={body.get('job_id', '—')[:8]}")
+    if not pred_ok:
+        print(f"  Response: {body}")
 
     code, body = await _get(
         client, f"/api/predictions/?property_id={property_id}",
         headers=_auth_header(jwt),
     )
-    if code == 404:
-        _skip("GET /api/predictions/", "endpoint not yet implemented")
-    else:
-        _record("GET /api/predictions/", code == 200, f"http={code}")
+    # 200 with 0 items is a valid PASS — predictions are generated async by Celery
+    count = len(body) if isinstance(body, list) else "?"
+    _record("GET /api/predictions/", code == 200, f"http={code} count={count}")
 
     # ------------------------------------------------------------------
     # 6. Scan upload — tiny 1×1 JPEG (DEV_MODE: skips real storage)

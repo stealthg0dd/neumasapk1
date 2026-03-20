@@ -74,6 +74,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     PYTHONUTF8=1 \
+    ENV=prod \
     PATH="/opt/venv/bin:$PATH" \
     # Gunicorn defaults
     GUNICORN_WORKERS=4 \

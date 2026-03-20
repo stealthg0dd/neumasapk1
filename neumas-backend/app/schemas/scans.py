@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, HttpUrl
 class ScanBase(BaseModel):
     """Base scan fields."""
 
-    scan_type: Literal["full", "partial", "spot_check"] = "full"
+    scan_type: Literal["full", "partial", "spot_check", "receipt", "barcode"] = "full"
 
 
 class ScanCreate(ScanBase):
@@ -28,7 +28,7 @@ class ScanUploadRequest(BaseModel):
 
     property_id: UUID
     image_count: int = Field(..., ge=1, le=10)
-    scan_type: Literal["full", "partial", "spot_check"] = "full"
+    scan_type: Literal["full", "partial", "spot_check", "receipt", "barcode"] = "full"
 
 
 class ScanUploadResponse(BaseModel):
@@ -172,7 +172,7 @@ class ScanStatusResponse(BaseModel):
     scan_id: UUID
     processed: bool
     status: str
-    created_at: datetime
+    created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None

@@ -126,10 +126,18 @@ def configure_logging() -> None:
 
     # Set levels for noisy libraries
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("gunicorn").setLevel(logging.INFO)
+
+    if settings.is_production:
+        # In prod, kill uvicorn's plain-text access log entirely.
+        # RequestLoggingMiddleware already emits structured JSON access events.
+        logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+        logging.getLogger("gunicorn.access").setLevel(logging.ERROR)
+    else:
+        # Dev: suppress uvicorn access log too — middleware output is cleaner.
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
