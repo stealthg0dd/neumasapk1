@@ -60,9 +60,12 @@ def get_cors_config() -> dict[str, Any]:
 
     Returns configuration dict for CORSMiddleware.
     """
+    origins = settings.cors_origins_list
+    # allow_credentials=True is incompatible with allow_origins=["*"]
+    allow_credentials = "*" not in origins
     return {
-        "allow_origins": settings.cors_origins_list,
-        "allow_credentials": True,
+        "allow_origins": origins,
+        "allow_credentials": allow_credentials,
         "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": [
             "Authorization",
@@ -77,7 +80,7 @@ def get_cors_config() -> dict[str, Any]:
             "X-RateLimit-Remaining",
             "X-RateLimit-Reset",
         ],
-        "max_age": 600,  # Cache preflight for 10 minutes
+        "max_age": 600,
     }
 
 

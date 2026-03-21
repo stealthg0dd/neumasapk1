@@ -91,11 +91,10 @@ async def list_predictions(
         repo = await get_predictions_repository(tenant)
         rows = await repo.get_by_property(tenant, prediction_type="stockout", limit=limit)
     except Exception as e:
+        # Return an empty list rather than a 500 so the frontend degrades
+        # gracefully instead of crashing on .filter() of undefined.
         logger.error("Failed to list predictions", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve predictions",
-        )
+        return []
 
     # Optional urgency filter (stored in stockout_risk_level column)
     if urgency:

@@ -51,17 +51,21 @@ class Settings(BaseSettings):
     WORKERS: int = Field(default=4, description="Number of Gunicorn workers")
 
     # CORS (comma-separated string in env, parsed to list)
+    # Use "*" to allow all origins (development only).
+    # In production set to your exact frontend URL, e.g.:
+    #   CORS_ORIGINS=https://neumas-web.up.railway.app,https://neumas.app
     CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://localhost:8080",
-        description="Allowed CORS origins (comma-separated)",
+        default="http://localhost:3000,http://localhost:8080,http://localhost:3001",
+        description="Allowed CORS origins (comma-separated). Use * for all.",
     )
 
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS into a list."""
         if not self.CORS_ORIGINS:
-            return []
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+            return ["*"]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        return origins
 
     # Supabase (optional - app will start in degraded mode without these)
     SUPABASE_URL: str = Field(

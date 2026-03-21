@@ -12,9 +12,43 @@ Production-hardened with:
 import sys
 import os
 
+
+def sanitize_env() -> None:
+    """
+    Replace Unicode smart quotes and curly apostrophes in every environment
+    variable value before any other code runs.
+
+    Railway (and similar PaaS platforms) sometimes inject smart-quote
+    characters into env-var values when users paste strings from word
+    processors or documentation sites.  CPython's ascii codec cannot
+    encode these characters, which causes UnicodeEncodeError deep inside
+    libraries that call str.encode('ascii') on env values (e.g. psycopg2
+    DSN parsing, httpx header injection, Celery broker URLs).
+
+    Must be called before any import that reads os.environ.
+    """
+    REPLACEMENTS = {
+        "\u201c": '"',   # left double quote  "
+        "\u201d": '"',   # right double quote "
+        "\u2018": "'",   # left single quote  '
+        "\u2019": "'",   # right single quote '
+        "\u2013": "-",   # en dash  -
+        "\u2014": "--",  # em dash  --
+        "\u00a0": " ",   # non-breaking space
+    }
+    for key, value in list(os.environ.items()):
+        sanitized = value
+        for bad, good in REPLACEMENTS.items():
+            if bad in sanitized:
+                sanitized = sanitized.replace(bad, good)
+        if sanitized != value:
+            os.environ[key] = sanitized
+
+
+sanitize_env()
+
 # Force UTF-8 for all I/O before any other imports.
-# Railway (and many Docker environments) default to ASCII, which causes
-# UnicodeEncodeError when Supabase API responses contain curly quotes etc.
+# Railway (and many Docker environments) default to ASCII.
 os.environ.setdefault("PYTHONUTF8", "1")
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
