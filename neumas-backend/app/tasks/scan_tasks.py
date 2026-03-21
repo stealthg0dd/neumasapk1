@@ -380,10 +380,10 @@ async def _upsert_inventory_item(
     Add a scanned item to the inventory.
 
     - If an item with the same name (case-insensitive) already exists:
-      increment its current_qty.
+      increment its quantity.
     - Otherwise create a new inventory_items row.
 
-    Columns written: property_id, name, current_qty, unit, status
+    Columns written: property_id, name, quantity, unit, status
     """
     item_name: str = (item.get("item_name") or "").strip()
     if not item_name:
@@ -395,7 +395,7 @@ async def _upsert_inventory_item(
     # Look for existing item by name (case-insensitive)
     existing_resp = await (
         supabase.table("inventory_items")
-        .select("id, current_qty")
+        .select("id, quantity")
         .eq("property_id", property_id)
         .ilike("name", item_name)
         .limit(1)
@@ -404,11 +404,11 @@ async def _upsert_inventory_item(
 
     if existing_resp.data:
         existing = existing_resp.data[0]
-        new_qty = float(existing.get("current_qty") or 0) + qty_to_add
+        new_qty = float(existing.get("quantity") or 0) + qty_to_add
 
         resp = await (
             supabase.table("inventory_items")
-            .update({"current_qty": str(new_qty)})
+            .update({"quantity": str(new_qty)})
             .eq("id", existing["id"])
             .execute()
         )
@@ -426,9 +426,9 @@ async def _upsert_inventory_item(
     insert_payload: dict[str, Any] = {
         "property_id": property_id,
         "name":        item_name,
-        "current_qty": str(qty_to_add),
+        "quantity":    str(qty_to_add),
         "unit":        unit,
-        "status":      "active",
+        "is_active":   True,
     }
 
     resp = await supabase.table("inventory_items").insert(insert_payload).execute()
