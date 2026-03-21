@@ -2,8 +2,8 @@
 Celery tasks for scan processing.
 
 Provides:
-- scans.process_scan    — full pipeline: vision → inventory → patterns → predictions
-- scans.reprocess_scan  — re-run the pipeline for an existing scan
+- scans.process_scan    -- full pipeline: vision -> inventory -> patterns -> predictions
+- scans.reprocess_scan  -- re-run the pipeline for an existing scan
 
 IMPORTANT: Service imports are done INSIDE async functions to avoid circular
 imports at module load time.
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
-# Category → DB-normalised name mapping (from VisionAgent output)
+# Category -> DB-normalised name mapping (from VisionAgent output)
 # =============================================================================
 CATEGORY_MAP: dict[str, str] = {
     "Dairy":     "dairy",
@@ -60,7 +60,7 @@ def process_scan(
 
     Pipeline:
     1. Mark scan as 'processing'
-    2. Call VisionAgent (Claude 3.5 Sonnet) → extract items
+    2. Call VisionAgent (Claude 3.5 Sonnet) -> extract items
     3. Save raw results + processed_results to scans table
     4. Upsert extracted items into inventory_items (add to existing qty)
     5. Recompute consumption patterns for the property
@@ -134,7 +134,7 @@ async def _process_scan_async(
         logger.error("Supabase admin client unavailable", scan_id=scan_id)
         return {"error": "Database not configured", "scan_id": scan_id}
 
-    # ── Idempotency check: skip if already completed ──────────────────────────
+    # -- Idempotency check: skip if already completed --------------------------
     existing_resp = await (
         supabase.table("scans")
         .select("status, items_detected, processing_time_ms")
@@ -144,7 +144,7 @@ async def _process_scan_async(
     )
     if existing_resp.data and existing_resp.data.get("status") == "completed":
         logger.info(
-            "Scan already completed — skipping pipeline",
+            "Scan already completed -- skipping pipeline",
             scan_id=scan_id,
             property_id=property_id,
         )
@@ -167,7 +167,7 @@ async def _process_scan_async(
 
     try:
         # =================================================================
-        # Step 1 — Mark scan as processing
+        # Step 1 -- Mark scan as processing
         # =================================================================
         await supabase.table("scans").update({
             "status": "processing",
@@ -178,7 +178,7 @@ async def _process_scan_async(
         logger.info("Scan marked as processing", scan_id=scan_id)
 
         # =================================================================
-        # Step 2 — Run VisionAgent
+        # Step 2 -- Run VisionAgent
         # =================================================================
         vision_agent = await get_vision_agent()
         vision_result = await vision_agent.analyze_receipt(
@@ -206,7 +206,7 @@ async def _process_scan_async(
         )
 
         # =================================================================
-        # Step 3 — Persist raw + processed results in scans table
+        # Step 3 -- Persist raw + processed results in scans table
         # =================================================================
         ms_after_vision = int((time.perf_counter() - wall_start) * 1000)
 
@@ -234,7 +234,7 @@ async def _process_scan_async(
         }).eq("id", scan_id).execute()
 
         # =================================================================
-        # Step 4 — Upsert items into inventory_items
+        # Step 4 -- Upsert items into inventory_items
         # =================================================================
         upserted: list[dict[str, Any]] = []
         for item in extracted_items:
@@ -267,7 +267,7 @@ async def _process_scan_async(
         )
 
         # =================================================================
-        # Step 5 — Recompute consumption patterns
+        # Step 5 -- Recompute consumption patterns
         # =================================================================
         try:
             pattern_result = await recompute_patterns_for_property(
@@ -289,7 +289,7 @@ async def _process_scan_async(
             result["errors"].append({"stage": "patterns", "error": str(exc)})
 
         # =================================================================
-        # Step 6 — Recompute stockout predictions
+        # Step 6 -- Recompute stockout predictions
         # =================================================================
         try:
             pred_result = await recompute_predictions_for_property(
@@ -311,7 +311,7 @@ async def _process_scan_async(
             result["errors"].append({"stage": "predictions", "error": str(exc)})
 
         # =================================================================
-        # Step 7 — Mark scan as completed
+        # Step 7 -- Mark scan as completed
         # =================================================================
         total_ms = int((time.perf_counter() - wall_start) * 1000)
 

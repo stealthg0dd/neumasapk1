@@ -50,14 +50,14 @@ async def forecast(
     """
     property_id = str(body.property_id or tenant.property_id)
 
-    # Step 1 — recompute consumption patterns
+    # Step 1 -- recompute consumption patterns
     celery_app.send_task(
         "agents.recompute_patterns_for_property",
         args=[property_id],
         queue="neumas.predictions",
     )
 
-    # Step 2 — recompute stockout predictions
+    # Step 2 -- recompute stockout predictions
     pred_task = celery_app.send_task(
         "agents.recompute_predictions_for_property",
         args=[property_id],
@@ -101,7 +101,7 @@ async def list_predictions(
     if urgency:
         rows = [r for r in rows if r.get("stockout_risk_level") == urgency]
 
-    # Sort: critical → urgent → soon → later, then by prediction_date asc
+    # Sort: critical -> urgent -> soon -> later, then by prediction_date asc
     rows.sort(key=lambda r: (
         _URGENCY_ORDER.get(r.get("stockout_risk_level", "later"), 99),
         r.get("prediction_date", ""),

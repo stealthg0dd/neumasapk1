@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     )
     DEBUG: bool = Field(default=False, description="Debug mode")
 
-    # Base URL — used by smoke_test and any outbound links (e.g. emails)
+    # Base URL -- used by smoke_test and any outbound links (e.g. emails)
     BASE_URL: str = Field(
         default="http://localhost:8000",
         description="Public base URL of this deployment (no trailing slash)",

@@ -2,16 +2,16 @@
 Scan service for handling scan uploads and status tracking.
 
 Storage behaviour:
-  DEV_MODE=True  → skips real Supabase upload; uses a 1×1 placeholder URL so
-                   the full pipeline (VisionAgent stub → inventory upsert →
-                   patterns → predictions) runs without any external deps.
-  DEV_MODE=False → uploads to the configured bucket and returns either a
+  DEV_MODE=True  -> skips real Supabase upload; uses a 1?1 placeholder URL so
+                   the full pipeline (VisionAgent stub -> inventory upsert ->
+                   patterns -> predictions) runs without any external deps.
+  DEV_MODE=False -> uploads to the configured bucket and returns either a
                    signed URL (STORAGE_PUBLIC_RECEIPTS=False, default) or a
                    public URL (STORAGE_PUBLIC_RECEIPTS=True).
 
 Configurable via env / .env:
   STORAGE_BUCKET_RECEIPTS      bucket name          (default: "scans")
-  STORAGE_PUBLIC_RECEIPTS      True → public URL    (default: False)
+  STORAGE_PUBLIC_RECEIPTS      True -> public URL    (default: False)
   STORAGE_SIGNED_URL_EXPIRY    seconds              (default: 3600)
 """
 
@@ -36,7 +36,7 @@ from app.schemas.scans import (
 
 logger = get_logger(__name__)
 
-# Placeholder used in DEV_MODE — a minimal 1×1 white JPEG data URL
+# Placeholder used in DEV_MODE -- a minimal 1?1 white JPEG data URL
 _DEV_PLACEHOLDER_URL = (
     "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/"
     "2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwg"
@@ -48,7 +48,7 @@ _DEV_PLACEHOLDER_URL = (
 
 
 def _dev_placeholder_url(scan_id: str) -> str:
-    """Return a stable fake URL for DEV_MODE — unique per scan so logs are traceable."""
+    """Return a stable fake URL for DEV_MODE -- unique per scan so logs are traceable."""
     return f"https://placeholder.neumas.dev/scans/{scan_id}.jpg"
 
 
@@ -217,7 +217,7 @@ class ScanService:
             ext = "jpg"
         storage_path = f"{org_id}/{property_id}/{scan_id}.{ext}"
 
-        # ── DEV_MODE: skip real upload ────────────────────────────────────────
+        # -- DEV_MODE: skip real upload ----------------------------------------
         if settings.DEV_MODE:
             placeholder = _dev_placeholder_url(str(scan_id))
             logger.info(
@@ -227,7 +227,7 @@ class ScanService:
             )
             return storage_path, placeholder
 
-        # ── Production upload ─────────────────────────────────────────────────
+        # -- Production upload -------------------------------------------------
         content = await file.read()
         content_type = file.content_type or "image/jpeg"
 
@@ -256,7 +256,7 @@ class ScanService:
             )
             raise
 
-        # ── Resolve image URL ─────────────────────────────────────────────────
+        # -- Resolve image URL -------------------------------------------------
         image_url = await self._get_image_url(bucket, storage_path)
         if not image_url:
             raise ValueError(
@@ -269,15 +269,15 @@ class ScanService:
         Return either a signed URL or a public URL for a stored object.
 
         Uses STORAGE_PUBLIC_RECEIPTS to decide:
-          True  → public URL (instant, no expiry, requires public bucket)
-          False → signed URL (time-limited, works with private bucket)
+          True  -> public URL (instant, no expiry, requires public bucket)
+          False -> signed URL (time-limited, works with private bucket)
         """
         client = await get_async_supabase_admin()
         if not client:
             return None
 
         if settings.STORAGE_PUBLIC_RECEIPTS:
-            # Synchronous helper — no network call needed
+            # Synchronous helper -- no network call needed
             try:
                 url = client.storage.from_(bucket).get_public_url(path)
                 return url if isinstance(url, str) else None

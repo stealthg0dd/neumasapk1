@@ -1,5 +1,5 @@
 """
-Predict Agent — deterministic stockout prediction from consumption patterns.
+Predict Agent -- deterministic stockout prediction from consumption patterns.
 
 Data sources (admin Supabase client, no TenantContext required):
   - consumption_patterns  (pattern_type = "daily", per item)
@@ -12,23 +12,23 @@ Pipeline per item
 2. days_remaining = current_quantity / avg_consumption_rate
 3. predicted_runout_date = today + ceil(days_remaining) days
 4. urgency_bucket from thresholds:
-     critical  ≤ 1 day
-     urgent    1 < days ≤ 3
-     soon      3 < days ≤ 7
+     critical  ? 1 day
+     urgent    1 < days ? 3
+     soon      3 < days ? 7
      later     > 7 days
 5. confidence_score:
-     - Start from pattern.confidence  (0.0–1.0).
+     - Start from pattern.confidence  (0.0-1.0).
      - Subtract 0.10 if inventory_items.updated_at is older than 7 days.
      - Clamp to [0.10, 1.0].
 6. Upsert one "stockout" prediction row per item.
 
-All logic is deterministic — no LLM calls.
+All logic is deterministic -- no LLM calls.
 
 Entry points
 ------------
-- recompute_predictions_for_property(property_id)  ← Celery + admin routes
-- PredictAgent.generate_demand_forecast(property_id) ← backward-compat
-- PredictAgent.predict_stockouts(property_id)        ← backward-compat
+- recompute_predictions_for_property(property_id)  <- Celery + admin routes
+- PredictAgent.generate_demand_forecast(property_id) <- backward-compat
+- PredictAgent.predict_stockouts(property_id)        <- backward-compat
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ CONFIDENCE_CAP       = 1.00    # ceiling
 _STALE_PENALTY       = 0.10    # subtract 0.10 if inventory older than threshold
 _STALE_THRESHOLD_DAYS = 7      # days before the stale penalty applies
 
-# Confidence interval: ±20 % of days_remaining
+# Confidence interval: ?20 % of days_remaining
 CI_VARIANCE = 0.20
 
 
@@ -108,7 +108,7 @@ def _compute_confidence(
         except (ValueError, TypeError):
             score -= _STALE_PENALTY   # treat unparseable date as stale
     else:
-        score -= _STALE_PENALTY       # no timestamp → assume stale
+        score -= _STALE_PENALTY       # no timestamp -> assume stale
 
     return round(max(MIN_CONFIDENCE, min(CONFIDENCE_CAP, score)), 4)
 
@@ -123,8 +123,8 @@ def _generate_reason(
     """
     Build a human-readable explanation for a prediction.
 
-    Pure Python — no LLM call.  An LLM enhancement could be layered on top
-    by replacing this function's output with a call to call_agent("PREDICT", …)
+    Pure Python -- no LLM call.  An LLM enhancement could be layered on top
+    by replacing this function's output with a call to call_agent("PREDICT", ...)
     when richer narrative is needed.
     """
     if urgency == URGENCY_CRITICAL:
@@ -167,7 +167,7 @@ async def _fetch_items_with_patterns(
             "quantity": ...,
             "unit": ...,
             "updated_at": ...,
-            "pattern": {...}  | None   ← consumption_patterns row or None
+            "pattern": {...}  | None   <- consumption_patterns row or None
         }
     """
     client = await get_async_supabase_admin()
@@ -287,7 +287,7 @@ async def recompute_predictions_for_property(
             "property_id":          "...",
             "items_evaluated":      N,
             "predictions_upserted": N,
-            "items_skipped":        N,   ← no pattern or zero consumption
+            "items_skipped":        N,   <- no pattern or zero consumption
             "critical_count":       N,
             "urgent_count":         N,
             "soon_count":           N,
@@ -334,7 +334,7 @@ async def recompute_predictions_for_property(
         current_qty = float(entry.get("quantity") or 0)
         pattern = entry.get("pattern")
 
-        # ── Skip: no pattern data ──────────────────────────────────────────
+        # -- Skip: no pattern data ------------------------------------------
         if pattern is None:
             logger.debug(
                 "No daily pattern for item; skipping prediction",
@@ -353,7 +353,7 @@ async def recompute_predictions_for_property(
             or 0
         )
 
-        # ── Skip: zero or negative consumption rate ────────────────────────
+        # -- Skip: zero or negative consumption rate ------------------------
         if avg_daily <= 0:
             logger.debug(
                 "Zero consumption rate for item; skipping prediction",
@@ -364,7 +364,7 @@ async def recompute_predictions_for_property(
             items_skipped += 1
             continue
 
-        # ── Core maths ─────────────────────────────────────────────────────
+        # -- Core maths -----------------------------------------------------
         days_remaining = current_qty / avg_daily
         days_ceil = math.ceil(days_remaining)
         predicted_runout_date = today + timedelta(days=max(1, days_ceil))
@@ -372,11 +372,11 @@ async def recompute_predictions_for_property(
         urgency = _urgency_bucket(days_remaining)
         bucket_counts[urgency] += 1
 
-        # Confidence interval (±20 % of days_remaining, floored at 0)
+        # Confidence interval (?20 % of days_remaining, floored at 0)
         ci_low = max(0.0, days_remaining * (1 - CI_VARIANCE))
         ci_high = days_remaining * (1 + CI_VARIANCE)
 
-        # Confidence: pattern score × inventory recency factor
+        # Confidence: pattern score ? inventory recency factor
         pattern_conf = float(pattern.get("confidence") or 0.5)
         confidence = _compute_confidence(
             pattern_conf,
@@ -403,7 +403,7 @@ async def recompute_predictions_for_property(
             "reason": reason,
         }
 
-        # ── Persist ────────────────────────────────────────────────────────
+        # -- Persist --------------------------------------------------------
         try:
             await _upsert_prediction(
                 property_id=property_id,
@@ -460,7 +460,7 @@ async def recompute_predictions_for_property(
 
 
 # =============================================================================
-# PredictAgent — backward-compatible wrapper consumed by existing Celery tasks
+# PredictAgent -- backward-compatible wrapper consumed by existing Celery tasks
 # =============================================================================
 
 class PredictAgent:
@@ -500,7 +500,7 @@ class PredictAgent:
             "summary": {
                 "total_items_forecasted": result["predictions_upserted"],
                 "critical_count": result["critical_count"],
-                "warning_count": result["urgent_count"],   # map urgent → warning
+                "warning_count": result["urgent_count"],   # map urgent -> warning
                 "normal_count": (
                     result["soon_count"] + result["later_count"]
                 ),

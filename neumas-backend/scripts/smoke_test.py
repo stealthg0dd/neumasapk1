@@ -14,7 +14,7 @@ Usage (from repo root):
     BASE_URL=https://neumas-production.up.railway.app python -m scripts.smoke_test
     API_URL=http://app:8000 python -m scripts.smoke_test  # legacy alias
 
-Environment variables (all optional — falls back to .env):
+Environment variables (all optional -- falls back to .env):
     BASE_URL           Base URL of the running API  (default: http://localhost:8000)
     API_URL            Alias for BASE_URL (BASE_URL takes precedence)
     SMOKE_EMAIL        Test account e-mail          (default: smoke-<ts>@example.com)
@@ -35,7 +35,7 @@ from typing import Any, Optional, Tuple
 # Config
 # ---------------------------------------------------------------------------
 
-# Load .env if present (best-effort — no hard dependency on python-dotenv)
+# Load .env if present (best-effort -- no hard dependency on python-dotenv)
 _env_file = os.path.join(os.path.dirname(__file__), "..", ".env")
 if os.path.exists(_env_file):
     try:
@@ -55,7 +55,7 @@ PROPERTY_NAME = f"Smoke Hotel {_ts_suffix}"
 SCAN_POLLS  = int(os.getenv("SMOKE_SCAN_POLLS", "12"))
 POLL_SLEEP  = float(os.getenv("SMOKE_POLL_SLEEP", "5"))
 
-# Minimal valid JPEG (1×1 white pixel) — used for scan upload
+# Minimal valid JPEG (1?1 white pixel) -- used for scan upload
 _TINY_JPEG = base64.b64decode(
     "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U"
     "HRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgN"
@@ -77,13 +77,13 @@ _results: list[dict[str, Any]] = []
 def _record(step: str, ok: bool, detail: str = "") -> None:
     status = "PASS" if ok else "FAIL"
     _results.append({"step": step, "status": status, "detail": detail})
-    icon = "✓" if ok else "✗"
-    print(f"  {icon} [{status}] {step}" + (f" — {detail}" if detail else ""))
+    icon = "?" if ok else "?"
+    print(f"  {icon} [{status}] {step}" + (f" -- {detail}" if detail else ""))
 
 
 def _skip(step: str, reason: str) -> None:
     _results.append({"step": step, "status": "SKIP", "detail": reason})
-    print(f"  - [SKIP] {step} — {reason}")
+    print(f"  - [SKIP] {step} -- {reason}")
 
 
 # ---------------------------------------------------------------------------
@@ -145,11 +145,11 @@ async def _poll(
         remaining = max_polls - attempt
         if remaining > 0:
             print(
-                f"    polling {label} ({attempt}/{max_polls}) … "
+                f"    polling {label} ({attempt}/{max_polls}) ... "
                 f"sleeping {sleep:.0f}s"
             )
             await asyncio.sleep(sleep)
-    return False, body  # noqa: F821 — body defined in loop (≥1 iteration)
+    return False, body  # noqa: F821 -- body defined in loop (?1 iteration)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ async def run(client) -> bool:
         return False
 
     # ------------------------------------------------------------------
-    # 1. Signup — creates org, admin user, and default property in one call
+    # 1. Signup -- creates org, admin user, and default property in one call
     # ------------------------------------------------------------------
     print("\n[1] Signup")
     code, body = await _post(client, "/api/auth/signup", {
@@ -192,14 +192,14 @@ async def run(client) -> bool:
         property_id = str(profile.get("property_id", ""))
     else:
         org_id = ""
-    _record("POST /api/auth/signup", ok, f"http={code} org_id={org_id[:8] or '—'}")
+    _record("POST /api/auth/signup", ok, f"http={code} org_id={org_id[:8] or '--'}")
     if not ok:
         print(f"  Response: {body}")
         return False
     print(f"  JWT: {jwt[:20]}... org_id: {org_id[:8]} property_id: {property_id[:8]}")
 
     # ------------------------------------------------------------------
-    # 2. Login — verify auth round-trip and refresh JWT
+    # 2. Login -- verify auth round-trip and refresh JWT
     # ------------------------------------------------------------------
     print("\n[2] Login")
     code, body = await _post(client, "/api/auth/login", {
@@ -215,16 +215,16 @@ async def run(client) -> bool:
             property_id = str(profile.get("property_id", ""))
     else:
         print(f"  Response: {body}")
-    _record("POST /api/auth/login", ok, f"http={code} org_id={org_id[:8] or '—'}")
+    _record("POST /api/auth/login", ok, f"http={code} org_id={org_id[:8] or '--'}")
 
     if not property_id:
-        print("  No property_id from signup/login — cannot continue property-scoped tests.")
+        print("  No property_id from signup/login -- cannot continue property-scoped tests.")
         return False
 
     # ------------------------------------------------------------------
-    # 3. Protected inventory list — sanity check (200, not 401/500)
+    # 3. Protected inventory list -- sanity check (200, not 401/500)
     # ------------------------------------------------------------------
-    print("\n[3] Inventory — list (auth check)")
+    print("\n[3] Inventory -- list (auth check)")
     code, body = await _get(
         client, f"/api/inventory/?property_id={property_id}",
         headers=_auth_header(jwt),
@@ -234,9 +234,9 @@ async def run(client) -> bool:
     _record("GET /api/inventory/", ok, f"http={code} items={len(items_list) if isinstance(items_list, list) else '?'}")
 
     # ------------------------------------------------------------------
-    # 4. Create inventory item — upsert "Milk 1L" with qty 5
+    # 4. Create inventory item -- upsert "Milk 1L" with qty 5
     # ------------------------------------------------------------------
-    print("\n[4] Inventory — create item")
+    print("\n[4] Inventory -- create item")
     # require_property() reads ?property_id= from the query string; also
     # include it in the body to satisfy InventoryItemCreate.property_id.
     code, body = await _post(
@@ -264,14 +264,14 @@ async def run(client) -> bool:
         )
         item_created = code in (200, 201) and ("id" in body or "item_id" in body)
     _record("inventory create (Milk 1L)", item_created,
-            f"http={code} id={body.get('id') or body.get('item_id', '—')}")
+            f"http={code} id={body.get('id') or body.get('item_id', '--')}")
     if not item_created:
         print(f"  Response: {body}")
 
     # ------------------------------------------------------------------
     # 4b. Verify "Milk 1L" appears in GET /api/inventory/
     # ------------------------------------------------------------------
-    print("\n[4b] Inventory — verify Milk 1L present")
+    print("\n[4b] Inventory -- verify Milk 1L present")
     code, body = await _get(
         client, f"/api/inventory/?property_id={property_id}",
         headers=_auth_header(jwt),
@@ -284,13 +284,13 @@ async def run(client) -> bool:
     ]
     milk_found = any("milk" in n for n in names_lower)
     _record(
-        "GET /api/inventory/ — Milk 1L present",
+        "GET /api/inventory/ -- Milk 1L present",
         milk_found or not item_created,   # skip assertion if create failed
         f"http={code} milk_found={milk_found} total={len(items_list)}",
     )
 
     # ------------------------------------------------------------------
-    # 5. Predictions — forecast + list
+    # 5. Predictions -- forecast + list
     # ------------------------------------------------------------------
     print("\n[5] Predictions")
     code, body = await _post(
@@ -299,7 +299,7 @@ async def run(client) -> bool:
         headers=_auth_header(jwt),
     )
     pred_ok = code in (200, 202)
-    _record("POST /api/predictions/forecast", pred_ok, f"http={code} job_id={body.get('job_id', '—')[:8]}")
+    _record("POST /api/predictions/forecast", pred_ok, f"http={code} job_id={body.get('job_id', '--')[:8]}")
     if not pred_ok:
         print(f"  Response: {body}")
 
@@ -307,14 +307,14 @@ async def run(client) -> bool:
         client, f"/api/predictions/?property_id={property_id}",
         headers=_auth_header(jwt),
     )
-    # 200 with 0 items is a valid PASS — predictions are generated async by Celery
+    # 200 with 0 items is a valid PASS -- predictions are generated async by Celery
     count = len(body) if isinstance(body, list) else "?"
     _record("GET /api/predictions/", code == 200, f"http={code} count={count}")
 
     # ------------------------------------------------------------------
-    # 6. Scan upload — tiny 1×1 JPEG (DEV_MODE: skips real storage)
+    # 6. Scan upload -- tiny 1?1 JPEG (DEV_MODE: skips real storage)
     # ------------------------------------------------------------------
-    print("\n[6] Scan — upload receipt image")
+    print("\n[6] Scan -- upload receipt image")
     files     = {"file": ("receipt.jpg", io.BytesIO(_TINY_JPEG), "image/jpeg")}
     data_form = {"scan_type": "receipt"}
     resp = await client.post(
@@ -331,7 +331,7 @@ async def run(client) -> bool:
     scan_id = scan_body.get("scan_id", "")
     _record(
         "POST /api/scan/upload", ok,
-        f"http={resp.status_code} scan_id={scan_id or '—'}",
+        f"http={resp.status_code} scan_id={scan_id or '--'}",
     )
     if not ok:
         print(f"  Response: {scan_body}")
@@ -339,7 +339,7 @@ async def run(client) -> bool:
     # ------------------------------------------------------------------
     # 7. Poll scan status until completed/failed or timeout
     # ------------------------------------------------------------------
-    print("\n[7] Scan — wait for completion")
+    print("\n[7] Scan -- wait for completion")
     if scan_id:
         def _scan_done(b: Any) -> bool:
             return b.get("status") in ("completed", "failed")
@@ -361,15 +361,15 @@ async def run(client) -> bool:
         elif completed and final_status == "failed":
             note += f" error={last.get('error_message', '?')[:60]}"
         else:
-            note += " (worker not running — status unchanged)"
-        _record(f"scan {scan_id[:8]}… status", poll_ok, note)
+            note += " (worker not running -- status unchanged)"
+        _record(f"scan {scan_id[:8]}... status", poll_ok, note)
     else:
         _skip("scan status poll", "no scan_id from upload step")
 
     # ------------------------------------------------------------------
-    # 8. Generate shopping list — triggers Celery task
+    # 8. Generate shopping list -- triggers Celery task
     # ------------------------------------------------------------------
-    print("\n[8] Shopping list — trigger generation")
+    print("\n[8] Shopping list -- trigger generation")
     code, body = await _post(
         client, f"/api/shopping-list/generate?property_id={property_id}",
         {"property_id": property_id},
@@ -379,15 +379,15 @@ async def run(client) -> bool:
     job_id = body.get("job_id") or body.get("task_id") or body.get("id", "")
     _record(
         "POST /api/shopping-list/generate", gen_ok,
-        f"http={code} job_id={str(job_id)[:8] or '—'}",
+        f"http={code} job_id={str(job_id)[:8] or '--'}",
     )
     if not gen_ok:
         print(f"  Response: {body}")
 
     # ------------------------------------------------------------------
-    # 9. Poll for shopping list — assert at least one list exists
+    # 9. Poll for shopping list -- assert at least one list exists
     # ------------------------------------------------------------------
-    print("\n[9] Shopping list — wait for list to appear")
+    print("\n[9] Shopping list -- wait for list to appear")
 
     def _list_exists(b: Any) -> bool:
         if isinstance(b, list):
@@ -403,7 +403,7 @@ async def run(client) -> bool:
         headers=_auth_header(jwt),
         done_fn=_list_exists,
         label="shopping list",
-        max_polls=6,        # shorter wait — list only exists if Celery ran
+        max_polls=6,        # shorter wait -- list only exists if Celery ran
         sleep=POLL_SLEEP,
     )
 
@@ -413,17 +413,17 @@ async def run(client) -> bool:
         else:
             total = len(last_sl.get("items") or last_sl.get("shopping_lists") or [])
         _record(
-            f"GET /api/shopping-list/{property_id[:8]}…",
+            f"GET /api/shopping-list/{property_id[:8]}...",
             True,
             f"lists={total}",
         )
     else:
         # A missing list is acceptable when Celery worker is not running in
-        # the smoke test environment — flag as informational, not a failure.
+        # the smoke test environment -- flag as informational, not a failure.
         _record(
-            f"GET /api/shopping-list/{property_id[:8]}…",
+            f"GET /api/shopping-list/{property_id[:8]}...",
             True,   # non-fatal: worker may not be running in smoke env
-            "no list yet — Celery worker may not be running",
+            "no list yet -- Celery worker may not be running",
         )
 
     return True
@@ -466,10 +466,10 @@ async def main() -> int:
         print("\nFailed steps:")
         for r in _results:
             if r["status"] == "FAIL":
-                print(f"  • {r['step']}: {r['detail']}")
+                print(f"  - {r['step']}: {r['detail']}")
         return 1
 
-    print("\nAll checks passed — API is healthy.")
+    print("\nAll checks passed -- API is healthy.")
     return 0
 
 

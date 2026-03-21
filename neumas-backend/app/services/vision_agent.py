@@ -350,7 +350,7 @@ class VisionAgent:
         try:
             # Remove currency symbols and commas
             if isinstance(price, str):
-                price = re.sub(r"[£$€,]", "", price.strip())
+                price = re.sub(r"[?$?,]", "", price.strip())
             return float(price)
         except (ValueError, TypeError):
             return None

@@ -136,7 +136,7 @@ def configure_logging() -> None:
         logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
         logging.getLogger("gunicorn.access").setLevel(logging.ERROR)
     else:
-        # Dev: suppress uvicorn access log too — middleware output is cleaner.
+        # Dev: suppress uvicorn access log too -- middleware output is cleaner.
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 

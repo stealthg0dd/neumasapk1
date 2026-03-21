@@ -66,7 +66,7 @@ def _handle_pgrst_error(err: Exception, context: str = "") -> None:
 
     if code == "PGRST204":
         logger.error(
-            "PostgREST schema cache miss (PGRST204) — column or relation not found. "
+            "PostgREST schema cache miss (PGRST204) -- column or relation not found. "
             "ACTION REQUIRED: open the Supabase SQL Editor and run: "
             "NOTIFY pgrst, 'reload schema';",
             context=context,
@@ -286,25 +286,25 @@ class AuthService:
         Raises:
             Exception: If signup fails at any step
         """
-        # ── Isolated Auth Client Pattern ─────────────────────────────────────
+        # -- Isolated Auth Client Pattern -------------------------------------
         # The _async_admin_client is a singleton initialised once at startup
         # with the service_role key.  Calling sign_in_with_password() on it
         # attaches a user-scoped JWT to the client's internal session, which
-        # then gets used for every subsequent .table() call — bypassing the
+        # then gets used for every subsequent .table() call -- bypassing the
         # service-role bypass and triggering recursive RLS policies.
         #
         # Rule: only the singleton admin_client (service_role) touches the DB.
         #       A transient sign_in_client (also service_role key, freshly
         #       constructed and immediately discarded) is used solely to obtain
         #       the session tokens.  It is never reused.
-        # ─────────────────────────────────────────────────────────────────────
+        # ---------------------------------------------------------------------
         admin_client = await get_async_supabase_admin()
         auth_id: UUID | None = None  # tracked for rollback
 
         try:
-            # ── Step 1: Create Auth user ──────────────────────────────────────
+            # -- Step 1: Create Auth user --------------------------------------
             # admin.create_user + email_confirm:True bypasses SMTP rate limits
-            # and immediately activates the account — no verification email sent.
+            # and immediately activates the account -- no verification email sent.
             logger.info("Step 1: Creating auth user", email=request.email)
             auth_user_response = await admin_client.auth.admin.create_user({
                 "email": request.email,
@@ -312,12 +312,12 @@ class AuthService:
                 "email_confirm": True,
             })
             if not auth_user_response.user:
-                raise ValueError("Failed to create auth user — no user returned")
+                raise ValueError("Failed to create auth user -- no user returned")
 
             auth_id = auth_user_response.user.id
             logger.info("Auth user created", auth_id=str(auth_id), email=request.email)
 
-            # ── Step 2: Obtain session via transient client ───────────────────
+            # -- Step 2: Obtain session via transient client -------------------
             # Create a throw-away AsyncClient with the service_role key.
             # sign_in_with_password mutates the client's internal session, so
             # we MUST NOT reuse it for any table() operations afterwards.
@@ -329,7 +329,7 @@ class AuthService:
                 "email": request.email,
                 "password": request.password,
             })
-            # sign_in_client is intentionally not stored — it is discarded here.
+            # sign_in_client is intentionally not stored -- it is discarded here.
             del sign_in_client
 
             session = login_response.session
@@ -338,11 +338,11 @@ class AuthService:
             refresh_token: str | None = session.refresh_token if session else None
             logger.info("Session obtained", has_token=bool(access_token))
 
-            # ── Step 3: Generate unique org slug ─────────────────────────────
+            # -- Step 3: Generate unique org slug -----------------------------
             org_slug = generate_slug(request.org_name)
             logger.info("Generated slug", slug=org_slug, org_name=request.org_name)
 
-            # ── Step 4: Insert organization (service_role, bypasses RLS) ─────
+            # -- Step 4: Insert organization (service_role, bypasses RLS) -----
             logger.info("Step 4: Creating organization", name=request.org_name, slug=org_slug)
             try:
                 org_response = await admin_client.table("organizations").insert({
@@ -359,7 +359,7 @@ class AuthService:
             org_id = UUID(org_response.data[0]["id"])
             logger.info("Organization created", org_id=str(org_id), slug=org_slug)
 
-            # ── Step 5: Insert property (service_role, bypasses RLS) ─────────
+            # -- Step 5: Insert property (service_role, bypasses RLS) ---------
             logger.info("Step 5: Creating property", name=request.property_name, org_id=str(org_id))
             try:
                 prop_response = await admin_client.table("properties").insert({
@@ -377,7 +377,7 @@ class AuthService:
             property_id = UUID(prop_response.data[0]["id"])
             logger.info("Property created", property_id=str(property_id))
 
-            # ── Step 6: Insert user record (service_role, bypasses RLS) ──────
+            # -- Step 6: Insert user record (service_role, bypasses RLS) ------
             # auth_id links this profile to the Supabase Auth identity.
             # org_id links to the organisation created above.
             logger.info("Step 6: Creating user record", auth_id=str(auth_id), org_id=str(org_id))
@@ -400,25 +400,25 @@ class AuthService:
             logger.info("User record created", user_id=str(user_id), email=request.email)
 
         except Exception:
-            # ── Rollback: remove the Supabase Auth user if it was created ─────
+            # -- Rollback: remove the Supabase Auth user if it was created -----
             # This keeps auth state consistent with the DB on partial failures.
             if auth_id is not None:
                 try:
                     await admin_client.auth.admin.delete_user(str(auth_id))
                     logger.warning(
-                        "Signup rolled back — auth user deleted",
+                        "Signup rolled back -- auth user deleted",
                         auth_id=str(auth_id),
                         email=request.email,
                     )
                 except Exception as rollback_err:
                     logger.error(
-                        "Rollback failed — auth user may be orphaned",
+                        "Rollback failed -- auth user may be orphaned",
                         auth_id=str(auth_id),
                         rollback_error=str(rollback_err),
                     )
             raise
 
-        # ── Build and return response ─────────────────────────────────────────
+        # -- Build and return response -----------------------------------------
         profile = ProfileResponse(
             user_id=user_id,
             email=request.email,

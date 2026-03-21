@@ -155,7 +155,7 @@ async def get_current_user(
     Process:
     1. Decode JWT locally (fast path).
        If that fails (wrong secret, alg mismatch), fall back to
-       Supabase auth.get_user() — handles real Supabase-issued tokens
+       Supabase auth.get_user() -- handles real Supabase-issued tokens
        even when SUPABASE_JWT_SECRET is not configured locally.
     2. Query users table joined with organizations.
     3. Return UserInfo with org context.
@@ -165,16 +165,16 @@ async def get_current_user(
         HTTPException 403: If user is inactive or not found
     """
     try:
-        # ── Fast path: local JWT decode ───────────────────────────────────────
+        # -- Fast path: local JWT decode ---------------------------------------
         auth_id: str | None = None
         try:
             payload = decode_jwt(token)
             auth_id = payload.get("sub")
         except TokenValidationError:
-            # ── Fallback: verify via Supabase API ─────────────────────────────
+            # -- Fallback: verify via Supabase API -----------------------------
             # Covers: wrong/missing SUPABASE_JWT_SECRET, alg mismatch, RS256
             # tokens issued by newer Supabase projects.
-            logger.debug("Local JWT decode failed — falling back to Supabase API")
+            logger.debug("Local JWT decode failed -- falling back to Supabase API")
             auth_client = await get_auth_client()
             if auth_client:
                 user_data_from_auth = await auth_client.get_user(token)
@@ -203,7 +203,7 @@ async def get_current_user(
                 detail="Database unavailable",
             )
         
-        # Flat select("*") — avoids PostgREST FK join syntax and unknown columns.
+        # Flat select("*") -- avoids PostgREST FK join syntax and unknown columns.
         # auth_service.login uses the same pattern successfully.
         response = await (
             client.table("users")

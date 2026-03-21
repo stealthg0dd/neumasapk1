@@ -30,7 +30,7 @@ def generate_shopping_list(
     """
     Generate a shopping list for a property.
 
-    Delegates to the full agent pipeline (predictions → shopping → budget).
+    Delegates to the full agent pipeline (predictions -> shopping -> budget).
     preferred_store is stored in task metadata but not currently used by the
     agent pipeline; it will be wired when store-specific pricing is added.
     """

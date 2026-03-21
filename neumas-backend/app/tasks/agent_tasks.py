@@ -483,7 +483,7 @@ def recompute_patterns_for_property_task(
     Recompute consumption patterns for a property.
 
     Delegates to recompute_patterns_for_property() from pattern_agent.
-    Idempotent — safe to call multiple times; upserts existing rows.
+    Idempotent -- safe to call multiple times; upserts existing rows.
 
     Args:
         property_id: UUID of the property
@@ -547,7 +547,7 @@ def recompute_predictions_for_property_task(
     Recompute stockout predictions for a property.
 
     Delegates to recompute_predictions_for_property() from predict_agent.
-    Idempotent — safe to call multiple times; upserts existing rows.
+    Idempotent -- safe to call multiple times; upserts existing rows.
 
     Args:
         property_id: UUID of the property

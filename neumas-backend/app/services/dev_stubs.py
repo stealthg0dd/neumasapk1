@@ -100,7 +100,7 @@ def stub_pattern(task_payload: dict[str, Any]) -> dict[str, Any]:
             }
         ],
         "insights": [
-            "Consumption peaks on Fridays — likely weekend prep.",
+            "Consumption peaks on Fridays -- likely weekend prep.",
             "Weekend usage drops ~35% vs weekday average.",
         ],
     }
@@ -189,7 +189,7 @@ def stub_budget(task_payload: dict[str, Any]) -> dict[str, Any]:
         "optimizations": [
             {
                 "original_item": "Full-Cream Milk 1L",
-                "suggestion": "Switch to house-brand 2L cartons — saves ~20%",
+                "suggestion": "Switch to house-brand 2L cartons -- saves ~20%",
                 "savings_estimate": 6.00,
                 "reason": "Generic brand available at same supplier",
             },
