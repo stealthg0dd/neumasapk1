@@ -60,6 +60,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.responses import JSONResponse
 
@@ -88,10 +89,9 @@ except ImportError as e:
 
 # Safe import for security module
 try:
-    from app.core.security import configure_cors, is_admin
+    from app.core.security import is_admin
 except ImportError as e:
     logger.warning(f"Failed to import security module: {e}")
-    configure_cors = None
     is_admin = lambda x: False
 
 
@@ -164,19 +164,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS from settings (if security module is available)
-if configure_cors:
-    configure_cors(app)
-else:
-    # Fallback: add basic CORS middleware
-    from fastapi.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Configure CORS — applied first so it covers every route including /api/auth/*
+# Hardcoded Vercel origins are always allowed regardless of env var state
+_ALWAYS_ALLOWED = [
+    "https://neumasfinal.vercel.app",
+    "https://neumasfinal-stealthg0dd-varuns-projects-6fad10b9.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8080",
+]
+_env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+# Merge env origins with hardcoded list, deduplicating, excluding bare wildcard
+_cors_origins = list({o for o in (_ALWAYS_ALLOWED + _env_origins) if o != "*"})
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Add request logging middleware (generates request_id, logs req/res)
 if RequestLoggingMiddleware:
