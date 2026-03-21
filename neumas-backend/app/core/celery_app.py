@@ -25,6 +25,14 @@ celery_app = Celery(
     backend=settings.celery_backend,
 )
 
+# Force synchronous execution (no Redis needed for MVP)
+import os
+ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+if ALWAYS_EAGER:
+    print("⚠️  CELERY RUNNING IN EAGER MODE (NO REDIS NEEDED)")
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+
 # Define exchanges
 neumas_exchange = Exchange("neumas", type="direct")
 
