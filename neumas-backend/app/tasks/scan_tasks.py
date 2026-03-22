@@ -113,6 +113,7 @@ async def _process_scan_async(
     user_id: str,
     image_url: str,
     scan_type: str,
+    org_id: str = "",
 ) -> dict[str, Any]:
     """
     Async implementation of the full scan pipeline.
@@ -133,6 +134,20 @@ async def _process_scan_async(
     if not supabase:
         logger.error("Supabase admin client unavailable", scan_id=scan_id)
         return {"error": "Database not configured", "scan_id": scan_id}
+
+    # -- Resolve org_id if not provided (Celery path doesn't pass it) ----------
+    if not org_id:
+        try:
+            prop_resp = await (
+                supabase.table("properties")
+                .select("org_id")
+                .eq("id", property_id)
+                .single()
+                .execute()
+            )
+            org_id = (prop_resp.data or {}).get("org_id", "")
+        except Exception as exc:
+            logger.warning("Could not resolve org_id from properties", property_id=property_id, error=str(exc))
 
     # -- Idempotency check: skip if already completed --------------------------
     existing_resp = await (
@@ -241,6 +256,7 @@ async def _process_scan_async(
             try:
                 inv_item = await _upsert_inventory_item(
                     supabase=supabase,
+                    org_id=org_id,
                     property_id=property_id,
                     item=item,
                 )
@@ -373,6 +389,7 @@ async def _mark_failed(supabase: Any, scan_id: str, error_msg: str) -> None:
 
 async def _upsert_inventory_item(
     supabase: Any,
+    org_id: str,
     property_id: str,
     item: dict[str, Any],
 ) -> dict[str, Any] | None:
@@ -424,6 +441,7 @@ async def _upsert_inventory_item(
 
     # Create new item
     insert_payload: dict[str, Any] = {
+        "org_id":      org_id,
         "property_id": property_id,
         "name":        item_name,
         "quantity":    str(qty_to_add),

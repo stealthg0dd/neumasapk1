@@ -128,6 +128,7 @@ class ScanService:
             _process_scan_async(
                 task=None,
                 scan_id=str(scan_id),
+                org_id=str(tenant.org_id),
                 property_id=str(tenant.property_id),
                 user_id=str(tenant.user_id),
                 image_url=image_url,
