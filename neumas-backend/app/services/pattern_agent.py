@@ -265,6 +265,7 @@ async def _upsert_pattern(
     confidence: float,
     sample_size: int,
     org_id: str = "",
+    property_id: str = "",
 ) -> None:
     """
     Insert or update one consumption_patterns row.
@@ -283,6 +284,8 @@ async def _upsert_pattern(
     }
     if org_id:
         payload["org_id"] = org_id
+    if property_id:
+        payload["property_id"] = property_id
 
     existing = await (
         client.table("consumption_patterns")
@@ -484,6 +487,7 @@ async def recompute_patterns_for_property(
                 confidence=confidence,
                 sample_size=n_purchases,
                 org_id=item_org_id,
+                property_id=str(property_id),
             )
             patterns_upserted += 1
         except Exception as exc:
@@ -506,6 +510,7 @@ async def recompute_patterns_for_property(
                     confidence=min(confidence, 0.70),
                     sample_size=n_purchases,
                     org_id=item_org_id,
+                    property_id=str(property_id),
                 )
                 patterns_upserted += 1
             except Exception as exc:
