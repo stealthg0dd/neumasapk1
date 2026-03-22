@@ -250,7 +250,7 @@ async def _fetch_inventory_items(
     client = await get_async_supabase_admin()
     response = await (
         client.table("inventory_items")
-        .select("id, name, unit, quantity")
+        .select("id, org_id, name, unit, quantity")
         .eq("property_id", str(property_id))
         .eq("is_active", True)
         .execute()
@@ -264,6 +264,7 @@ async def _upsert_pattern(
     pattern_data: dict[str, Any],
     confidence: float,
     sample_size: int,
+    org_id: str = "",
 ) -> None:
     """
     Insert or update one consumption_patterns row.
@@ -280,6 +281,8 @@ async def _upsert_pattern(
         "confidence": str(confidence),
         "sample_size": sample_size,
     }
+    if org_id:
+        payload["org_id"] = org_id
 
     existing = await (
         client.table("consumption_patterns")
@@ -426,6 +429,7 @@ async def recompute_patterns_for_property(
             continue
 
         item_id = UUID(matched["id"])
+        item_org_id: str = matched.get("org_id") or ""
         display_name: str = matched.get("name", raw_name)
 
         # Sort chronologically
@@ -479,6 +483,7 @@ async def recompute_patterns_for_property(
                 pattern_data=daily_pattern_data,
                 confidence=confidence,
                 sample_size=n_purchases,
+                org_id=item_org_id,
             )
             patterns_upserted += 1
         except Exception as exc:
@@ -500,6 +505,7 @@ async def recompute_patterns_for_property(
                     # Weekly patterns are less certain than daily ones
                     confidence=min(confidence, 0.70),
                     sample_size=n_purchases,
+                    org_id=item_org_id,
                 )
                 patterns_upserted += 1
             except Exception as exc:
