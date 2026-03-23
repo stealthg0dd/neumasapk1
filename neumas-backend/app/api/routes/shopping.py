@@ -5,7 +5,7 @@ Shopping list routes.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import TenantContext, get_tenant_context, require_property
 from app.core.logging import get_logger
@@ -36,7 +36,6 @@ shopping_service = ShoppingService()
 )
 async def list_shopping_lists(
     tenant: Annotated[TenantContext, Depends(get_tenant_context)],
-    property_id: Annotated[UUID | None, Query(description="Property ID (defaults to tenant property)")] = None,
 ) -> list[ActiveShoppingListResponse]:
     """
     Returns the active shopping list for a property wrapped in a list so the
@@ -44,8 +43,7 @@ async def list_shopping_lists(
     exists rather than a 404 so the dashboard degrades gracefully.
     """
     try:
-        pid = property_id or tenant.property_id
-        result = await shopping_service.get_active_list(pid, tenant)
+        result = await shopping_service.get_active_list(tenant.property_id, tenant)
         return [result] if result is not None else []
     except Exception as e:
         logger.error("Failed to list shopping lists", error=str(e))

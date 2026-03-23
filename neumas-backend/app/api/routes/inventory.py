@@ -37,7 +37,7 @@ async def list_items(
     category_id: Annotated[UUID | None, Query(description="Filter by category")] = None,
     status_filter: Annotated[str | None, Query(alias="status", description="Filter by stock status")] = None,
     search: Annotated[str | None, Query(description="Search by name or SKU")] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[InventoryItemSummary]:
     """
