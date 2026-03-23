@@ -276,13 +276,20 @@ async def _upsert_pattern(
     """
     client = await get_async_supabase_admin()
 
+    _period_start = period_start or datetime.now(UTC)
+    _period_end = _period_start + {
+        "daily":  timedelta(days=1),
+        "weekly": timedelta(days=7),
+    }.get(pattern_type, timedelta(days=30))
+
     payload: dict[str, Any] = {
         "item_id": str(item_id),
         "pattern_type": pattern_type,
         "pattern_data": pattern_data,
         "confidence": str(confidence),
         "sample_size": sample_size,
-        "period_start": (period_start or datetime.now(UTC)).isoformat(),
+        "period_start": _period_start.isoformat(),
+        "period_end": _period_end.isoformat(),
     }
     if org_id:
         payload["org_id"] = org_id
