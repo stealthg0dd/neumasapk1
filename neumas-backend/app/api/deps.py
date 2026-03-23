@@ -246,31 +246,6 @@ async def get_current_user(
             user_data.get("default_property_id")
             or user_data.get("default_property")
         )
-
-        # Fallback: query tenants table when users.default_property_id is NULL.
-        # The JWT sub claim (auth_id) is the user_id key in the tenants table.
-        if not raw_default_prop:
-            try:
-                tenants_resp = await (
-                    client.table("tenants")
-                    .select("property_id")
-                    .eq("user_id", auth_id)
-                    .limit(1)
-                    .execute()
-                )
-                if tenants_resp.data:
-                    raw_default_prop = tenants_resp.data[0].get("property_id")
-                    logger.debug(
-                        "Resolved property_id from tenants table",
-                        auth_id=auth_id,
-                        property_id=raw_default_prop,
-                    )
-            except Exception as tenant_err:
-                logger.debug(
-                    "tenants table lookup failed (table may not exist)",
-                    error=str(tenant_err),
-                )
-
         return UserInfo(
             id=UUID(user_data["id"]),
             auth_id=UUID(user_data["auth_id"]),
