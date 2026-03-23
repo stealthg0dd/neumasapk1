@@ -326,20 +326,19 @@ def _normalize_role(db_role: str) -> Literal["resident", "admin", "staff"]:
 async def get_tenant_context(
     token: Annotated[str, Depends(get_token)],
     user: Annotated[UserInfo, Depends(get_current_user)],
-    property_context_id: Annotated[UUID | None, Query(alias="property_id", description="Property context")] = None,
 ) -> TenantContext:
     """
     Get tenant context for the current request.
 
-    The optional ?property_id= query parameter sets the active property.
-    Falls back to the user's default_property_id if not supplied.
+    The property_id is automatically resolved from the database:
+    1. users.default_property_id column
+    2. tenants.property_id table (fallback, resolved in get_current_user)
 
-    NOTE: The internal parameter is named property_context_id (not property_id)
-    to avoid FastAPI's path-parameter name clash on routes like /{property_id}.
-    The query-string key remains ?property_id= via the alias.
+    No ?property_id= query parameter is accepted — the backend resolves
+    it entirely from the authenticated user's database record.
     """
-    # Determine effective property_id
-    effective_property_id = property_context_id or user.default_property_id
+    # Use property_id from user's database record (resolved in get_current_user)
+    effective_property_id = user.default_property_id
 
     # If property_id provided, validate access using the admin client.
     # Security is maintained by explicitly filtering on org_id so a user
