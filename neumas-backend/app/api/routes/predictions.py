@@ -50,19 +50,28 @@ async def forecast(
     """
     property_id = str(body.property_id or tenant.property_id)
 
-    # Step 1 -- recompute consumption patterns
-    celery_app.send_task(
-        "agents.recompute_patterns_for_property",
-        args=[property_id],
-        queue="neumas.predictions",
-    )
+    try:
+        # Step 1 -- recompute consumption patterns
+        celery_app.send_task(
+            "agents.recompute_patterns_for_property",
+            args=[property_id],
+            queue="neumas.predictions",
+        )
 
-    # Step 2 -- recompute stockout predictions
-    pred_task = celery_app.send_task(
-        "agents.recompute_predictions_for_property",
-        args=[property_id],
-        queue="neumas.predictions",
-    )
+        # Step 2 -- recompute stockout predictions
+        pred_task = celery_app.send_task(
+            "agents.recompute_predictions_for_property",
+            args=[property_id],
+            queue="neumas.predictions",
+        )
+    except Exception as e:
+        err_str = str(e).lower()
+        is_redis_down = "redis" in err_str or "retry limit" in err_str or "connection" in err_str
+        logger.error("Failed to enqueue forecast", property_id=property_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE if is_redis_down else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Background worker is temporarily unavailable. Please try again in a moment." if is_redis_down else "Failed to queue forecast",
+        )
 
     logger.info(
         "Forecast queued",

@@ -174,12 +174,32 @@ class ScanService:
         # Determine processed flag based on status
         processed = scan.get("status") == "completed"
 
+        # Extract items from processed_results when scan is complete.
+        # VisionAgent stores items with key "item_name" — normalise to "name"
+        # so the frontend doesn't need to know about the internal field name.
+        extracted_items: list[dict] | None = None
+        if processed:
+            processed_results = scan.get("processed_results") or {}
+            raw_items = processed_results.get("items") or []
+            extracted_items = [
+                {
+                    "name": (it.get("item_name") or it.get("name") or "").strip(),
+                    "quantity": it.get("quantity", 1),
+                    "unit": it.get("unit", "unit"),
+                    "confidence": float(it.get("confidence") or 0.8),
+                }
+                for it in raw_items
+                if (it.get("item_name") or it.get("name") or "").strip()
+            ]
+
         return ScanStatusResponse(
             scan_id=scan_id,
             processed=processed,
             status=scan.get("status", "unknown"),
             created_at=scan.get("created_at"),
             error_message=scan.get("error_message"),
+            items_detected=scan.get("items_detected"),
+            extracted_items=extracted_items,
         )
 
     async def _upload_to_storage(

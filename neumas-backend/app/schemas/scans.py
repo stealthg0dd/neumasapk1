@@ -177,6 +177,8 @@ class ScanStatusResponse(BaseModel):
     completed_at: datetime | None = None
     error_message: str | None = None
     items_detected: int | None = None
+    # Extracted items from processed_results (present when status == "completed")
+    extracted_items: list[dict[str, Any]] | None = None
 
 
 # Forward references
