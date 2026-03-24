@@ -121,3 +121,13 @@ CMD gunicorn app.main:app \
     --error-logfile - \
     --capture-output \
     --enable-stdio-inheritance
+
+# -----------------------------------------------------------------------------
+# Stage 5: Celery Worker (for Railway worker service)
+# -----------------------------------------------------------------------------
+FROM production AS worker
+
+CMD celery -A app.core.celery_app worker \
+    --loglevel=info \
+    --queues=neumas_default,scans,agents,neumas.predictions,neumas.shopping \
+    --concurrency=${CELERY_CONCURRENCY:-2}
