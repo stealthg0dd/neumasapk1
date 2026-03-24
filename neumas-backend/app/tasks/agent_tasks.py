@@ -591,3 +591,70 @@ async def _recompute_predictions_async(task: Any, property_id: str) -> dict[str,
     )
 
     return result
+
+
+# =============================================================================
+# Task: agents.refresh_all_predictions
+# =============================================================================
+
+
+@neumas_task(
+    name="agents.refresh_all_predictions",
+    bind=True,
+    queue="agents",
+    max_retries=1,
+)
+def refresh_all_predictions(self) -> dict[str, Any]:
+    """
+    Daily beat task: refresh predictions for every active property.
+
+    Fetches all active properties via the admin client (no tenant context
+    needed) and fans out one `agents.run_predictions` task per property.
+
+    Returns a summary with the number of properties enqueued.
+    """
+    logger.info("refresh_all_predictions: starting daily refresh")
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(_refresh_all_predictions_async())
+
+
+async def _refresh_all_predictions_async() -> dict[str, Any]:
+    """Fetch all active properties and enqueue per-property prediction tasks."""
+    from app.db.repositories.properties import get_properties_repository
+
+    repo = await get_properties_repository()  # admin client, no tenant
+    properties = await repo.get_all_active()
+
+    enqueued = 0
+    failed = 0
+    for prop in properties:
+        try:
+            celery_app.send_task(
+                "agents.run_predictions",
+                args=[str(prop["id"])],
+                queue="agents",
+            )
+            enqueued += 1
+        except Exception as exc:
+            logger.warning(
+                "refresh_all_predictions: failed to enqueue property",
+                property_id=str(prop.get("id")),
+                error=str(exc),
+            )
+            failed += 1
+
+    logger.info(
+        "refresh_all_predictions: fan-out complete",
+        enqueued=enqueued,
+        failed=failed,
+        total=len(properties),
+    )
+    return {"enqueued": enqueued, "failed": failed, "total": len(properties)}

@@ -279,6 +279,27 @@ class PropertiesRepository:
         return prop is not None
 
 
+    async def get_all_active(
+        self,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """
+        Get all active properties across all organizations.
+
+        Admin-only method for background tasks (e.g., daily prediction refresh).
+        Uses the admin Supabase client — bypasses RLS intentionally.
+        """
+        response = await (
+            self.client.table(self.table)
+            .select("id, org_id, name")
+            .eq("is_active", True)
+            .order("org_id")
+            .range(0, limit - 1)
+            .execute()
+        )
+        return response.data or []
+
+
 async def get_properties_repository(
     tenant: "TenantContext | None" = None,
 ) -> PropertiesRepository:
