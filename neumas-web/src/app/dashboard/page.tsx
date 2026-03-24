@@ -110,56 +110,69 @@ export default function DashboardPage() {
     let cancelled = false;
 
     async function fetchAll() {
-      // ── Predictions ─────────────────────────────────────────────────────────
-      setLoadingPred(true);
-      try {
-        const data = await listPredictions({ limit: 20 });
-        if (!cancelled) setPredictions(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancelled) setPredictions([]);
-      } finally {
-        if (!cancelled) setLoadingPred(false);
-      }
+      // Fire all three in parallel — they all use the same token, so if the
+      // token is invalid ALL get 401 simultaneously and the redirect guard in
+      // client.ts fires only once.  Sequential fetching would cascade: the first
+      // 401 clears localStorage, then the next request fires with no token.
+      await Promise.all([
 
-      // ── Inventory ────────────────────────────────────────────────────────────
-      setLoadingInv(true);
-      try {
-        const res = await listInventory({ limit: 10 });
-        if (!cancelled) {
-          const items = Array.isArray(res?.items) ? res.items : [];
-          setInventoryItems(items);
-          setInventoryTotal(res?.total ?? 0);
-          const val = items.reduce(
-            (s, i) => s + (i.cost_per_unit ?? 0) * i.quantity, 0
-          );
-          setInventoryValue(Math.round(val));
-        }
-      } catch {
-        if (!cancelled) { setInventoryItems([]); setInventoryTotal(0); setInventoryValue(0); }
-      } finally {
-        if (!cancelled) setLoadingInv(false);
-      }
-
-      // ── Shopping list ─────────────────────────────────────────────────────────
-      setLoadingShop(true);
-      try {
-        const lists = await listShoppingLists();
-        const safeList = Array.isArray(lists) ? lists : [];
-        const activeList = safeList.find((l) => l.status === "draft" || l.status === "approved");
-        if (activeList && !cancelled) {
-          const detail = await getShoppingList(activeList.id);
-          if (!cancelled) {
-            const rawItems = Array.isArray(detail?.items) ? detail.items : [];
-            setShoppingItems(rawItems.map(normalizeShoppingItem));
+        // ── Predictions ─────────────────────────────────────────────────────
+        (async () => {
+          setLoadingPred(true);
+          try {
+            const data = await listPredictions({ limit: 20 });
+            if (!cancelled) setPredictions(Array.isArray(data) ? data : []);
+          } catch {
+            if (!cancelled) setPredictions([]);
+          } finally {
+            if (!cancelled) setLoadingPred(false);
           }
-        } else if (!cancelled) {
-          setShoppingItems([]);
-        }
-      } catch {
-        if (!cancelled) setShoppingItems([]);
-      } finally {
-        if (!cancelled) setLoadingShop(false);
-      }
+        })(),
+
+        // ── Inventory ────────────────────────────────────────────────────────
+        (async () => {
+          setLoadingInv(true);
+          try {
+            const res = await listInventory({ limit: 10 });
+            if (!cancelled) {
+              const items = Array.isArray(res?.items) ? res.items : [];
+              setInventoryItems(items);
+              setInventoryTotal(res?.total ?? 0);
+              setInventoryValue(
+                Math.round(items.reduce((s, i) => s + (i.cost_per_unit ?? 0) * i.quantity, 0))
+              );
+            }
+          } catch {
+            if (!cancelled) { setInventoryItems([]); setInventoryTotal(0); setInventoryValue(0); }
+          } finally {
+            if (!cancelled) setLoadingInv(false);
+          }
+        })(),
+
+        // ── Shopping list ─────────────────────────────────────────────────────
+        (async () => {
+          setLoadingShop(true);
+          try {
+            const lists = await listShoppingLists();
+            const safeList = Array.isArray(lists) ? lists : [];
+            const activeList = safeList.find((l) => l.status === "draft" || l.status === "approved");
+            if (activeList && !cancelled) {
+              const detail = await getShoppingList(activeList.id);
+              if (!cancelled) {
+                const rawItems = Array.isArray(detail?.items) ? detail.items : [];
+                setShoppingItems(rawItems.map(normalizeShoppingItem));
+              }
+            } else if (!cancelled) {
+              setShoppingItems([]);
+            }
+          } catch {
+            if (!cancelled) setShoppingItems([]);
+          } finally {
+            if (!cancelled) setLoadingShop(false);
+          }
+        })(),
+
+      ]);
     }
 
     // 500 ms debounce — absorbs auth-hydration bursts without a perceptible delay

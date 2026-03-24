@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Navbar } from "@/components/layout/Navbar";
 import { useAuthStore, selectIsAuthenticated } from "@/lib/store/auth";
 import { fadeIn } from "@/lib/design-system";
+import { get } from "@/lib/api/client";
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,20 @@ export default function DashboardLayout({
   const router        = useRouter();
   const isAuth        = useAuthStore(selectIsAuthenticated);
   const hasHydrated   = useAuthStore((s) => s._hasHydrated);
+
+  // Health: null=checking, true=ok, false=degraded
+  const [workerOk, setWorkerOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Lightweight health probe — just hit a fast read-only endpoint
+    get<unknown>("/api/predictions/", { limit: 1 })
+      .then(() => setWorkerOk(true))
+      .catch((err: { response?: { status: number } }) => {
+        // 401 means API is reachable; only mark degraded on 5xx / network error
+        const status = err?.response?.status;
+        setWorkerOk(!status || status < 500);
+      });
+  }, []);
 
   // Client-side auth guard — redirect to /login if not authenticated
   useEffect(() => {
@@ -62,8 +77,20 @@ export default function DashboardLayout({
         <footer className="shrink-0 h-10 flex items-center justify-between px-6 border-t border-border/40 text-xs text-muted-foreground">
           <span>Neumas v0.1.0</span>
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-mint-500 animate-pulse" />
-            <span>All systems operational</span>
+            {workerOk === null ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-border animate-pulse" />
+            ) : workerOk ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-mint-500 animate-pulse" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            )}
+            <span>
+              {workerOk === null
+                ? "Checking status…"
+                : workerOk
+                ? "All systems operational"
+                : "Background worker unavailable"}
+            </span>
           </div>
         </footer>
       </div>

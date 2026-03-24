@@ -19,6 +19,10 @@ import axios, {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
+// Prevents multiple 401 responses from triggering parallel redirect+clear cycles.
+// Once the first 401 fires the redirect, all subsequent 401s are no-ops.
+let _redirectingToLogin = false;
+
 const BASE_URL =
   typeof window !== "undefined"
     ? (process.env.NEXT_PUBLIC_API_URL ?? "") // use env var; empty = same origin (proxy)
@@ -94,9 +98,14 @@ apiClient.interceptors.response.use(
     config._retryCount = config._retryCount ?? 0;
 
     const shouldRetry =
+      !_redirectingToLogin &&
       config._retryCount < MAX_RETRIES - 1 &&
       (error.response == null || // network error
-        (error.response.status >= 500 && error.response.status < 600));
+        // Retry 5xx but NOT 503 — "service unavailable" from the backend
+        // (Redis/worker down) is not transient; retrying just adds delay.
+        (error.response.status >= 500 &&
+          error.response.status < 600 &&
+          error.response.status !== 503));
 
     if (shouldRetry) {
       config._retryCount += 1;
@@ -126,8 +135,10 @@ apiClient.interceptors.response.use(
         .join("; ");
     } else if (error.response?.status === 401) {
       message = "Session expired. Please log in again.";
-      // Clear ALL auth state and redirect to login
-      if (typeof window !== "undefined") {
+      // Only the first 401 should clear state and redirect — subsequent ones
+      // (from requests that fired before the redirect completes) are no-ops.
+      if (typeof window !== "undefined" && !_redirectingToLogin) {
+        _redirectingToLogin = true;
         localStorage.removeItem("neumas_access_token");
         localStorage.removeItem("neumas-auth"); // Zustand persist key
         window.location.href = "/login";
