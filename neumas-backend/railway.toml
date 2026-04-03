@@ -1,7 +1,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-dockerBuildTarget = "production"
+dockerBuildTarget = "api"
 
 [deploy]
 healthcheckPath = "/health"

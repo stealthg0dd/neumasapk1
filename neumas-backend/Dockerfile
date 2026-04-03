@@ -131,3 +131,10 @@ CMD celery -A app.core.celery_app worker \
     --loglevel=info \
     --queues=neumas_default,scans,agents,neumas.predictions,neumas.shopping \
     --concurrency=${CELERY_CONCURRENCY:-2}
+
+# -----------------------------------------------------------------------------
+# Stage 6: API (default build target — must remain the LAST stage)
+# This ensures `docker build` without --target runs the gunicorn API server.
+# The railway-worker.toml uses --target=worker to build the Celery worker.
+# -----------------------------------------------------------------------------
+FROM production AS api
