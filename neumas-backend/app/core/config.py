@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # Environment
-    ENV: Literal["local", "dev", "staging", "prod"] = Field(
+    ENV: Literal["local", "dev", "staging", "prod", "test"] = Field(
         default="local",
         description="Application environment",
     )
