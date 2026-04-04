@@ -66,6 +66,30 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 
+# ---------------------------------------------------------------------------
+# Sentry — initialise as early as possible so all subsequent exceptions are
+# captured, including those that occur during startup/import.
+# ---------------------------------------------------------------------------
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENV,
+            release=settings.APP_VERSION,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+            integrations=[
+                StarletteIntegration(transaction_style="endpoint"),
+                FastApiIntegration(transaction_style="endpoint"),
+            ],
+            send_default_pii=False,
+        )
+except ImportError:
+    pass  # sentry-sdk not installed — safe to continue
+
 # Import routers explicitly at the top - errors will be visible in logs
 from app.api.routes import admin, auth, inventory, predictions, scans, shopping, analytics
 
@@ -145,6 +169,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("Celery connection check failed", error=str(e))
     else:
         logger.warning("Redis not configured - Celery tasks disabled")
+
+    # Register with the agent OS router-system (non-blocking)
+    if settings.AGENT_OS_URL:
+        try:
+            import httpx
+
+            headers: dict[str, str] = {"Content-Type": "application/json"}
+            if settings.AGENT_OS_API_KEY:
+                headers["X-API-Key"] = settings.AGENT_OS_API_KEY
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{settings.AGENT_OS_URL}/api/register",
+                    json={"repo_id": "neumas-backend"},
+                    headers=headers,
+                )
+                resp.raise_for_status()
+            logger.info("Registered with agent OS router-system", repo_id="neumas-backend")
+        except Exception as e:
+            logger.warning("Agent OS registration failed (non-fatal)", error=str(e))
+    else:
+        logger.warning("AGENT_OS_URL not configured - skipping router-system registration")
 
     yield
 

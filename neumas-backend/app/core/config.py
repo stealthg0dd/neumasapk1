@@ -116,6 +116,26 @@ class Settings(BaseSettings):
         default="", description="Celery result backend URL (defaults to REDIS_URL)"
     )
 
+    # Agent OS / Router-system registration
+    AGENT_OS_URL: str = Field(
+        default="",
+        description="Base URL of the agent OS (router-system) service. Leave empty to skip registration.",
+    )
+    AGENT_OS_API_KEY: str = Field(
+        default="",
+        description="API key for authenticating with the agent OS.",
+    )
+
+    # Sentry
+    SENTRY_DSN: str = Field(
+        default="",
+        description="Sentry DSN for error tracking. Leave empty to disable Sentry.",
+    )
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(
+        default=0.1,
+        description="Sentry performance tracing sample rate (0.0–1.0). Use 1.0 in dev.",
+    )
+
     # Supabase Storage
     STORAGE_BUCKET_RECEIPTS: str = Field(
         default="scans",

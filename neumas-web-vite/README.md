@@ -1,6 +1,53 @@
+# ⚠️ DEPRECATED — neumas-web-vite
+
+> **This directory is no longer active and is NOT deployed to production.**
+> All new development must happen in [`neumas-web/`](../neumas-web/).
+
+## Active frontend
+
+The production frontend is **`neumas-web`** — a Next.js 16 (App Router) application deployed on Railway:
+
+```
+https://neumas-production.up.railway.app
+```
+
+## Why this directory still exists
+
+`neumas-web-vite` was an early Vite + React 18 prototype built before the project migrated to Next.js for SSR, API routes, Sentry integration, and richer tooling. It is kept for historical reference only.
+
+---
+
+<details>
+<summary>Original README (legacy)</summary>
+
 # Neumas Web
 
 React + TypeScript dashboard for the Neumas inventory management API.
+
+## Quick start
+
+```bash
+cd neumas-web
+npm install
+cp .env.example .env.local
+# edit .env.local if needed (see Configuration below)
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). Log in with an account that
+already exists in your Supabase project (create one via the backend's
+`POST /api/auth/signup` if needed).
+
+## Configuration
+
+All runtime configuration is via environment variables prefixed with `VITE_`.
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Base URL of the Neumas backend |
+
+</details>
+
 
 ## Quick start
 
