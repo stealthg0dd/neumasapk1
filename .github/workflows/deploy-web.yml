@@ -91,8 +91,11 @@ jobs:
 
       - name: Verify /api/health
         if: steps.deploy.outputs.url != ''
+        env:
+          NEUMAS_VERCEL_URL: ${{ secrets.NEUMAS_VERCEL_URL }}
         run: |
-          HEALTH_URL="${{ steps.deploy.outputs.url }}/api/health"
+          # Use the stable production alias — unique deployment URLs have Vercel protection enabled
+          HEALTH_URL="${NEUMAS_VERCEL_URL:-${{ steps.deploy.outputs.url }}}/api/health"
           echo "Checking $HEALTH_URL"
           for i in 1 2 3 4 5; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL")
