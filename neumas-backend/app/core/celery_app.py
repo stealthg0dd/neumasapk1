@@ -17,6 +17,26 @@ from kombu import Exchange, Queue
 from app.core.config import settings
 
 # =============================================================================
+# Sentry — initialised here so worker processes capture task exceptions.
+# The FastAPI integration is not added (workers have no HTTP context).
+# =============================================================================
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
+
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENV,
+            release=settings.APP_VERSION,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+            integrations=[CeleryIntegration(monitor_beat_tasks=True)],
+            send_default_pii=False,
+        )
+except ImportError:
+    pass  # sentry-sdk not installed — safe to continue
+
+# =============================================================================
 # STEP 1: Create Celery app FIRST (before any task discovery)
 # =============================================================================
 celery_app = Celery(
@@ -27,6 +47,7 @@ celery_app = Celery(
 
 # Force synchronous execution (no Redis needed for MVP)
 import os
+
 ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
 if ALWAYS_EAGER:
     print("⚠️  CELERY RUNNING IN EAGER MODE (NO REDIS NEEDED)")
@@ -44,12 +65,12 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    
+
     # Default queue
     task_default_queue="neumas_default",
     task_default_exchange="neumas",
     task_default_routing_key="neumas_default",
-    
+
     # Queue definitions
     task_queues=(
         Queue("neumas_default", neumas_exchange, routing_key="neumas_default"),
@@ -58,7 +79,7 @@ celery_app.conf.update(
         Queue("neumas.predictions", neumas_exchange, routing_key="neumas.predictions"),
         Queue("neumas.shopping", neumas_exchange, routing_key="neumas.shopping"),
     ),
-    
+
     # Task routing - route by task name prefix
     task_routes={
         "scans.*": {"queue": "scans", "routing_key": "scans"},
@@ -72,7 +93,7 @@ celery_app.conf.update(
         "app.tasks.scan_tasks.*": {"queue": "scans"},
         "app.tasks.agent_tasks.*": {"queue": "neumas.predictions"},
     },
-    
+
     # Broker connection retry (important for Railway cold-start)
     broker_connection_retry_on_startup=True,
     broker_connection_retry=True,
@@ -93,17 +114,17 @@ celery_app.conf.update(
         "interval_step": 0.3,
         "interval_max": 0.5,
     },
-    
+
     # Worker settings
     worker_prefetch_multiplier=1,
     worker_concurrency=4,
-    
+
     # Task execution settings
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_time_limit=600,  # 10 minutes hard limit (LLM calls can be slow)
     task_soft_time_limit=540,  # 9 minutes soft limit
-    
+
     # Retry settings for transient errors (LLM rate limits, HTTP errors)
     task_annotations={
         "*": {
@@ -120,7 +141,7 @@ celery_app.conf.update(
             "default_retry_delay": 30,
         },
     },
-    
+
     # Beat scheduler (for periodic tasks)
     beat_schedule={
         # Periodic prediction refresh
@@ -233,7 +254,7 @@ def discover_tasks() -> None:
     global _tasks_discovered
     if _tasks_discovered:
         return
-    
+
     celery_app.autodiscover_tasks(
         [
             "app.tasks.scan_tasks",

@@ -2,20 +2,20 @@
 Supabase client initialization and connection management.
 
 Multi-tenant access helpers compatible with Row Level Security (RLS):
-- get_supabase_admin(): Service role client for server-side operations 
+- get_supabase_admin(): Service role client for server-side operations
   (pattern updates, background tasks) - NEVER exposed to users
 - get_supabase_for_user(jwt): User-scoped client that respects RLS policies
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from functools import lru_cache
-from typing import Any, AsyncGenerator
+from typing import Any
 
-from supabase import Client, create_client
 from supabase._async.client import AsyncClient, create_async_client
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from supabase import Client, create_client
 
 logger = get_logger(__name__)
 
@@ -34,23 +34,23 @@ _async_admin_client: AsyncClient | None = None
 def get_supabase_admin() -> Client | None:
     """
     Get synchronous Supabase admin client using SERVICE_ROLE_KEY.
-    
+
     WARNING: This client bypasses Row Level Security.
     Use ONLY for server-side operations like:
     - Background tasks (Celery workers)
     - Pattern/prediction updates
     - Admin operations
-    
+
     NEVER expose this client to user-facing endpoints directly.
-    
+
     Returns None if Supabase is not configured.
     """
     global _admin_client
-    
+
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - admin client unavailable")
         return None
-    
+
     if _admin_client is None:
         _admin_client = create_client(
             settings.SUPABASE_URL,
@@ -63,23 +63,23 @@ def get_supabase_admin() -> Client | None:
 async def get_async_supabase_admin() -> AsyncClient | None:
     """
     Get asynchronous Supabase admin client using SERVICE_ROLE_KEY.
-    
+
     WARNING: This client bypasses Row Level Security.
     Use ONLY for server-side operations like:
-    - Background tasks (Celery workers)  
+    - Background tasks (Celery workers)
     - Pattern/prediction updates
     - Admin operations
-    
+
     NEVER expose this client to user-facing endpoints directly.
-    
+
     Returns None if Supabase is not configured.
     """
     global _async_admin_client
-    
+
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - async admin client unavailable")
         return None
-    
+
     if _async_admin_client is None:
         _async_admin_client = await create_async_client(
             settings.SUPABASE_URL,
@@ -98,17 +98,17 @@ async def get_async_supabase_admin() -> AsyncClient | None:
 def get_supabase_for_user(jwt: str) -> Client:
     """
     Get a Supabase client scoped to a specific user's JWT.
-    
+
     This client respects Row Level Security (RLS) policies.
     All queries will automatically filter based on the JWT claims
     (user_id, org_id) as defined in Supabase RLS policies.
-    
+
     Args:
         jwt: The user's access token from Supabase Auth
-        
+
     Returns:
         Supabase client configured with user's JWT for RLS
-        
+
     Example:
         # In an endpoint with authenticated user
         client = get_supabase_for_user(user_jwt)
@@ -132,17 +132,17 @@ def get_supabase_for_user(jwt: str) -> Client:
 async def get_async_supabase_for_user(jwt: str) -> AsyncClient:
     """
     Get an async Supabase client scoped to a specific user's JWT.
-    
+
     This client respects Row Level Security (RLS) policies.
     All queries will automatically filter based on the JWT claims
     (user_id, org_id) as defined in Supabase RLS policies.
-    
+
     Args:
         jwt: The user's access token from Supabase Auth
-        
+
     Returns:
         Async Supabase client configured with user's JWT for RLS
-        
+
     Example:
         # In an async endpoint with authenticated user
         client = await get_async_supabase_for_user(user_jwt)
@@ -167,9 +167,9 @@ async def get_async_supabase_for_user(jwt: str) -> AsyncClient:
 def get_supabase_client() -> Client | None:
     """
     Alias for get_supabase_admin() for backward compatibility.
-    
+
     DEPRECATED: Use get_supabase_admin() or get_supabase_for_user(jwt) instead.
-    
+
     Returns None if Supabase is not configured.
     """
     return get_supabase_admin()
@@ -178,9 +178,9 @@ def get_supabase_client() -> Client | None:
 async def get_async_supabase_client() -> AsyncClient | None:
     """
     Alias for get_async_supabase_admin() for backward compatibility.
-    
+
     DEPRECATED: Use get_async_supabase_admin() or get_async_supabase_for_user(jwt) instead.
-    
+
     Returns None if Supabase is not configured.
     """
     return await get_async_supabase_admin()
@@ -250,7 +250,7 @@ async def check_supabase_health() -> dict[str, Any]:
 
         # Simple query to verify connection
         # Using a system table or simple select
-        result = await client.table("organizations").select("id").limit(1).execute()
+        await client.table("organizations").select("id").limit(1).execute()
 
         latency_ms = (time.perf_counter() - start) * 1000
 
@@ -271,7 +271,7 @@ async def check_supabase_health() -> dict[str, Any]:
 async def health_check() -> bool:
     """
     Simple health check that returns True if Supabase is configured and reachable.
-    
+
     Returns True even if Supabase is not configured (degraded mode).
     This allows the app's /ready endpoint to start.
     """
@@ -279,7 +279,7 @@ async def health_check() -> bool:
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - running in degraded mode")
         return True
-    
+
     try:
         result = await check_supabase_health()
         return result.get("connected", False)

@@ -9,7 +9,6 @@ import base64
 import json
 import re
 from typing import Any
-from uuid import UUID
 
 import httpx
 
@@ -68,7 +67,7 @@ Do not include any explanation or markdown - return ONLY the JSON object."""
 class VisionAgent:
     """
     AI agent for processing inventory scan images using Claude 3.5 Sonnet.
-    
+
     Specializes in B2B procurement receipts with:
     - Quantity normalization (cases, packs, multipacks)
     - Category classification
@@ -79,7 +78,7 @@ class VisionAgent:
         """Initialize the VisionAgent with Anthropic client."""
         self.model = "claude-sonnet-4-6"
         self.max_tokens = 4096
-        
+
         if not settings.ANTHROPIC_API_KEY:
             logger.warning("ANTHROPIC_API_KEY not set - VisionAgent will fail")
 
@@ -90,11 +89,11 @@ class VisionAgent:
     ) -> dict[str, Any]:
         """
         Analyze a receipt image and extract items.
-        
+
         Args:
             image_url: URL of the receipt image
             scan_type: Type of scan (receipt, barcode)
-            
+
         Returns:
             Dict with extracted items, metadata, and confidence
         """
@@ -112,19 +111,19 @@ class VisionAgent:
 
             # Call Claude Vision API
             result = await self._call_claude_vision(image_data)
-            
+
             if "error" in result:
                 return result
 
             # Post-process and validate
             processed = self._post_process_results(result)
-            
+
             logger.info(
                 "Receipt analysis complete",
                 items_extracted=len(processed.get("items", [])),
                 confidence=processed.get("confidence", 0),
             )
-            
+
             return processed
 
         except Exception as e:
@@ -134,7 +133,7 @@ class VisionAgent:
     async def _fetch_image(self, image_url: str) -> dict[str, str] | None:
         """
         Fetch image from URL and return base64 encoded data.
-        
+
         Returns:
             Dict with 'data' (base64) and 'media_type', or None on failure
         """
@@ -142,26 +141,26 @@ class VisionAgent:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(image_url)
                 response.raise_for_status()
-                
+
                 # Detect media type
                 content_type = response.headers.get("content-type", "image/jpeg")
                 if ";" in content_type:
                     content_type = content_type.split(";")[0].strip()
-                
+
                 # Validate it's an image
                 if not content_type.startswith("image/"):
                     logger.error("URL does not point to an image", content_type=content_type)
                     return None
-                
+
                 # Convert to base64
                 image_bytes = response.content
                 base64_data = base64.standard_b64encode(image_bytes).decode("utf-8")
-                
+
                 return {
                     "data": base64_data,
                     "media_type": content_type,
                 }
-                
+
         except httpx.HTTPStatusError as e:
             logger.error("HTTP error fetching image", status=e.response.status_code, url=image_url[:80])
             return None
@@ -200,7 +199,7 @@ class VisionAgent:
 
         try:
             client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-            
+
             # Build the message with image
             message = client.messages.create(
                 model=self.model,
@@ -229,13 +228,13 @@ class VisionAgent:
 
             # Extract text response
             response_text = message.content[0].text
-            
+
             # Parse JSON from response
             parsed = self._parse_json_response(response_text)
-            
+
             if parsed is None:
                 return self._error_response("Failed to parse LLM response as JSON")
-            
+
             # Add LLM metadata
             parsed["llm_provider"] = "anthropic"
             parsed["llm_model"] = self.model
@@ -243,7 +242,7 @@ class VisionAgent:
                 "input_tokens": message.usage.input_tokens,
                 "output_tokens": message.usage.output_tokens,
             }
-            
+
             return parsed
 
         except Exception as e:
@@ -264,20 +263,20 @@ class VisionAgent:
         Parse JSON from LLM response, handling potential markdown wrapping.
         """
         text = response_text.strip()
-        
+
         # Try direct parse first
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
-        
+
         # Try to extract JSON from markdown code blocks
         patterns = [
             r"```json\s*([\s\S]*?)\s*```",
             r"```\s*([\s\S]*?)\s*```",
             r"\{[\s\S]*\}",
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
@@ -286,26 +285,26 @@ class VisionAgent:
                     return json.loads(json_str)
                 except json.JSONDecodeError:
                     continue
-        
+
         logger.error("Failed to parse JSON from response", response_preview=text[:200])
         return None
 
     def _post_process_results(self, result: dict[str, Any]) -> dict[str, Any]:
         """
         Post-process and validate extracted items.
-        
+
         - Ensures all required fields exist
         - Normalizes quantities and units
         - Validates categories
         """
         items = result.get("items", [])
         processed_items = []
-        
+
         valid_categories = {
-            "Dairy", "Produce", "Meat", "Dry Goods", 
+            "Dairy", "Produce", "Meat", "Dry Goods",
             "Beverages", "Alcohol", "Cleaning", "Other"
         }
-        
+
         for item in items:
             processed = {
                 "item_name": str(item.get("item_name", "Unknown")).strip(),
@@ -315,16 +314,16 @@ class VisionAgent:
                 "total_price": self._normalize_price(item.get("total_price")),
                 "category": item.get("category", "Other"),
             }
-            
+
             # Validate category
             if processed["category"] not in valid_categories:
                 processed["category"] = "Other"
-            
+
             # Additional normalization from item_name
             processed = self._extract_quantity_from_name(processed)
-            
+
             processed_items.append(processed)
-        
+
         return {
             "items": processed_items,
             "receipt_metadata": result.get("receipt_metadata", {}),
@@ -358,13 +357,13 @@ class VisionAgent:
     def _extract_quantity_from_name(self, item: dict[str, Any]) -> dict[str, Any]:
         """
         Extract quantity multipliers from item names.
-        
+
         Examples:
         - "Case of 12x 1L Milk" -> quantity: 12, unit: "1L", name: "Milk"
         - "6-pack Beer 330ml" -> quantity: 6, unit: "330ml", name: "Beer"
         """
         name = item["item_name"]
-        
+
         # Pattern: "Case of Nx" or "Pack of N"
         case_match = re.search(r"(?:case|pack|box)\s*(?:of)?\s*(\d+)\s*x?\s*", name, re.IGNORECASE)
         if case_match:

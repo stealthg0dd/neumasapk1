@@ -2,8 +2,7 @@
 Tests for inventory endpoints.
 """
 
-from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -12,7 +11,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.schemas.auth import UserInfo
-from app.schemas.inventory import InventoryItemResponse
 
 
 @pytest.fixture
@@ -84,26 +82,25 @@ class TestInventoryList:
         auth_headers: dict[str, str],
     ):
         """Test listing inventory requires property_id."""
-        with patch("app.api.deps.get_token", return_value="test-token"):
-            with patch(
-                "app.api.deps.get_current_user",
-            ) as mock_user:
-                mock_user.return_value = UserInfo(
-                    id=uuid4(),
-                    email="test@example.com",
-                    full_name="Test",
-                    role="manager",
-                    organization_id=uuid4(),
-                    is_active=True,
-                )
+        with patch("app.api.deps.get_token", return_value="test-token"), patch(
+            "app.api.deps.get_current_user",
+        ) as mock_user:
+            mock_user.return_value = UserInfo(
+                id=uuid4(),
+                email="test@example.com",
+                full_name="Test",
+                role="manager",
+                organization_id=uuid4(),
+                is_active=True,
+            )
 
-                response = await client.get(
-                    "/api/inventory/",
-                    headers=auth_headers,
-                )
+            response = await client.get(
+                "/api/inventory/",
+                headers=auth_headers,
+            )
 
-                # Should fail validation for missing property_id
-                assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+            # Should fail validation for missing property_id
+            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 class TestInventoryCreate:

@@ -1,0 +1,81 @@
+# =============================================================================
+# Neumas monorepo — root .gitignore
+# =============================================================================
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+# Allow the checked-in template
+!.env.example
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ── Next.js ───────────────────────────────────────────────────────────────────
+.next/
+out/
+.vercel
+
+# ── Vite / build output ──────────────────────────────────────────────────────
+dist/
+build/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+.installed.cfg
+.eggs/
+
+# ── IoT device credentials and certificates ──────────────────────────────────
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+devices/credentials/
+certs/
+iot-keys/
+
+# ── Testing / coverage ───────────────────────────────────────────────────────
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+*.tsbuildinfo
+
+# ── IDE / editors ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+celerybeat-schedule
+*.log

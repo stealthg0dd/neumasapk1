@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class OrganizationsRepository:
     """
     Repository for organization-related database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by org_id which aligns with RLS policies.
     """
@@ -48,12 +48,12 @@ class OrganizationsRepository:
     ) -> dict[str, Any] | None:
         """
         Get organization by ID.
-        
+
         If org_id is not provided, uses tenant's org_id.
         RLS: Users can only view their own organization.
         """
         target_org_id = org_id or tenant.org_id
-        
+
         # Verify tenant has access to this org
         if target_org_id != tenant.org_id and tenant.role != "admin":
             logger.warning(
@@ -63,7 +63,7 @@ class OrganizationsRepository:
                 user_org=str(tenant.org_id),
             )
             return None
-        
+
         try:
             response = await (
                 self.client.table(self.table)
@@ -84,7 +84,7 @@ class OrganizationsRepository:
     ) -> dict[str, Any] | None:
         """
         Get organization by slug.
-        
+
         RLS: Only returns org if user has access.
         """
         try:
@@ -108,12 +108,12 @@ class OrganizationsRepository:
     ) -> dict[str, Any]:
         """
         Create a new organization.
-        
+
         Note: Typically only super-admins can create orgs.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can create organizations")
-        
+
         response = await (
             self.client.table(self.table).insert(data).execute()
         )
@@ -132,16 +132,16 @@ class OrganizationsRepository:
     ) -> dict[str, Any]:
         """
         Update an organization.
-        
+
         RLS: Only admins can update their organization.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can update organizations")
-        
+
         target_org_id = org_id or tenant.org_id
         if target_org_id != tenant.org_id:
             raise PermissionError("Cannot update other organizations")
-        
+
         response = await (
             self.client.table(self.table)
             .update(data)
@@ -162,16 +162,16 @@ class OrganizationsRepository:
     ) -> bool:
         """
         Delete an organization (soft delete by deactivating).
-        
+
         RLS: Only admins can delete their organization.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can delete organizations")
-        
+
         target_org_id = org_id or tenant.org_id
         if target_org_id != tenant.org_id:
             raise PermissionError("Cannot delete other organizations")
-        
+
         try:
             await (
                 self.client.table(self.table)
@@ -198,7 +198,7 @@ class OrganizationsRepository:
     ) -> list[dict[str, Any]]:
         """
         List organizations for tenant.
-        
+
         RLS: Regular users only see their own organization.
         Super-admins could see all (if implemented with service role).
         """
@@ -227,13 +227,13 @@ class OrganizationsRepository:
     ) -> dict[str, Any] | None:
         """
         Get organization with its properties.
-        
+
         RLS: Users can only view their organization with properties.
         """
         target_org_id = org_id or tenant.org_id
         if target_org_id != tenant.org_id:
             return None
-        
+
         try:
             response = await (
                 self.client.table(self.table)
@@ -259,12 +259,12 @@ class OrganizationsRepository:
     ) -> dict[str, Any]:
         """
         Update organization settings (merge with existing).
-        
+
         RLS: Only admins can update settings.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can update organization settings")
-        
+
         org = await self.get_by_id(tenant, org_id)
         if not org:
             raise ValueError("Organization not found or access denied")
@@ -280,7 +280,7 @@ async def get_organizations_repository(
 ) -> OrganizationsRepository:
     """
     Get organizations repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

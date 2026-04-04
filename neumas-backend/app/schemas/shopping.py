@@ -4,7 +4,7 @@ Shopping list schemas.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field

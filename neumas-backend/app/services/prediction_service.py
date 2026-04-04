@@ -2,15 +2,14 @@
 Prediction service for retrieving and organizing predictions by urgency.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
 from app.core.logging import get_logger
-from app.db.repositories.predictions import get_predictions_repository
 from app.db.repositories.inventory import get_inventory_repository
+from app.db.repositories.predictions import get_predictions_repository
 from app.schemas.predictions import (
     PredictionItem,
     UrgencyBucket,
@@ -34,7 +33,7 @@ class PredictionService:
         Urgency buckets:
         - critical: <= 3 days until stockout
         - urgent: 4-7 days
-        - soon: 8-14 days  
+        - soon: 8-14 days
         - later: > 14 days
 
         Args:
@@ -78,7 +77,7 @@ class PredictionService:
             # Calculate days until runout
             runout_date = pred.get("predicted_stockout_date")
             days_until_runout: int | None = None
-            
+
             if runout_date:
                 if isinstance(runout_date, str):
                     runout_date = datetime.fromisoformat(runout_date.replace("Z", "+00:00"))

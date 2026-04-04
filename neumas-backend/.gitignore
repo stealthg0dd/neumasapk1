@@ -52,11 +52,23 @@ dmypy.json
 # Documentation
 docs/_build/
 
-# Environment
+# Environment — commit .env.example but ignore everything else
 .env
 .env.local
 .env.*.local
 *.env
+!.env.example
+
+# IoT device credentials and certificates
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+devices/credentials/
+certs/
+iot-keys/
 
 # Logs
 *.log

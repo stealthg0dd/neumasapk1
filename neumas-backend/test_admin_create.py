@@ -2,14 +2,16 @@
 """Test admin user creation API."""
 import asyncio
 
+
 async def test():
-    from app.db.supabase_client import get_async_supabase_admin
     import uuid
-    
+
+    from app.db.supabase_client import get_async_supabase_admin
+
     client = await get_async_supabase_admin()
     unique = uuid.uuid4().hex[:8]
     email = f"admin-{unique}@demo.com"
-    
+
     print(f"Testing admin.create_user for: {email}")
     try:
         result = await client.auth.admin.create_user({

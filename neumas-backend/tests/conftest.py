@@ -3,7 +3,7 @@ Pytest configuration and shared fixtures.
 """
 
 import os
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

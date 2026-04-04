@@ -42,7 +42,7 @@ async def list_items(
 ) -> list[InventoryItemSummary]:
     """
     List inventory items with optional filters.
-    
+
     Filters:
     - category_id: Filter by category
     - status: Filter by stock status (normal, low_stock, out_of_stock)
@@ -229,7 +229,7 @@ async def adjust_quantity(
 ) -> InventoryItemResponse:
     """
     Adjust inventory quantity.
-    
+
     Positive values add to quantity, negative values subtract.
     """
     try:

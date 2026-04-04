@@ -7,15 +7,15 @@ import secrets
 from typing import Any
 from uuid import UUID
 
+from postgrest.exceptions import APIError as PostgRESTAPIError
+
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import (
     TokenValidationError,
     decode_token,
 )
-from postgrest.exceptions import APIError as PostgRESTAPIError
-from supabase import create_async_client
-from app.db.supabase_client import get_async_supabase_admin, get_async_supabase_for_user
+from app.db.supabase_client import get_async_supabase_admin, get_auth_client
 from app.schemas.auth import (
     CurrentUserContext,
     LoginResponse,
@@ -24,6 +24,7 @@ from app.schemas.auth import (
     SignupResponse,
     UserInfo,
 )
+from supabase import create_async_client
 
 logger = get_logger(__name__)
 
@@ -31,10 +32,10 @@ logger = get_logger(__name__)
 def generate_slug(name: str) -> str:
     """
     Generate a URL-safe slug from a name.
-    
+
     Converts to lowercase, replaces spaces/special chars with hyphens,
     and appends a random suffix for uniqueness.
-    
+
     Example: 'Test Lab' -> 'test-lab-a1b2'
     """
     # Convert to lowercase and replace spaces with hyphens
@@ -132,7 +133,7 @@ class AuthService:
             .single()
             .execute()
         )
-        
+
         user = user_response.data
         if not user:
             logger.warning("User not found for auth_id", auth_id=str(auth_id))
@@ -480,7 +481,7 @@ class AuthService:
             .single()
             .execute()
         )
-        
+
         user = user_response.data
         if not user:
             logger.error("User record not found after login", auth_id=auth_id)

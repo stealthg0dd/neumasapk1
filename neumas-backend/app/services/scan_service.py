@@ -17,8 +17,7 @@ Configurable via env / .env:
 
 import asyncio
 import uuid
-from datetime import datetime
-from typing import Any
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -30,8 +29,8 @@ from app.db.repositories.scans import get_scans_repository
 from app.db.supabase_client import get_async_supabase_admin
 from app.schemas.scans import (
     ScanQueuedResponse,
+    ScanResponse,
     ScanStatusResponse,
-    ScanUploadMultipartRequest,
 )
 
 logger = get_logger(__name__)
@@ -81,7 +80,7 @@ class ScanService:
             Exception: If upload or DB insert fails
         """
         scan_id = uuid.uuid4()
-        
+
         logger.info(
             "Processing scan upload",
             scan_id=str(scan_id),
@@ -100,7 +99,7 @@ class ScanService:
 
         # Step 2: Create scan record
         scans_repo = await get_scans_repository()
-        scan_data = await scans_repo.create(
+        await scans_repo.create(
             tenant,
             {
                 "id": str(scan_id),
@@ -338,9 +337,6 @@ class ScanService:
         Raises:
             ValueError: If scan not found
         """
-        from app.schemas.scans import ScanResponse
-        from decimal import Decimal
-
         scans_repo = await get_scans_repository()
         scan = await scans_repo.get_by_id(tenant, scan_id)
 
@@ -383,9 +379,6 @@ class ScanService:
         Returns:
             List of scan responses
         """
-        from app.schemas.scans import ScanResponse
-        from decimal import Decimal
-
         scans_repo = await get_scans_repository()
         scans = await scans_repo.get_by_property(
             tenant=tenant,

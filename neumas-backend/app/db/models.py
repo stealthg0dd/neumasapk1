@@ -9,10 +9,8 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
-    JSON,
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -20,7 +18,8 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 

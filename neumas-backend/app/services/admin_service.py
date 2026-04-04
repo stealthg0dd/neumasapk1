@@ -2,17 +2,15 @@
 Admin service for B2B dashboard and data export.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
 from app.core.logging import get_logger
-from app.db.repositories.organizations import get_organizations_repository
+from app.db.repositories.inventory import get_inventory_repository
 from app.db.repositories.predictions import get_predictions_repository
 from app.db.repositories.properties import get_properties_repository
-from app.db.repositories.inventory import get_inventory_repository
 from app.schemas.admin import (
     CriticalAlertItem,
     DashboardResponse,
@@ -55,7 +53,7 @@ class AdminService:
 
         props_repo = await get_properties_repository()
         predictions_repo = await get_predictions_repository()
-        inventory_repo = await get_inventory_repository()
+        await get_inventory_repository()
 
         # Get properties count
         properties = await props_repo.get_by_organization(org_id, tenant)
@@ -64,10 +62,10 @@ class AdminService:
         # Get active predictions count across all properties
         total_active_predictions = 0
         critical_alerts: dict[str, int] = {}  # item_name -> alert_count
-        
+
         for prop in properties:
             prop_id = UUID(prop["id"])
-            
+
             # Count active predictions
             predictions = await predictions_repo.get_stockout_predictions(
                 property_id=prop_id,
@@ -149,7 +147,7 @@ class AdminService:
 
         # Get all properties
         properties = await props_repo.get_by_organization(org_id, tenant)
-        property_map = {UUID(p["id"]): p["name"] for p in properties}
+        {UUID(p["id"]): p["name"] for p in properties}
 
         rows: list[ExportRow] = []
         now = datetime.now(UTC)

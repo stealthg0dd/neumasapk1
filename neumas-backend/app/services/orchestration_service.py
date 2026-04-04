@@ -12,7 +12,6 @@ from typing import Any, Literal
 from uuid import UUID
 
 from app.core.celery_app import (
-    LLMExhaustedError,
     LLMParseError,
     LLMRateLimitError,
     celery_app,
@@ -21,10 +20,8 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.repositories.inventory import get_inventory_repository
 from app.db.repositories.predictions import get_predictions_repository
-from app.db.repositories.scans import get_scans_repository
 from app.db.repositories.shopping_lists import get_shopping_lists_repository
 from app.schemas.predictions import DemandForecastRequest
-from app.schemas.scans import ScanCreate
 from app.schemas.shopping import GenerateShoppingListRequest
 
 logger = get_logger(__name__)
@@ -87,7 +84,7 @@ GOOGLE_MODEL_NAMES: dict[str, str] = {
 # =============================================================================
 
 SYSTEM_PROMPTS: dict[AgentName, str] = {
-    "VISION": """You are a vision analysis agent for inventory management. 
+    "VISION": """You are a vision analysis agent for inventory management.
 Analyze the provided image and extract inventory items.
 
 RESPOND ONLY WITH VALID JSON in this exact format:
@@ -148,7 +145,7 @@ RESPOND ONLY WITH VALID JSON in this exact format:
 
 Urgency levels:
 - critical: 0-3 days
-- urgent: 4-7 days  
+- urgent: 4-7 days
 - soon: 8-14 days
 - later: >14 days""",
 
@@ -361,11 +358,11 @@ def _extract_json(text: str) -> dict[str, Any]:
 
     # Try to find JSON object
     text = text.strip()
-    
+
     # Find first { and last }
     start = text.find("{")
     end = text.rfind("}")
-    
+
     if start != -1 and end != -1 and end > start:
         json_str = text[start : end + 1]
         try:

@@ -6,7 +6,6 @@ any external API keys.  Every function logs its input and returns a
 realistic-looking but hard-coded JSON structure.
 """
 
-import json
 from datetime import date, timedelta
 from typing import Any
 

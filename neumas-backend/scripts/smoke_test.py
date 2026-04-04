@@ -24,12 +24,12 @@ Environment variables (all optional -- falls back to .env):
 """
 
 import asyncio
+import base64
 import io
 import os
-import base64
 import sys
 import time
-from typing import Any, Optional, Tuple
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Config
@@ -91,8 +91,8 @@ def _skip(step: str, reason: str) -> None:
 # ---------------------------------------------------------------------------
 
 async def _post(
-    client, path: str, body: dict, *, headers: Optional[dict] = None
-) -> Tuple[int, Any]:
+    client, path: str, body: dict, *, headers: dict | None = None
+) -> tuple[int, Any]:
     resp = await client.post(
         f"{API_URL}{path}", json=body, headers=headers or {}
     )
@@ -104,8 +104,8 @@ async def _post(
 
 
 async def _get(
-    client, path: str, *, headers: Optional[dict] = None
-) -> Tuple[int, Any]:
+    client, path: str, *, headers: dict | None = None
+) -> tuple[int, Any]:
     resp = await client.get(f"{API_URL}{path}", headers=headers or {})
     try:
         data = resp.json()
@@ -131,7 +131,7 @@ async def _poll(
     label: str,
     max_polls: int = SCAN_POLLS,
     sleep: float = POLL_SLEEP,
-) -> Tuple[bool, Any]:
+) -> tuple[bool, Any]:
     """
     Poll GET `path` up to `max_polls` times (sleeping `sleep` seconds between
     attempts) until `done_fn(body)` returns True.

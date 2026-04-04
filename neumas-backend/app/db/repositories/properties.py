@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class PropertiesRepository:
     """
     Repository for property-related database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by org_id which aligns with RLS policies.
     """
@@ -48,7 +48,7 @@ class PropertiesRepository:
     ) -> dict[str, Any] | None:
         """
         Get property by ID.
-        
+
         RLS: Users can only view properties in their organization.
         """
         try:
@@ -79,7 +79,7 @@ class PropertiesRepository:
     ) -> list[dict[str, Any]]:
         """
         Get all properties for tenant's organization.
-        
+
         RLS: Automatically filtered to user's organization.
         """
         query = (
@@ -106,15 +106,15 @@ class PropertiesRepository:
     ) -> dict[str, Any]:
         """
         Create a new property for tenant's organization.
-        
+
         RLS: Insert policy requires org_id to match user's org.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can create properties")
-        
+
         # Ensure org_id is set from tenant context
         data["org_id"] = str(tenant.org_id)
-        
+
         response = await self.client.table(self.table).insert(data).execute()
         logger.info(
             "Created property",
@@ -132,12 +132,12 @@ class PropertiesRepository:
     ) -> dict[str, Any]:
         """
         Update a property.
-        
+
         RLS: Update policy ensures user can only update properties in their org.
         """
         if tenant.role not in ("admin", "staff"):
             raise PermissionError("Insufficient permissions to update properties")
-        
+
         response = await (
             self.client.table(self.table)
             .update(data)
@@ -159,12 +159,12 @@ class PropertiesRepository:
     ) -> bool:
         """
         Soft delete a property.
-        
+
         RLS: Delete policy ensures user can only delete properties in their org.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can delete properties")
-        
+
         try:
             await (
                 self.client.table(self.table)
@@ -194,13 +194,13 @@ class PropertiesRepository:
     ) -> dict[str, Any] | None:
         """
         Get property with inventory summary stats.
-        
+
         Uses tenant's current property_id if not specified.
         """
         target_property_id = property_id or tenant.property_id
         if not target_property_id:
             return None
-        
+
         try:
             # Get property basic info
             property_data = await self.get_by_id(tenant, target_property_id)
@@ -246,16 +246,16 @@ class PropertiesRepository:
     ) -> dict[str, Any]:
         """
         Update property settings (merge with existing).
-        
+
         RLS: Only admins/staff can update settings.
         """
         if tenant.role not in ("admin", "staff"):
             raise PermissionError("Insufficient permissions to update property settings")
-        
+
         target_property_id = property_id or tenant.property_id
         if not target_property_id:
             raise ValueError("property_id required")
-        
+
         prop = await self.get_by_id(tenant, target_property_id)
         if not prop:
             raise ValueError("Property not found or access denied")
@@ -272,7 +272,7 @@ class PropertiesRepository:
     ) -> bool:
         """
         Verify that tenant has access to a property.
-        
+
         Checks that property belongs to tenant's organization.
         """
         prop = await self.get_by_id(tenant, property_id)
@@ -305,7 +305,7 @@ async def get_properties_repository(
 ) -> PropertiesRepository:
     """
     Get properties repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

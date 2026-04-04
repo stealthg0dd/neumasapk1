@@ -37,10 +37,10 @@ logger = get_logger(__name__)
 class InventoryRepository:
     """
     Repository for inventory-related database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by property_id which aligns with RLS policies.
-    
+
     Supabase RLS ensures users only see rows where:
     - property_id belongs to a property within user's organization
     """
@@ -61,7 +61,7 @@ class InventoryRepository:
     ) -> dict[str, Any] | None:
         """
         Get inventory item by ID.
-        
+
         RLS: Supabase will filter to items in user's accessible properties.
         Application filter: Explicit property_id check for defense-in-depth.
         """
@@ -71,11 +71,11 @@ class InventoryRepository:
                 .select("*, category:inventory_categories(*)")
                 .eq("id", str(item_id))
             )
-            
+
             # Filter by property_id if set in tenant context
             if tenant.property_id:
                 query = query.eq("property_id", str(tenant.property_id))
-            
+
             response = await query.single().execute()
             return response.data
         except Exception as e:
@@ -98,14 +98,14 @@ class InventoryRepository:
     ) -> list[dict[str, Any]]:
         """
         Get inventory items for the tenant's property with filtering.
-        
+
         RLS: Supabase ensures users only see items in their accessible properties.
         Application filter: property_id from tenant context.
         """
         if not tenant.property_id:
             logger.warning("get_items_by_property called without property_id", tenant=str(tenant))
             return []
-        
+
         query = (
             self.client.table(self.table)
             .select("*, category:inventory_categories(id, name)")
@@ -136,13 +136,13 @@ class InventoryRepository:
     ) -> list[dict[str, Any]]:
         """
         Get items that are at or below reorder point for tenant's property.
-        
+
         RLS: Supabase filters by property access.
         Application filter: property_id from tenant context.
         """
         if not tenant.property_id:
             return []
-        
+
         response = await (
             self.client.table(self.table)
             .select("*")
@@ -195,7 +195,7 @@ class InventoryRepository:
     ) -> dict[str, Any]:
         """
         Create a new inventory item for tenant's property.
-        
+
         RLS: Insert policy requires property_id to be accessible to user.
         """
         if not tenant.property_id:
@@ -224,7 +224,7 @@ class InventoryRepository:
     ) -> dict[str, Any]:
         """
         Update an inventory item.
-        
+
         RLS: Update policy ensures user can only update items they can access.
         Application filter: property_id check.
         """
@@ -233,10 +233,10 @@ class InventoryRepository:
             .update(data)
             .eq("id", str(item_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         response = await query.execute()
         logger.info(
             "Updated inventory item",
@@ -254,7 +254,7 @@ class InventoryRepository:
     ) -> dict[str, Any]:
         """
         Update item quantity.
-        
+
         RLS: Ensures user has access to the item's property.
         """
         update_data: dict[str, Any] = {"quantity": str(new_quantity)}
@@ -264,10 +264,10 @@ class InventoryRepository:
             .update(update_data)
             .eq("id", str(item_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         response = await query.execute()
 
         logger.info(
@@ -303,7 +303,7 @@ class InventoryRepository:
     ) -> bool:
         """
         Soft delete an inventory item.
-        
+
         RLS: Delete policy ensures user can only delete accessible items.
         """
         try:
@@ -312,10 +312,10 @@ class InventoryRepository:
                 .update({"is_active": False})
                 .eq("id", str(item_id))
             )
-            
+
             if tenant.property_id:
                 query = query.eq("property_id", str(tenant.property_id))
-            
+
             await query.execute()
             logger.info(
                 "Deleted inventory item",
@@ -369,7 +369,7 @@ class InventoryRepository:
         """Get item by barcode within tenant's property."""
         if not tenant.property_id:
             return None
-        
+
         try:
             response = await (
                 self.client.table(self.table)
@@ -395,7 +395,7 @@ class InventoryRepository:
     ) -> list[dict[str, Any]]:
         """
         Get inventory categories for tenant's organization.
-        
+
         RLS: Categories filtered by org_id.
         """
         query = (
@@ -471,9 +471,7 @@ class InventoryRepository:
             for item in items:
                 qty = float(item.get("quantity", 0))
                 reorder = float(item.get("reorder_point") or item.get("min_quantity", 0))
-                if status_filter == "out_of_stock" and qty == 0:
-                    filtered.append(item)
-                elif status_filter == "low_stock" and 0 < qty <= reorder:
+                if status_filter == "out_of_stock" and qty == 0 or status_filter == "low_stock" and 0 < qty <= reorder:
                     filtered.append(item)
             return filtered
         return items
@@ -541,7 +539,7 @@ async def get_inventory_repository(
 ) -> InventoryRepository:
     """
     Get inventory repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

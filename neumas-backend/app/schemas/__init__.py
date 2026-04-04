@@ -63,8 +63,8 @@ from app.schemas.scans import (
     ScanUploadResponse,
 )
 from app.schemas.shopping import (
-    GenerateShoppingListRequest,
     GeneratedShoppingListResponse,
+    GenerateShoppingListRequest,
     OptimizeBudgetRequest,
     OptimizeBudgetResponse,
     ShoppingListCreate,

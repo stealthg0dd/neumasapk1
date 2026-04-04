@@ -17,8 +17,8 @@ from uuid import UUID
 
 from app.core.celery_app import celery_app, neumas_task
 from app.core.logging import get_logger
-from app.services.shopping_agent import get_shopping_agent
 from app.services.budget_agent import get_budget_agent
+from app.services.shopping_agent import get_shopping_agent
 
 logger = get_logger(__name__)
 

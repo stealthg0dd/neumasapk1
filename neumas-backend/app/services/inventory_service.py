@@ -2,9 +2,7 @@
 Inventory service for managing inventory items and triggering predictions.
 """
 
-from datetime import datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
@@ -269,7 +267,6 @@ class InventoryService:
         tenant: TenantContext,
     ) -> InventoryItemResponse:
         """Create a new inventory item."""
-        from app.schemas.inventory import InventoryItemCreate
 
         inventory_repo = await get_inventory_repository()
         new_item = await inventory_repo.create(

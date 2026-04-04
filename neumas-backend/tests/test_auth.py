@@ -104,7 +104,7 @@ class TestAuthEndpoints:
             "app.api.deps.get_current_user",
             return_value=test_user,
         ):
-            response = await client.get(
+            await client.get(
                 "/api/auth/me",
                 headers=auth_headers,
             )

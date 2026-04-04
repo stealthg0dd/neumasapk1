@@ -3,18 +3,19 @@
 import asyncio
 import uuid
 
+
 async def test():
     from app.db.supabase_client import get_async_supabase_admin
     from app.services.auth_service import generate_slug
-    
+
     admin_client = await get_async_supabase_admin()
     unique = uuid.uuid4().hex[:8]
     email = f"test-signup-{unique}@demo.com"
     password = "TestPassword123"
     org_name = f"Test Org {unique}"
-    
+
     print(f"Testing signup for: {email}")
-    
+
     # Step 1: Use admin.create_user (no email rate limits)
     print("\n1. Creating auth user (admin API)...")
     try:
@@ -32,7 +33,7 @@ async def test():
     except Exception as e:
         print(f"Auth error: {e}")
         return
-    
+
     # Step 2: Sign in to get session
     print("\n2. Signing in to get session...")
     try:
@@ -45,7 +46,7 @@ async def test():
     except Exception as e:
         print(f"Sign in error: {e}")
         access_token = ""
-    
+
     # Step 3: Create organization
     print("\n3. Creating organization...")
     org_slug = generate_slug(org_name)
@@ -60,7 +61,7 @@ async def test():
     except Exception as e:
         print(f"Org error: {e}")
         return
-    
+
     # Step 4: Create property
     print("\n4. Creating property...")
     try:
@@ -74,7 +75,7 @@ async def test():
     except Exception as e:
         print(f"Property error: {e}")
         return
-    
+
     # Step 5: Create user record
     print("\n5. Creating user record...")
     try:
@@ -90,7 +91,7 @@ async def test():
     except Exception as e:
         print(f"User error: {e}")
         return
-    
+
     print("\n" + "="*50)
     print("SIGNUP FLOW SUCCESSFUL!")
     print("="*50)

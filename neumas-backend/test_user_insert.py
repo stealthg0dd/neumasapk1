@@ -3,15 +3,16 @@
 import asyncio
 import uuid
 
+
 async def test():
     from app.db.supabase_client import get_async_supabase_admin
-    
+
     client = await get_async_supabase_admin()
-    
+
     # First, create a test org
     test_id = uuid.uuid4().hex[:6]
     print(f"Test ID: {test_id}")
-    
+
     print("\n1. Creating org...")
     try:
         org = await client.table("organizations").insert({
@@ -23,7 +24,7 @@ async def test():
     except Exception as e:
         print(f"Org error: {e}")
         return
-    
+
     print("\n2. Creating property...")
     try:
         prop = await client.table("properties").insert({
@@ -38,7 +39,7 @@ async def test():
         # Clean up
         await client.table("organizations").delete().eq("id", org_id).execute()
         return
-    
+
     print("\n3. Creating user record with org_id...")
     # Fake auth_id for test
     fake_auth_id = str(uuid.uuid4())
@@ -55,7 +56,7 @@ async def test():
         print("\n=== ALL STEPS SUCCESSFUL ===")
     except Exception as e:
         print(f"User insert error: {e}")
-    
+
     # Clean up
     await client.table("organizations").delete().eq("id", org_id).execute()
     print("Cleaned up test data")

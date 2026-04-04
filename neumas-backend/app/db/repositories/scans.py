@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 class ScansRepository:
     """
     Repository for scan database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by property_id which aligns with RLS policies.
     """
@@ -50,7 +50,7 @@ class ScansRepository:
     ) -> dict[str, Any] | None:
         """
         Get scan by ID.
-        
+
         RLS: Users can only view scans for properties in their organization.
         """
         query = (
@@ -58,11 +58,11 @@ class ScansRepository:
             .select("*")
             .eq("id", str(scan_id))
         )
-        
+
         # Filter by property if set
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         try:
             response = await query.single().execute()
             return response.data
@@ -84,13 +84,13 @@ class ScansRepository:
     ) -> list[dict[str, Any]]:
         """
         Get scans for tenant's property.
-        
+
         RLS: Automatically filtered to user's accessible properties.
         """
         if not tenant.property_id:
             logger.warning("get_by_property called without property_id")
             return []
-        
+
         query = (
             self.client.table(self.table)
             .select("*")
@@ -115,12 +115,12 @@ class ScansRepository:
     ) -> dict[str, Any]:
         """
         Create a new scan for tenant's property.
-        
+
         RLS: Insert policy requires property_id to be accessible.
         """
         if not tenant.property_id:
             raise ValueError("property_id required to create scan")
-        
+
         # Ensure tenant fields are set
         data["property_id"] = str(tenant.property_id)
         data["org_id"] = str(tenant.org_id)
@@ -145,7 +145,7 @@ class ScansRepository:
     ) -> dict[str, Any]:
         """
         Update a scan.
-        
+
         RLS: Update policy ensures user can only update accessible scans.
         """
         query = (
@@ -153,10 +153,10 @@ class ScansRepository:
             .update(data)
             .eq("id", str(scan_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         response = await query.execute()
         logger.info(
             "Updated scan",
@@ -246,7 +246,7 @@ class ScansRepository:
         """Get scan history for tenant's property with optional filters."""
         if not tenant.property_id:
             return []
-        
+
         query = (
             self.client.table(self.table)
             .select("*")
@@ -281,7 +281,7 @@ class ScansRepository:
     ) -> bool:
         """
         Delete a scan.
-        
+
         RLS: Delete policy ensures user can only delete accessible scans.
         """
         try:
@@ -290,10 +290,10 @@ class ScansRepository:
                 .delete()
                 .eq("id", str(scan_id))
             )
-            
+
             if tenant.property_id:
                 query = query.eq("property_id", str(tenant.property_id))
-            
+
             await query.execute()
             logger.info(
                 "Deleted scan",
@@ -311,7 +311,7 @@ class ScansRepository:
     ) -> list[dict[str, Any]]:
         """
         Get pending scans for processing (used by workers).
-        
+
         Note: This is an admin/server-side operation, uses admin client.
         """
         response = await (
@@ -330,7 +330,7 @@ async def get_scans_repository(
 ) -> ScansRepository:
     """
     Get scans repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks/workers).
     """

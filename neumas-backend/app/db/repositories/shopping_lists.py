@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 class ShoppingListsRepository:
     """
     Repository for shopping list database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by property_id which aligns with RLS policies.
     """
@@ -56,7 +56,7 @@ class ShoppingListsRepository:
     ) -> dict[str, Any] | None:
         """
         Get shopping list by ID with items.
-        
+
         RLS: Users can only view lists for their properties.
         """
         query = (
@@ -64,10 +64,10 @@ class ShoppingListsRepository:
             .select("*, items:shopping_list_items(*)")
             .eq("id", str(list_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         try:
             response = await query.single().execute()
             return response.data
@@ -121,13 +121,13 @@ class ShoppingListsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get shopping lists for tenant's property.
-        
+
         RLS: Automatically filtered to accessible properties.
         """
         if not tenant.property_id:
             logger.warning("get_by_property called without property_id")
             return []
-        
+
         query = (
             self.client.table(self.table)
             .select("*, items:shopping_list_items(count)")
@@ -152,16 +152,16 @@ class ShoppingListsRepository:
     ) -> dict[str, Any]:
         """
         Create a new shopping list for tenant's property.
-        
+
         RLS: Insert policy requires property_id to be accessible.
         """
         if not tenant.property_id:
             raise ValueError("property_id required to create shopping list")
-        
+
         # Ensure property_id and created_by are set from tenant context
         data["property_id"] = str(tenant.property_id)
         data["created_by_id"] = str(tenant.user_id)
-        
+
         response = await self.client.table(self.table).insert(data).execute()
         logger.info(
             "Created shopping list",
@@ -179,7 +179,7 @@ class ShoppingListsRepository:
     ) -> dict[str, Any]:
         """
         Update a shopping list.
-        
+
         RLS: Update policy ensures user can only update accessible lists.
         """
         query = (
@@ -187,10 +187,10 @@ class ShoppingListsRepository:
             .update(data)
             .eq("id", str(list_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         response = await query.execute()
         logger.info(
             "Updated shopping list",
@@ -224,7 +224,7 @@ class ShoppingListsRepository:
     ) -> bool:
         """
         Delete a shopping list and its items.
-        
+
         RLS: Delete policy ensures user can only delete accessible lists.
         """
         try:
@@ -241,10 +241,10 @@ class ShoppingListsRepository:
                 .delete()
                 .eq("id", str(list_id))
             )
-            
+
             if tenant.property_id:
                 query = query.eq("property_id", str(tenant.property_id))
-            
+
             await query.execute()
             logger.info(
                 "Deleted shopping list",
@@ -268,14 +268,14 @@ class ShoppingListsRepository:
     ) -> dict[str, Any]:
         """
         Add item to shopping list.
-        
+
         Verifies list belongs to tenant's property before adding.
         """
         # Verify access to the list
         shopping_list = await self.get_by_id(tenant, list_id)
         if not shopping_list:
             raise ValueError("Shopping list not found or access denied")
-        
+
         item_data["shopping_list_id"] = str(list_id)
         response = await self.client.table(self.items_table).insert(item_data).execute()
         return response.data[0]
@@ -291,7 +291,7 @@ class ShoppingListsRepository:
         shopping_list = await self.get_by_id(tenant, list_id)
         if not shopping_list:
             raise ValueError("Shopping list not found or access denied")
-        
+
         for item in items:
             item["shopping_list_id"] = str(list_id)
 
@@ -307,14 +307,14 @@ class ShoppingListsRepository:
     ) -> dict[str, Any]:
         """
         Update a shopping list item.
-        
+
         Verifies list belongs to tenant's property.
         """
         # Verify access to the list
         shopping_list = await self.get_by_id(tenant, list_id)
         if not shopping_list:
             raise ValueError("Shopping list not found or access denied")
-        
+
         response = await (
             self.client.table(self.items_table)
             .update(data)
@@ -352,14 +352,14 @@ class ShoppingListsRepository:
     ) -> bool:
         """
         Remove item from shopping list.
-        
+
         Verifies list belongs to tenant's property.
         """
         # Verify access to the list
         shopping_list = await self.get_by_id(tenant, list_id)
         if not shopping_list:
             return False
-        
+
         try:
             await (
                 self.client.table(self.items_table)
@@ -380,14 +380,14 @@ class ShoppingListsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get all items in a shopping list.
-        
+
         Verifies list belongs to tenant's property.
         """
         # Verify access to the list
         shopping_list = await self.get_by_id(tenant, list_id)
         if not shopping_list:
             return []
-        
+
         response = await (
             self.client.table(self.items_table)
             .select("*, inventory_item:inventory_items(id, name)")
@@ -459,7 +459,7 @@ async def get_shopping_lists_repository(
 ) -> ShoppingListsRepository:
     """
     Get shopping lists repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

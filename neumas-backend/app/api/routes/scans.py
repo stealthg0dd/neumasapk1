@@ -5,7 +5,16 @@ Scan routes for receipt/barcode processing.
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 
 from app.api.deps import TenantContext, get_tenant_context, require_property
 from app.core.logging import get_logger
@@ -40,12 +49,12 @@ async def upload_scan(
 ) -> ScanQueuedResponse:
     """
     Upload an image for scan processing.
-    
+
     Accepts receipt or barcode images. The image will be:
     1. Uploaded to storage
     2. Queued for AI processing
     3. Results saved to database
-    
+
     Returns scan_id to check status later.
     """
     # Validate file type
@@ -54,7 +63,7 @@ async def upload_scan(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image (JPEG, PNG, WebP)",
         )
-    
+
     # Validate file size (max 10MB)
     MAX_SIZE = 10 * 1024 * 1024
     content = await file.read()
@@ -65,7 +74,7 @@ async def upload_scan(
         )
     # Reset file position for service
     await file.seek(0)
-    
+
     try:
         return await scan_service.upload_scan(
             file=file,
@@ -97,7 +106,7 @@ async def get_scan_status(
 ) -> ScanStatusResponse:
     """
     Get the current status of a scan.
-    
+
     Statuses:
     - queued: Waiting to be processed
     - processing: Currently being analyzed

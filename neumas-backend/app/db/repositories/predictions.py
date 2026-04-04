@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 class PredictionsRepository:
     """
     Repository for prediction/forecast database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by property_id which aligns with RLS policies.
     """
@@ -50,7 +50,7 @@ class PredictionsRepository:
     ) -> dict[str, Any] | None:
         """
         Get prediction by ID.
-        
+
         RLS: Users can only view predictions for their properties.
         """
         query = (
@@ -58,10 +58,10 @@ class PredictionsRepository:
             .select("*")
             .eq("id", str(prediction_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         try:
             response = await query.single().execute()
             return response.data
@@ -83,13 +83,13 @@ class PredictionsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get predictions for tenant's property.
-        
+
         RLS: Automatically filtered to accessible properties.
         """
         if not tenant.property_id:
             logger.warning("get_by_property called without property_id")
             return []
-        
+
         query = (
             self.client.table(self.table)
             .select("*, inventory_item:inventory_items(id, name)")
@@ -122,7 +122,7 @@ class PredictionsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get predictions for a specific item.
-        
+
         RLS: Item must belong to tenant's property.
         """
         query = (
@@ -130,7 +130,7 @@ class PredictionsRepository:
             .select("*")
             .eq("item_id", str(item_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
 
@@ -152,15 +152,15 @@ class PredictionsRepository:
     ) -> dict[str, Any]:
         """
         Create a new prediction for tenant's property.
-        
+
         RLS: Insert policy requires property_id to be accessible.
         """
         if not tenant.property_id:
             raise ValueError("property_id required to create prediction")
-        
+
         # Ensure property_id is set from tenant context
         data["property_id"] = str(tenant.property_id)
-        
+
         response = await self.client.table(self.table).insert(data).execute()
         logger.info(
             "Created prediction",
@@ -180,10 +180,10 @@ class PredictionsRepository:
         """
         if not predictions:
             return []
-        
+
         if not tenant.property_id:
             raise ValueError("property_id required to create predictions")
-        
+
         # Ensure all predictions have correct property_id
         for pred in predictions:
             pred["property_id"] = str(tenant.property_id)
@@ -204,7 +204,7 @@ class PredictionsRepository:
     ) -> dict[str, Any]:
         """
         Update a prediction.
-        
+
         RLS: Update policy ensures user can only update accessible predictions.
         """
         query = (
@@ -212,10 +212,10 @@ class PredictionsRepository:
             .update(data)
             .eq("id", str(prediction_id))
         )
-        
+
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
-        
+
         response = await query.execute()
         return response.data[0]
 
@@ -271,7 +271,7 @@ class PredictionsRepository:
         """
         if not tenant.property_id:
             return []
-        
+
         response = await (
             self.client.table(self.table)
             .select("*, inventory_item:inventory_items(id, name, quantity, min_quantity)")
@@ -289,7 +289,7 @@ class PredictionsRepository:
     ) -> int:
         """
         Delete predictions older than specified date (cleanup).
-        
+
         Note: This is an admin/server-side operation.
         """
         try:
@@ -375,7 +375,7 @@ async def get_predictions_repository(
 ) -> PredictionsRepository:
     """
     Get predictions repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

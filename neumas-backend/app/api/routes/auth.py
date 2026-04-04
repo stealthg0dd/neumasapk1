@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import TenantContext, UserInfo, get_current_user, get_tenant_context
+from app.api.deps import UserInfo, get_current_user
 from app.core.logging import get_logger
 from app.schemas.auth import (
     LoginRequest,
@@ -36,7 +36,7 @@ auth_service = AuthService()
 async def signup(request: SignupRequest) -> SignupResponse:
     """
     Register a new user with organization and property.
-    
+
     Creates:
     - Supabase Auth user
     - Organization record
@@ -67,7 +67,7 @@ async def signup(request: SignupRequest) -> SignupResponse:
 async def login(request: LoginRequest) -> LoginResponse:
     """
     Authenticate user with email and password.
-    
+
     Returns JWT access token and user profile.
     """
     try:
@@ -140,7 +140,7 @@ async def logout(
 ) -> None:
     """
     Logout current user.
-    
+
     Note: JWT tokens are stateless. This endpoint is for audit logging.
     Client should discard the token.
     """

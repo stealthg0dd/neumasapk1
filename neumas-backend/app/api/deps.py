@@ -14,7 +14,6 @@ from fastapi import Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import TokenValidationError, decode_jwt
 from app.db.supabase_client import (
@@ -37,14 +36,14 @@ security = HTTPBearer(auto_error=False)
 class TenantContext(BaseModel):
     """
     Tenant context for multi-tenant access control.
-    
+
     This object is passed to all repository methods to ensure proper
     data isolation aligned with Supabase Row Level Security (RLS) policies.
-    
+
     All repository queries must filter by org_id and/or property_id
     to guarantee tenant isolation even without RLS (defense in depth).
     """
-    
+
     user_id: UUID = Field(..., description="Current authenticated user's ID")
     org_id: UUID = Field(..., description="User's organization ID")
     property_id: UUID | None = Field(
@@ -55,32 +54,32 @@ class TenantContext(BaseModel):
         ...,
         description="User's role within the organization",
     )
-    
+
     # JWT token for user-scoped Supabase client
     jwt: str = Field(..., description="User's JWT for RLS-enabled queries", exclude=True)
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     def __repr__(self) -> str:
         return (
             f"TenantContext(user_id={self.user_id}, org_id={self.org_id}, "
             f"property_id={self.property_id}, role={self.role})"
         )
-    
+
     @property
     def is_admin(self) -> bool:
         """Check if user has admin role."""
         return self.role == "admin"
-    
+
     @property
     def is_staff(self) -> bool:
         """Check if user has staff or admin role."""
         return self.role in ("admin", "staff")
-    
+
     async def get_supabase_client(self):
         """
         Get a Supabase client scoped to this user's JWT.
-        
+
         The client respects RLS policies - queries will automatically
         filter based on user's org_id/property_id claims.
         """
@@ -94,7 +93,7 @@ class TenantContext(BaseModel):
 
 class UserInfo(BaseModel):
     """Current user info resolved from database."""
-    
+
     id: UUID
     auth_id: UUID
     email: str
@@ -202,7 +201,7 @@ async def get_current_user(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database unavailable",
             )
-        
+
         # Flat select("*") -- avoids PostgREST FK join syntax and unknown columns.
         # auth_service.login uses the same pattern successfully.
         response = await (
@@ -258,7 +257,7 @@ async def get_current_user(
             permissions=user_data.get("permissions") or {},
             is_active=user_data.get("is_active", True),
         )
-        
+
     except HTTPException:
         raise
     except TokenValidationError as e:
@@ -340,7 +339,7 @@ async def get_tenant_context(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Access denied to this property",
                 )
-    
+
     return TenantContext(
         user_id=user.id,
         org_id=user.organization_id,
@@ -358,7 +357,7 @@ async def get_tenant_context(
 def require_property():
     """
     Dependency that requires a property context.
-    
+
     Use for endpoints that require a property_id to be set.
     """
     async def _require_property(
@@ -370,7 +369,7 @@ def require_property():
                 detail="property_id is required for this operation",
             )
         return tenant
-    
+
     return Depends(_require_property)
 
 
@@ -421,7 +420,7 @@ TenantWithProperty = Annotated[TenantContext, require_property()]
 # Admin-only tenant context
 AdminTenant = Annotated[TenantContext, Depends(require_role("admin"))]
 
-# Staff-only tenant context  
+# Staff-only tenant context
 StaffTenant = Annotated[TenantContext, Depends(require_role("admin", "staff"))]
 
 
@@ -434,7 +433,7 @@ class Pagination(BaseModel):
     """Pagination parameters."""
     page: int = Field(1, ge=1, description="Page number")
     page_size: int = Field(20, ge=1, le=100, description="Items per page")
-    
+
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.page_size

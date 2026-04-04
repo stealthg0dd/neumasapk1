@@ -2,19 +2,19 @@
 Supabase client initialization and connection management.
 
 Multi-tenant access helpers compatible with Row Level Security (RLS):
-- get_supabase_admin(): Service role client for server-side operations 
+- get_supabase_admin(): Service role client for server-side operations
   (pattern updates, background tasks) - NEVER exposed to users
 - get_supabase_for_user(jwt): User-scoped client that respects RLS policies
 """
 
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
-
-from supabase import create_async_client, create_client, AsyncClient, Client
+from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from supabase import AsyncClient, Client, create_async_client, create_client
 
 logger = get_logger(__name__)
 
@@ -33,23 +33,23 @@ _async_admin_client: AsyncClient | None = None
 def get_supabase_admin() -> Client | None:
     """
     Get synchronous Supabase admin client using SERVICE_ROLE_KEY.
-    
+
     WARNING: This client bypasses Row Level Security.
     Use ONLY for server-side operations like:
     - Background tasks (Celery workers)
     - Pattern/prediction updates
     - Admin operations
-    
+
     NEVER expose this client to user-facing endpoints directly.
-    
+
     Returns None if Supabase is not configured.
     """
     global _admin_client
-    
+
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - admin client unavailable")
         return None
-    
+
     if _admin_client is None:
         _admin_client = create_client(
             settings.SUPABASE_URL,
@@ -62,23 +62,23 @@ def get_supabase_admin() -> Client | None:
 async def get_async_supabase_admin() -> AsyncClient | None:
     """
     Get asynchronous Supabase admin client using SERVICE_ROLE_KEY.
-    
+
     WARNING: This client bypasses Row Level Security.
     Use ONLY for server-side operations like:
-    - Background tasks (Celery workers)  
+    - Background tasks (Celery workers)
     - Pattern/prediction updates
     - Admin operations
-    
+
     NEVER expose this client to user-facing endpoints directly.
-    
+
     Returns None if Supabase is not configured.
     """
     global _async_admin_client
-    
+
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - async admin client unavailable")
         return None
-    
+
     if _async_admin_client is None:
         _async_admin_client = await create_async_client(
             settings.SUPABASE_URL,
@@ -97,21 +97,21 @@ async def get_async_supabase_admin() -> AsyncClient | None:
 def get_supabase_for_user(jwt: str) -> Client | None:
     """
     Get a Supabase client scoped to a specific user's JWT.
-    
+
     This client respects Row Level Security (RLS) policies.
     All queries will automatically filter based on the JWT claims
     (user_id, org_id) as defined in Supabase RLS policies.
-    
+
     Args:
         jwt: The user's access token from Supabase Auth
-        
+
     Returns:
         Supabase client configured with user's JWT for RLS
     """
     if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
         logger.warning("Supabase not configured for user client")
         return None
-    
+
     client = create_client(
         settings.SUPABASE_URL,
         settings.SUPABASE_ANON_KEY,
@@ -124,13 +124,13 @@ def get_supabase_for_user(jwt: str) -> Client | None:
 async def get_async_supabase_for_user(jwt: str) -> AsyncClient | None:
     """
     Get an async Supabase client scoped to a specific user's JWT.
-    
+
     This client respects Row Level Security (RLS) policies.
     """
     if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
         logger.warning("Supabase not configured for user client")
         return None
-    
+
     client = await create_async_client(
         settings.SUPABASE_URL,
         settings.SUPABASE_ANON_KEY,
@@ -147,7 +147,7 @@ async def get_async_supabase_for_user(jwt: str) -> AsyncClient | None:
 def get_supabase_client() -> Client | None:
     """
     Alias for get_supabase_admin() for backward compatibility.
-    
+
     DEPRECATED: Use get_supabase_admin() or get_supabase_for_user(jwt) instead.
     """
     return get_supabase_admin()
@@ -156,7 +156,7 @@ def get_supabase_client() -> Client | None:
 async def get_async_supabase_client() -> AsyncClient | None:
     """
     Alias for get_async_supabase_admin() for backward compatibility.
-    
+
     DEPRECATED: Use get_async_supabase_admin() or get_async_supabase_for_user(jwt) instead.
     """
     return await get_async_supabase_admin()
@@ -225,7 +225,7 @@ async def check_supabase_health() -> dict[str, Any]:
     try:
         start = time.perf_counter()
         client = await get_async_supabase_admin()
-        
+
         if client is None:
             return {
                 "connected": False,
@@ -237,7 +237,7 @@ async def check_supabase_health() -> dict[str, Any]:
         # If it doesn't exist, we'll still consider the connection healthy
         # but note that schema needs to be set up
         try:
-            result = await client.table("organizations").select("id").limit(1).execute()
+            await client.table("organizations").select("id").limit(1).execute()
         except Exception as table_err:
             error_str = str(table_err)
             # Table not found is OK - connection works, just no schema yet
@@ -271,14 +271,14 @@ async def check_supabase_health() -> dict[str, Any]:
 async def health_check() -> bool:
     """
     Simple health check that returns True if Supabase is configured and reachable.
-    
+
     Returns True if connected OR if Supabase not configured (degraded mode OK).
     """
     # If Supabase is not configured, return True (degraded mode)
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("Supabase not configured - running in degraded mode")
         return True
-    
+
     try:
         result = await check_supabase_health()
         connected = result.get("connected", False)
@@ -300,10 +300,10 @@ async def health_check() -> bool:
 async def ensure_storage_bucket(bucket_name: str = "receipts") -> bool:
     """
     Ensure a storage bucket exists, creating it if necessary.
-    
+
     Args:
         bucket_name: Name of the bucket (default: "receipts")
-        
+
     Returns:
         True if bucket exists or was created, False on error
     """
@@ -311,12 +311,12 @@ async def ensure_storage_bucket(bucket_name: str = "receipts") -> bool:
     if client is None:
         logger.error("Cannot manage storage - Supabase client unavailable")
         return False
-    
+
     try:
         # List existing buckets
         buckets = await client.storage.list_buckets()
         bucket_names = [b.name for b in buckets]
-        
+
         if bucket_name in bucket_names:
             logger.info("Storage bucket already exists", bucket=bucket_name)
             return True
@@ -351,13 +351,13 @@ async def upload_receipt_image(
 ) -> str | None:
     """
     Upload a receipt image to Supabase Storage.
-    
+
     Args:
         file_data: Raw file bytes
         file_name: Name/path for the file in storage
         content_type: MIME type of the file
         bucket_name: Storage bucket name
-        
+
     Returns:
         Public URL of the uploaded file, or None on error
     """
@@ -365,24 +365,24 @@ async def upload_receipt_image(
     if client is None:
         logger.error("Cannot upload - Supabase client unavailable")
         return None
-    
+
     try:
         # Ensure bucket exists
         await ensure_storage_bucket(bucket_name)
-        
+
         # Upload file
-        result = await client.storage.from_(bucket_name).upload(
+        await client.storage.from_(bucket_name).upload(
             file_name,
             file_data,
             {"content-type": content_type},
         )
-        
+
         # Get signed URL (valid for 1 hour)
         signed_url = await client.storage.from_(bucket_name).create_signed_url(
             file_name,
             3600,  # 1 hour expiry
         )
-        
+
         logger.info("Uploaded receipt image", file_name=file_name)
         return signed_url.get("signedURL") or signed_url.get("signed_url")
 
@@ -398,19 +398,19 @@ async def get_receipt_signed_url(
 ) -> str | None:
     """
     Get a signed URL for a receipt image.
-    
+
     Args:
         file_name: Name/path of the file in storage
         bucket_name: Storage bucket name
         expiry_seconds: URL expiry time in seconds
-        
+
     Returns:
         Signed URL or None on error
     """
     client = await get_async_supabase_admin()
     if client is None:
         return None
-    
+
     try:
         result = await client.storage.from_(bucket_name).create_signed_url(
             file_name,

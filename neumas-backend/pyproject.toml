@@ -35,6 +35,7 @@ dependencies = [
     "openai>=1.55.0",
     "anthropic>=0.39.0",
     "python-multipart>=0.0.12",
+    "sentry-sdk[fastapi,celery]>=2.20.0",
 ]
 
 [project.optional-dependencies]
@@ -93,7 +94,13 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "B904",   # raise from errors
     "ARG001", # unused function argument (common in FastAPI)
+    "ARG002", # unused method argument (interface/stub implementations)
+    "ARG005", # unused lambda argument
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"app/main.py" = ["E402"]        # router imports after Sentry/logging init
+"app/core/celery_app.py" = ["E402"]  # celery task imports after app init
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

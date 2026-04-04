@@ -1,0 +1,145 @@
+# =============================================================================
+# Neumas — local development docker-compose
+# Brings up the entire stack: Next.js web, FastAPI backend, Redis, Celery worker
+# =============================================================================
+# Usage:
+#   cp neumas-web/.env.example       neumas-web/.env.local
+#   cp neumas-backend/.env.example   neumas-backend/.env
+#   docker compose up --build
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Redis — shared broker + result backend for Celery
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: neumas-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - neumas-network
+
+  # ---------------------------------------------------------------------------
+  # FastAPI backend
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./neumas-backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: neumas-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./neumas-backend:/app
+      - /app/.venv  # exclude venv from bind-mount
+    env_file:
+      - ./neumas-backend/.env
+    environment:
+      - ENV=dev
+      - DEBUG=true
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - neumas-network
+
+  # ---------------------------------------------------------------------------
+  # Celery worker
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: ./neumas-backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: neumas-worker
+    command: >
+      celery -A app.core.celery_app worker
+      --loglevel=info
+      --queues=neumas_default,scans,agents,neumas.predictions
+      --concurrency=2
+    volumes:
+      - ./neumas-backend:/app
+      - /app/.venv
+    env_file:
+      - ./neumas-backend/.env
+    environment:
+      - ENV=dev
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - neumas-network
+
+  # ---------------------------------------------------------------------------
+  # Next.js web app (hot-reload via Next.js dev server)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./neumas-web
+      dockerfile: Dockerfile
+      target: builder          # stop at builder stage so source is present
+    container_name: neumas-web
+    # Override CMD to run dev server with hot reload
+    command: ["npm", "run", "dev"]
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind-mount source for hot reload
+      - ./neumas-web/src:/app/src
+      - ./neumas-web/public:/app/public
+      - ./neumas-web/next.config.ts:/app/next.config.ts
+      - ./neumas-web/tailwind.config.ts:/app/tailwind.config.ts
+      # Named volume keeps node_modules inside the container
+      - web-node-modules:/app/node_modules
+    env_file:
+      - ./neumas-web/.env.local
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      # Point the web proxy at the api container
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - neumas-network
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  redis-data:
+  web-node-modules:
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  neumas-network:
+    driver: bridge

@@ -10,7 +10,10 @@ from app.db.repositories.predictions import (
     PredictionsRepository,
     get_predictions_repository,
 )
-from app.db.repositories.properties import PropertiesRepository, get_properties_repository
+from app.db.repositories.properties import (
+    PropertiesRepository,
+    get_properties_repository,
+)
 from app.db.repositories.scans import ScansRepository, get_scans_repository
 from app.db.repositories.shopping_lists import (
     ShoppingListsRepository,

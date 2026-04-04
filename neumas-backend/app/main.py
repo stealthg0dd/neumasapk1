@@ -9,8 +9,8 @@ Production-hardened with:
 - Global exception handling
 """
 
-import sys
 import os
+import sys
 
 
 def sanitize_env() -> None:
@@ -56,12 +56,12 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
@@ -91,7 +91,15 @@ except ImportError:
     pass  # sentry-sdk not installed — safe to continue
 
 # Import routers explicitly at the top - errors will be visible in logs
-from app.api.routes import admin, auth, inventory, predictions, scans, shopping, analytics
+from app.api.routes import (
+    admin,
+    analytics,
+    auth,
+    inventory,
+    predictions,
+    scans,
+    shopping,
+)
 
 # Safe import for logging module
 try:
@@ -116,7 +124,8 @@ try:
     from app.core.security import is_admin
 except ImportError as e:
     logger.warning(f"Failed to import security module: {e}")
-    is_admin = lambda x: False
+    def is_admin(x):
+        return False
 
 
 @asynccontextmanager
@@ -128,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     - Database connections
     - Cache connections
     - Background worker initialization
-    
+
     Handles missing dependencies gracefully for degraded mode.
     """
     # Startup
@@ -480,10 +489,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     logger.error("Unhandled exception", error=error_msg, exc_type=type(exc).__name__, path=request.url.path)
 
     # Don't expose internal errors in production
-    if settings.is_production:
-        detail = "Internal server error"
-    else:
-        detail = error_msg
+    detail = "Internal server error" if settings.is_production else error_msg
 
     return JSONResponse(
         status_code=500,

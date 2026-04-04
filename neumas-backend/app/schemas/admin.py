@@ -9,7 +9,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ============================================================================
 # System Health & Monitoring
 # ============================================================================
@@ -200,11 +199,11 @@ class TriggerTaskRequest(BaseModel):
 
 
 class TriggerTaskResponse(BaseModel):
-    """Response after triggering a task."""
+    """Response after triggering task."""
 
     task_id: str
-    status: str
-    message: str
+    status: str = "PENDING"
+    message: str = "Task queued successfully"
 
 
 # ============================================================================
@@ -226,12 +225,6 @@ class AuditLog(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-class TriggerTaskResponse(BaseModel):
-    """Response after triggering task."""
-
-    task_id: str
-    status: str = "PENDING"
-    message: str = "Task queued successfully"
 
 
 # ============================================================================

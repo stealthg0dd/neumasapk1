@@ -8,7 +8,7 @@ neumas.shopping queue name expected by ShoppingService.
 import asyncio
 from typing import Any
 
-from app.core.celery_app import celery_app, neumas_task
+from app.core.celery_app import neumas_task
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

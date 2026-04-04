@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from app.core.celery_app import celery_app, neumas_task
+from app.core.celery_app import neumas_task
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -124,9 +124,9 @@ async def _process_scan_async(
     """
     # Lazy imports to prevent circular imports at module load
     from app.db.supabase_client import get_async_supabase_admin
-    from app.services.vision_agent import get_vision_agent
     from app.services.pattern_agent import recompute_patterns_for_property
     from app.services.predict_agent import recompute_predictions_for_property
+    from app.services.vision_agent import get_vision_agent
 
     wall_start = time.perf_counter()
 

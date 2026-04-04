@@ -4,7 +4,7 @@ Prediction schemas.
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
@@ -227,36 +227,11 @@ class PredictionAccuracyResponse(BaseModel):
 
 
 # ============================================================================
-# Accuracy Tracking Schemas
-# ============================================================================
-
-
-class PredictionAccuracyRequest(BaseModel):
-    """Request prediction accuracy metrics."""
-
-    property_id: UUID
-    prediction_type: Literal["demand", "stockout", "reorder"]
-    days: int = Field(default=30, ge=7, le=365)
-
-
-class PredictionAccuracyResponse(BaseModel):
-    """Prediction accuracy metrics."""
-
-    property_id: UUID
-    prediction_type: str
-    period_days: int
-    sample_size: int
-    mean_absolute_error: float | None
-    mean_absolute_percentage_error: float | None
-    accuracy_percentage: float | None
-
-
-# ============================================================================
 # Urgency-Ordered Prediction Schemas
 # ============================================================================
 
 
-class UrgencyBucket(str, Enum):
+class UrgencyBucket(StrEnum):
     """Urgency levels for predictions."""
 
     CRITICAL = "critical"  # <= 3 days

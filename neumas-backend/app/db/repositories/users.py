@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 class UsersRepository:
     """
     Repository for user-related database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Queries filter by org_id which aligns with RLS policies.
     """
@@ -49,12 +49,12 @@ class UsersRepository:
     ) -> dict[str, Any] | None:
         """
         Get user by ID.
-        
+
         If user_id not provided, returns current tenant's user.
         RLS: Users can only view users in their organization.
         """
         target_user_id = user_id or tenant.user_id
-        
+
         try:
             response = await (
                 self.client.table(self.table)
@@ -81,7 +81,7 @@ class UsersRepository:
     ) -> dict[str, Any] | None:
         """
         Get user by Supabase auth ID.
-        
+
         RLS: Filtered to tenant's organization.
         """
         try:
@@ -109,7 +109,7 @@ class UsersRepository:
     ) -> dict[str, Any] | None:
         """
         Get user by email within tenant's organization.
-        
+
         RLS: Filtered to tenant's organization.
         """
         try:
@@ -135,7 +135,7 @@ class UsersRepository:
     ) -> list[dict[str, Any]]:
         """
         Get all users for tenant's organization.
-        
+
         RLS: Automatically filtered to user's organization.
         """
         query = (
@@ -162,12 +162,12 @@ class UsersRepository:
     ) -> dict[str, Any]:
         """
         Create a new user in tenant's organization.
-        
+
         RLS: Insert policy requires matching org_id.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can create users")
-        
+
         # Normalize email and ensure org_id
         if "email" in data:
             data["email"] = data["email"].lower()
@@ -190,7 +190,7 @@ class UsersRepository:
     ) -> dict[str, Any]:
         """
         Update a user in tenant's organization.
-        
+
         RLS: Update policy ensures user can only update users in their org.
         Users can update themselves; admins can update anyone in org.
         """
@@ -198,7 +198,7 @@ class UsersRepository:
         is_self = user_id == tenant.user_id
         if not is_self and tenant.role != "admin":
             raise PermissionError("Can only update own profile or requires admin")
-        
+
         if "email" in data:
             data["email"] = data["email"].lower()
 
@@ -223,16 +223,16 @@ class UsersRepository:
     ) -> bool:
         """
         Soft delete a user.
-        
+
         RLS: Only admins can delete users in their org.
         """
         if tenant.role != "admin":
             raise PermissionError("Only admins can delete users")
-        
+
         # Prevent self-deletion
         if user_id == tenant.user_id:
             raise ValueError("Cannot delete yourself")
-        
+
         try:
             await (
                 self.client.table(self.table)
@@ -258,11 +258,11 @@ class UsersRepository:
     ) -> None:
         """
         Update user's last login timestamp.
-        
+
         If user_id not provided, updates current tenant's user.
         """
         target_user_id = user_id or tenant.user_id
-        
+
         try:
             await (
                 self.client.table(self.table)
@@ -285,11 +285,11 @@ class UsersRepository:
     ) -> dict[str, Any] | None:
         """
         Get user with organization details.
-        
+
         If user_id not provided, returns current tenant's user.
         """
         target_user_id = user_id or tenant.user_id
-        
+
         try:
             response = await (
                 self.client.table(self.table)
@@ -316,15 +316,15 @@ class UsersRepository:
     ) -> dict[str, Any]:
         """
         Update user preferences (merge with existing).
-        
+
         Users can only update their own preferences.
         """
         target_user_id = user_id or tenant.user_id
-        
+
         # Users can only update their own preferences
         if target_user_id != tenant.user_id and tenant.role != "admin":
             raise PermissionError("Can only update own preferences")
-        
+
         user = await self.get_by_id(tenant, target_user_id)
         if not user:
             raise ValueError("User not found or access denied")
@@ -342,7 +342,7 @@ class UsersRepository:
     ) -> bool:
         """
         Check if user has a specific permission.
-        
+
         If user_id not provided, checks current tenant's user.
         """
         target_user_id = user_id or tenant.user_id
@@ -363,7 +363,7 @@ async def get_users_repository(
 ) -> UsersRepository:
     """
     Get users repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

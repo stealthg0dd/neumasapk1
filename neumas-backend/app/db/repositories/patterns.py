@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 class PatternsRepository:
     """
     Repository for consumption pattern database operations.
-    
+
     All methods require a TenantContext to ensure proper tenant isolation.
     Patterns are linked to items, which are filtered by property_id.
     """
@@ -52,7 +52,7 @@ class PatternsRepository:
     ) -> dict[str, Any] | None:
         """
         Get pattern by ID.
-        
+
         RLS: Filters through item -> property relationship.
         """
         try:
@@ -63,18 +63,18 @@ class PatternsRepository:
                 .eq("id", str(pattern_id))
                 .execute()
             )
-            
+
             if not response.data:
                 return None
-            
+
             pattern = response.data[0]
-            
+
             # Verify property access
             if tenant.property_id:
                 item_property = pattern.get("inventory_item", {}).get("property_id")
                 if item_property != str(tenant.property_id):
                     return None
-            
+
             return pattern
         except Exception as e:
             logger.error(
@@ -92,7 +92,7 @@ class PatternsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get patterns for an inventory item.
-        
+
         RLS: Item must belong to tenant's property.
         """
         query = (
@@ -105,14 +105,14 @@ class PatternsRepository:
             query = query.eq("pattern_type", pattern_type)
 
         response = await query.order("confidence", desc=True).execute()
-        
+
         # Filter by property if set
         if tenant.property_id:
             return [
                 p for p in response.data
                 if p.get("inventory_item", {}).get("property_id") == str(tenant.property_id)
             ]
-        
+
         return response.data
 
     async def get_active_patterns(
@@ -122,7 +122,7 @@ class PatternsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get currently valid patterns for an item.
-        
+
         RLS: Item must belong to tenant's property.
         """
         from datetime import UTC, datetime
@@ -138,14 +138,14 @@ class PatternsRepository:
             .order("confidence", desc=True)
             .execute()
         )
-        
+
         # Filter by property if set
         if tenant.property_id:
             return [
                 p for p in response.data
                 if p.get("inventory_item", {}).get("property_id") == str(tenant.property_id)
             ]
-        
+
         return response.data
 
     async def create(
@@ -155,7 +155,7 @@ class PatternsRepository:
     ) -> dict[str, Any]:
         """
         Create a new consumption pattern.
-        
+
         RLS: Insert policy requires item to be accessible.
         """
         response = await self.client.table(self.table).insert(data).execute()
@@ -176,14 +176,14 @@ class PatternsRepository:
     ) -> dict[str, Any]:
         """
         Update a pattern.
-        
+
         RLS: Update policy ensures user can only update accessible patterns.
         """
         # Verify access first
         pattern = await self.get_by_id(tenant, pattern_id)
         if not pattern:
             raise ValueError("Pattern not found or access denied")
-        
+
         response = await (
             self.client.table(self.table)
             .update(data)
@@ -237,14 +237,14 @@ class PatternsRepository:
     ) -> bool:
         """
         Delete a pattern.
-        
+
         RLS: Delete policy ensures user can only delete accessible patterns.
         """
         # Verify access first
         pattern = await self.get_by_id(tenant, pattern_id)
         if not pattern:
             return False
-        
+
         try:
             await (
                 self.client.table(self.table)
@@ -270,13 +270,13 @@ class PatternsRepository:
     ) -> list[dict[str, Any]]:
         """
         Get all patterns for items in tenant's property.
-        
+
         RLS: Filtered by property_id from tenant context.
         """
         if not tenant.property_id:
             logger.warning("get_patterns_for_property called without property_id")
             return []
-        
+
         # Join with inventory_items to filter by property
         query = (
             self.client.table(self.table)
@@ -297,7 +297,7 @@ async def get_patterns_repository(
 ) -> PatternsRepository:
     """
     Get patterns repository instance.
-    
+
     If tenant is provided with JWT, uses user-scoped client for RLS.
     Otherwise uses admin client (for background tasks).
     """

@@ -2,10 +2,8 @@
 Shopping service for shopping list management and order deep links.
 """
 
-from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 from uuid import UUID
 
 from app.api.deps import TenantContext
@@ -102,7 +100,7 @@ class ShoppingService:
         )
 
         shopping_repo = await get_shopping_lists_repository()
-        
+
         # Get the most recent active list
         active_list = await shopping_repo.get_active_list(property_id, tenant)
 
@@ -177,7 +175,7 @@ class ShoppingService:
         )
 
         platform = request.platform.lower()
-        
+
         if platform not in DEEP_LINK_TEMPLATES:
             raise ValueError(f"Unsupported platform: {platform}")
 

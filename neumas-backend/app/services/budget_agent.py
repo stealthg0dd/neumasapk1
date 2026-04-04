@@ -557,7 +557,7 @@ Also provide:
 Period: {days} days
 Total spent: ${total_spent}
 Lists completed: {len(recent_lists)}
-Spending by category: {dict((k, float(v)) for k, v in by_category.items())}
+Spending by category: { {k: float(v) for k, v in by_category.items()} }
 
 Provide:
 1. Key spending trends
