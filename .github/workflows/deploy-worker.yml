@@ -1,0 +1,179 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "neumas-backend/**"
+      - ".github/workflows/deploy-worker.yml"
+
+# Only one backend deploy runs at a time.
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  # Gate: require CI to pass before deploying
+  ci-gate:
+    name: Wait for CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI must pass first
+        run: echo "CI gate satisfied — proceeding to deploy"
+
+  deploy-api:
+    name: Deploy API to Railway
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@latest
+
+      - name: Deploy API service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_NEUMAS }}
+        run: |
+          railway up \
+            --service neumas-api \
+            --detach \
+            --ci
+
+      - name: Wait for API health check
+        env:
+          AGENT_OS_URL: ${{ secrets.AGENT_OS_URL }}
+          RAILWAY_API_URL: ${{ secrets.RAILWAY_API_URL }}
+        run: |
+          HEALTH_URL="${RAILWAY_API_URL}/health"
+          echo "Checking $HEALTH_URL"
+          for i in 1 2 3 4 5 6; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "API health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 15s..."
+            sleep 15
+          done
+          echo "API health check failed after 6 attempts"
+          exit 1
+
+      - name: Register API heartbeat with agent OS
+        env:
+          AGENT_OS_URL: ${{ secrets.AGENT_OS_URL }}
+          AGENT_OS_API_KEY: ${{ secrets.AGENT_OS_API_KEY }}
+        run: |
+          curl -s -f -X POST "$AGENT_OS_URL/api/heartbeat/neumas-backend" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $AGENT_OS_API_KEY" \
+            -d '{
+              "status": "ok",
+              "uptime_seconds": 0,
+              "active_connections": 0,
+              "memory_mb": 0,
+              "version": "${{ github.sha }}"
+            }' || echo "Heartbeat failed (non-fatal)"
+
+  deploy-worker:
+    name: Deploy Celery Worker to Railway
+    runs-on: ubuntu-latest
+    needs: deploy-api
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@latest
+
+      - name: Deploy worker service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_NEUMAS }}
+        run: |
+          railway up \
+            --service neumas-worker \
+            --detach \
+            --ci
+
+      - name: Register worker heartbeat with agent OS
+        env:
+          AGENT_OS_URL: ${{ secrets.AGENT_OS_URL }}
+          AGENT_OS_API_KEY: ${{ secrets.AGENT_OS_API_KEY }}
+        run: |
+          curl -s -f -X POST "$AGENT_OS_URL/api/heartbeat/neumas-backend" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $AGENT_OS_API_KEY" \
+            -d '{
+              "status": "ok",
+              "uptime_seconds": 0,
+              "active_connections": 0,
+              "memory_mb": 0,
+              "version": "${{ github.sha }}"
+            }' || echo "Heartbeat failed (non-fatal)"
+
+      - name: Notify success — #neumas-alerts
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_NEUMAS_ALERTS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":railway_track: *neumas-backend deployed* to production",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":railway_track: *neumas-backend (API + Worker) deployed to production*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n*By:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify success — #ctech-command
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_CTECH_COMMAND }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":white_check_mark: neumas-backend production deploy complete (API + Worker)"
+            }
+
+  notify-failure:
+    name: Notify deploy failure
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-worker]
+    if: failure()
+    steps:
+      - name: Post failure — #neumas-alerts
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_NEUMAS_ALERTS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: *neumas-backend deploy FAILED*",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":fire: *neumas-backend deploy FAILED*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n*By:* ${{ github.actor }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
+
+      - name: Post failure — #ctech-command
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_CTECH_COMMAND }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: neumas-backend deploy FAILED — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+            }

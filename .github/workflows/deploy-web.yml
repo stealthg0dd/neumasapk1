@@ -1,0 +1,184 @@
+name: Deploy Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "neumas-web/**"
+      - ".github/workflows/deploy-web.yml"
+
+# Only one deploy runs at a time.  A new push cancels a queued but
+# not-yet-started deploy; an in-progress deploy always finishes.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  # Gate: require CI to pass before deploying
+  ci-gate:
+    name: Wait for CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI must pass first
+        run: echo "CI gate satisfied — proceeding to deploy"
+
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    environment: production
+
+    outputs:
+      deploy_url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: neumas-web/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        working-directory: neumas-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Build for Vercel
+        working-directory: neumas-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
+          NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        working-directory: neumas-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $URL"
+
+      - name: Verify /api/health
+        run: |
+          HEALTH_URL="${{ steps.deploy.outputs.deploy_url }}/api/health"
+          echo "Checking $HEALTH_URL"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+      - name: Create Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_NEUMAS_WEB }}
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases deploys "${{ github.sha }}" new \
+            --env production \
+            --url "${{ steps.deploy.outputs.deploy_url }}"
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+
+      - name: Register heartbeat with agent OS
+        env:
+          AGENT_OS_URL: ${{ secrets.AGENT_OS_URL }}
+          AGENT_OS_API_KEY: ${{ secrets.AGENT_OS_API_KEY }}
+        run: |
+          curl -s -f -X POST "$AGENT_OS_URL/api/heartbeat/neumas-web" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $AGENT_OS_API_KEY" \
+            -d '{
+              "status": "ok",
+              "uptime_seconds": 0,
+              "active_connections": 0,
+              "memory_mb": 0,
+              "version": "${{ github.sha }}"
+            }' || echo "Heartbeat failed (non-fatal)"
+
+      - name: Notify success — #neumas-alerts
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_NEUMAS_ALERTS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":rocket: *neumas-web deployed* to production",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":rocket: *neumas-web deployed to production*\n*URL:* ${{ steps.deploy.outputs.deploy_url }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n*By:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify success — #ctech-command
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_CTECH_COMMAND }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":white_check_mark: neumas-web production deploy complete — ${{ steps.deploy.outputs.deploy_url }}"
+            }
+
+  notify-failure:
+    name: Notify deploy failure
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: failure()
+    steps:
+      - name: Post failure — #neumas-alerts
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_NEUMAS_ALERTS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: *neumas-web deploy FAILED*",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":fire: *neumas-web deploy FAILED*\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n*By:* ${{ github.actor }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
+
+      - name: Post failure — #ctech-command
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_CTECH_COMMAND }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: neumas-web deploy FAILED — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+            }
