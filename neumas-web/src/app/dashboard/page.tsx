@@ -1,358 +1,506 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion, type Variants } from "framer-motion";
-import { ScanLine, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Bell,
+  ClipboardList,
+  Minus,
+  Package,
+  Plus,
+  ScanLine,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { GlassCard } from "@/components/ui/glass-card";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  adjustQuantity,
+  listInventoryItems,
+  listRecentScans,
+  listShoppingLists,
+} from "@/lib/api/endpoints";
+import type { InventoryItem, Scan } from "@/lib/api/types";
 import { useAuthStore } from "@/lib/store/auth";
-import { listPredictions, listInventory, listShoppingLists, getShoppingList, generateShoppingList, triggerForecast } from "@/lib/api/endpoints";
-import type { Prediction, InventoryItem, ShoppingListItem } from "@/lib/api/types";
-import { normalizeShoppingItem } from "@/lib/api/types";
-import { track, captureUIError } from "@/lib/analytics";
+import { captureUIError } from "@/lib/analytics";
+import {
+  daysUntilExpiry,
+  expiryTone,
+  getExpiryIso,
+  pantryCategoryTab,
+} from "@/lib/inventory-dates";
+import { cn } from "@/lib/utils";
 
-import { StockoutAlert } from "@/components/dashboard/StockoutAlert";
-import { SavingsCounter, StatCard } from "@/components/dashboard/SavingsCounter";
-import { InventoryPreview } from "@/components/dashboard/InventoryPreview";
-import { ShoppingPreview } from "@/components/dashboard/ShoppingPreview";
+const TABS = ["All", "Proteins", "Grains", "Dairy", "Produce", "Condiments"] as const;
 
-// ── Quick action button ────────────────────────────────────────────────────────
-
-function QuickAction({
-  icon: Icon,
-  label,
-  description,
-  onClick,
-  loading,
-  accentClass = "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30",
-}: {
-  icon:        React.ComponentType<{ className?: string }>;
-  label:       string;
-  description: string;
-  onClick:     () => void;
-  loading?:    boolean;
-  accentClass?: string;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      disabled={loading}
-      className={[
-        "flex items-center gap-3 w-full p-3.5 rounded-xl text-left transition-all border border-border/30",
-        "glass-button hover:border-border/60 disabled:opacity-60 disabled:cursor-not-allowed",
-      ].join(" ")}
-    >
-      <div className={["w-9 h-9 rounded-lg flex items-center justify-center shrink-0", accentClass].join(" ")}>
-        {loading ? (
-          <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-        ) : (
-          <Icon className="w-4 h-4" />
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground truncate">{description}</p>
-      </div>
-    </motion.button>
+function sgtHour(): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Singapore",
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date()),
+    10
   );
 }
 
-// ── Container animation ────────────────────────────────────────────────────────
+function greetingForHour(h: number): string {
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
-const container: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.07 } },
-};
+function categoryEmoji(cat: string): string {
+  const c = cat.toLowerCase();
+  if (c.includes("protein") || c.includes("meat")) return "🥩";
+  if (c.includes("grain") || c.includes("rice")) return "🌾";
+  if (c.includes("dairy") || c.includes("milk")) return "🥛";
+  if (c.includes("produce") || c.includes("veg") || c.includes("fruit")) return "🥬";
+  if (c.includes("condiment")) return "🧂";
+  return "📦";
+}
 
-const card: Variants = {
-  hidden:  { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-};
-
-// ── Page ──────────────────────────────────────────────────────────────────────
+function StatMini({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  index,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  sub?: string;
+  index: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05, type: "spring", stiffness: 400, damping: 30 }}
+    >
+      <GlassCard className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[var(--surface-elevated)] flex items-center justify-center shrink-0">
+            <Icon className="w-5 h-5 text-[#0071a3]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl font-semibold tabular-nums text-[var(--text-primary)] leading-tight">
+              {value}
+            </p>
+            <p className="text-xs font-medium text-[var(--text-secondary)] mt-0.5">{label}</p>
+            {sub && (
+              <p className="text-[11px] text-[var(--text-muted)] font-mono mt-1 truncate">{sub}</p>
+            )}
+          </div>
+        </div>
+      </GlassCard>
+    </motion.div>
+  );
+}
 
 export default function DashboardPage() {
-  const profile    = useAuthStore((s) => s.profile);
+  const profile = useAuthStore((s) => s.profile);
   const propertyId = useAuthStore((s) => s.propertyId);
 
-  const [predictions,    setPredictions]    = useState<Prediction[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [inventoryTotal, setInventoryTotal] = useState(0);
-  const [inventoryValue, setInventoryValue] = useState(0);
-  const [shoppingItems,  setShoppingItems]  = useState<ShoppingListItem[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [scans, setScans] = useState<Scan[]>([]);
+  const [listCount, setListCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<(typeof TABS)[number]>("All");
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
-  const [loadingPred, setLoadingPred] = useState(true);
-  const [loadingInv,  setLoadingInv]  = useState(true);
-  const [loadingShop, setLoadingShop] = useState(true);
+  const fetchedRef = useRef<string | null>(null);
 
-  const [generatingList,    setGeneratingList]    = useState(false);
-  const [triggeringForecast, setTriggeringForecast] = useState(false);
+  useEffect(() => {
+    try {
+      setBannerDismissed(localStorage.getItem("neumas-dismiss-expiry") === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  // ── Fetch data ───────────────────────────────────────────────────────────────
-  // Two ref guards prevent any re-entry:
-  //   isInitialMount  — true until the first fetch for any propertyId completes
-  //   fetchedForRef   — records which propertyId we last fetched; the effect is
-  //                     a no-op if it fires again for the same value (covers
-  //                     React StrictMode double-invoke and Zustand store churn)
-  // A 500 ms debounce absorbs bursts of rapid propertyId changes (e.g. during
-  // auth hydration) without making the dashboard feel sluggish on cold load.
-
-  const isInitialMount = useRef(true);
-  const fetchedForRef  = useRef<string | null>(null);
+  const load = useCallback(async () => {
+    if (!propertyId) return;
+    setLoading(true);
+    try {
+      const [inv, recent, lists] = await Promise.all([
+        listInventoryItems({ limit: 200 }),
+        listRecentScans({ limit: 5 }),
+        listShoppingLists({ limit: 50 }),
+      ]);
+      setItems(inv.items);
+      setScans(recent);
+      setListCount(Array.isArray(lists) ? lists.length : 0);
+    } catch (err) {
+      captureUIError("dashboard_load", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
-    if (fetchedForRef.current === propertyId) return;
-    fetchedForRef.current = propertyId;
-    isInitialMount.current = false;
+    if (fetchedRef.current === propertyId) return;
+    fetchedRef.current = propertyId;
+    load();
+  }, [propertyId, load]);
 
-    let cancelled = false;
+  const firstName = profile?.full_name?.split(" ")[0] ?? "Vee";
+  const greet = `${greetingForHour(sgtHour())}, ${firstName}`;
 
-    async function fetchAll() {
-      // Fire all three in parallel — they all use the same token, so if the
-      // token is invalid ALL get 401 simultaneously and the redirect guard in
-      // client.ts fires only once.  Sequential fetching would cascade: the first
-      // 401 clears localStorage, then the next request fires with no token.
-      await Promise.all([
+  const dateLine = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-SG", {
+        timeZone: "Asia/Singapore",
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(new Date()),
+    []
+  );
 
-        // ── Predictions ─────────────────────────────────────────────────────
-        (async () => {
-          setLoadingPred(true);
-          try {
-            const data = await listPredictions({ limit: 20 });
-            if (!cancelled) setPredictions(Array.isArray(data) ? data : []);
-          } catch {
-            if (!cancelled) setPredictions([]);
-          } finally {
-            if (!cancelled) setLoadingPred(false);
-          }
-        })(),
+  const filtered = useMemo(() => {
+    if (tab === "All") return items;
+    return items.filter((i) => pantryCategoryTab(i.category?.name) === tab);
+  }, [items, tab]);
 
-        // ── Inventory ────────────────────────────────────────────────────────
-        (async () => {
-          setLoadingInv(true);
-          try {
-            const res = await listInventory({ limit: 10 });
-            if (!cancelled) {
-              const items = Array.isArray(res?.items) ? res.items : [];
-              setInventoryItems(items);
-              setInventoryTotal(res?.total ?? 0);
-              setInventoryValue(
-                Math.round(items.reduce((s, i) => s + (i.cost_per_unit ?? 0) * i.quantity, 0))
-              );
-            }
-          } catch {
-            if (!cancelled) { setInventoryItems([]); setInventoryTotal(0); setInventoryValue(0); }
-          } finally {
-            if (!cancelled) setLoadingInv(false);
-          }
-        })(),
+  const expiringSoon = useMemo(() => {
+    return items.filter((i) => {
+      const d = daysUntilExpiry(getExpiryIso(i));
+      return d !== null && d >= 0 && d < 7;
+    });
+  }, [items]);
 
-        // ── Shopping list ─────────────────────────────────────────────────────
-        (async () => {
-          setLoadingShop(true);
-          try {
-            const lists = await listShoppingLists();
-            const safeList = Array.isArray(lists) ? lists : [];
-            const activeList = safeList.find((l) => l.status === "draft" || l.status === "approved");
-            if (activeList && !cancelled) {
-              const detail = await getShoppingList(activeList.id);
-              if (!cancelled) {
-                const rawItems = Array.isArray(detail?.items) ? detail.items : [];
-                setShoppingItems(rawItems.map(normalizeShoppingItem));
-              }
-            } else if (!cancelled) {
-              setShoppingItems([]);
-            }
-          } catch {
-            if (!cancelled) setShoppingItems([]);
-          } finally {
-            if (!cancelled) setLoadingShop(false);
-          }
-        })(),
+  const expiringWeek = useMemo(() => {
+    return items.filter((i) => {
+      const d = daysUntilExpiry(getExpiryIso(i));
+      return d !== null && d >= 0 && d <= 14;
+    });
+  }, [items]);
 
-      ]);
-    }
+  const lastScan = scans[0];
 
-    // 500 ms debounce — absorbs auth-hydration bursts without a perceptible delay
-    const timer = setTimeout(fetchAll, 500);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [propertyId]);
-
-  // ── Quick actions ────────────────────────────────────────────────────────────
-
-  async function handleGenerateList() {
-    if (!propertyId) return toast.error("No property selected.");
+  async function bumpQty(item: InventoryItem, delta: number) {
+    const prev = items;
+    setItems((list) =>
+      list.map((i) =>
+        i.id === item.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i
+      )
+    );
     try {
-      setGeneratingList(true);
-      await generateShoppingList({});
-      toast.success("Shopping list generation queued!");
-      track("shopping_list_generated", { critical_only: false, days_ahead: 14, min_qty_pct: 20 });
+      const updated = await adjustQuantity(item.id, delta, "dashboard");
+      setItems((list) => list.map((i) => (i.id === item.id ? updated : i)));
     } catch (err) {
-      captureUIError("dashboard_generate_list", err);
-    } finally {
-      setGeneratingList(false);
+      setItems(prev);
+      captureUIError("dashboard_qty", err);
     }
   }
-
-  async function handleTriggerForecast() {
-    try {
-      setTriggeringForecast(true);
-      await triggerForecast(14);
-      toast.success("Forecast job queued — check back shortly.");
-      track("forecast_triggered", { window_days: 14 });
-    } catch (err) {
-      captureUIError("dashboard_trigger_forecast", err);
-    } finally {
-      setTriggeringForecast(false);
-    }
-  }
-
-  // ── Derived stats ────────────────────────────────────────────────────────────
-
-  const criticalCount   = (predictions ?? []).filter((p) => p.stockout_risk_level === "critical").length;
-  const urgentCount     = (predictions ?? []).filter((p) => p.stockout_risk_level === "urgent").length;
-  const lowStockCount   = (inventoryItems ?? []).filter((i) => i.stock_status === "low" || i.stock_status === "critical").length;
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight gradient-text">
-          {profile?.full_name
-            ? `Welcome back, ${profile.full_name.split(" ")[0]}`
-            : "Dashboard"}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {profile?.property_name ?? "Your property"} · AI inventory overview
-        </p>
+    <div className="space-y-8 max-w-[1400px] mx-auto">
+      {/* Top bar */}
+      <header className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold tracking-tight text-[#0071a3]">Neumas</span>
+          </div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] mt-1">{greet}</h1>
+        </div>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <time
+            className="font-mono text-xs text-[var(--text-secondary)] tabular-nums"
+            dateTime={new Date().toISOString()}
+          >
+            {dateLine}
+          </time>
+          <button
+            type="button"
+            className="relative p-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] transition-colors"
+            aria-label="Notifications"
+            onClick={() => toast.info("You're all caught up.", { description: "No new alerts." })}
+          >
+            <Bell className="w-5 h-5 text-[var(--text-secondary)]" />
+          </button>
+        </div>
+      </header>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatMini
+          index={0}
+          icon={Package}
+          label="Total items in pantry"
+          value={loading ? "—" : items.length}
+        />
+        <StatMini
+          index={1}
+          icon={AlertTriangle}
+          label="Items expiring soon"
+          value={loading ? "—" : expiringWeek.length}
+        />
+        <StatMini
+          index={2}
+          icon={ScanLine}
+          label="Last scan"
+          value={
+            lastScan
+              ? new Date(lastScan.created_at).toLocaleDateString("en-SG", {
+                  timeZone: "Asia/Singapore",
+                  month: "short",
+                  day: "numeric",
+                })
+              : "—"
+          }
+          sub={lastScan ? `${lastScan.items_detected} items` : "No scans yet"}
+        />
+        <StatMini
+          index={3}
+          icon={ClipboardList}
+          label="Smart lists"
+          value={loading ? "—" : listCount}
+        />
       </div>
 
-      {/* Bento grid */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-12 gap-4 auto-rows-auto"
-      >
-        {/* ── Row 1 ──────────────────────────────────────────────────────── */}
-
-        {/* Stockout alerts — wide hero */}
-        <motion.div variants={card} className="col-span-12 lg:col-span-8 row-span-2">
-          <StockoutAlert predictions={predictions} loading={loadingPred} />
-        </motion.div>
-
-        {/* Savings counter */}
-        <motion.div variants={card} className="col-span-12 sm:col-span-6 lg:col-span-4">
-          <SavingsCounter
-            totalSaved={inventoryValue}
-            wasteReduction={lowStockCount}
-            activePredictions={predictions.length}
-            loading={loadingInv}
-          />
-        </motion.div>
-
-        {/* Stats — low stock */}
-        <motion.div variants={card} className="col-span-6 sm:col-span-3 lg:col-span-2">
-          <StatCard
-            label="Low stock items"
-            value={lowStockCount}
-            format="number"
-            trend={-8.3}
-            trendLabel="vs last week"
-            accentClass="text-amber-400"
-            index={0}
-          />
-        </motion.div>
-
-        {/* Stats — active alerts */}
-        <motion.div variants={card} className="col-span-6 sm:col-span-3 lg:col-span-2">
-          <StatCard
-            label="Active alerts"
-            value={criticalCount + urgentCount}
-            format="number"
-            trend={criticalCount > 0 ? -5 : 0}
-            trendLabel="vs yesterday"
-            accentClass="text-red-400"
-            index={1}
-          />
-        </motion.div>
-
-        {/* ── Row 2 ──────────────────────────────────────────────────────── */}
-
-        {/* Inventory preview */}
-        <motion.div variants={card} className="col-span-12 lg:col-span-8">
-          <InventoryPreview
-            items={inventoryItems}
-            total={inventoryTotal}
-            loading={loadingInv}
-          />
-        </motion.div>
-
-        {/* Shopping preview */}
-        <motion.div variants={card} className="col-span-12 sm:col-span-6 lg:col-span-4">
-          <ShoppingPreview items={shoppingItems} loading={loadingShop} />
-        </motion.div>
-
-        {/* ── Quick actions ───────────────────────────────────────────────── */}
-        <motion.div variants={card} className="col-span-12 sm:col-span-6">
-          <div className="glass-card rounded-2xl p-5 h-full">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Quick actions</h3>
-            <div className="space-y-2">
-              <QuickAction
-                icon={ScanLine}
-                label="Scan a receipt"
-                description="Upload or photograph an invoice"
-                onClick={() => window.location.href = "/dashboard/scans"}
-                accentClass="bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
-              />
-              <QuickAction
-                icon={Sparkles}
-                label="Generate shopping list"
-                description="AI-powered list based on predictions"
-                onClick={handleGenerateList}
-                loading={generatingList}
-                accentClass="bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Run forecast */}
-        <motion.div variants={card} className="col-span-12 sm:col-span-6">
+      <AnimatePresence>
+        {expiringSoon.length > 0 && !bannerDismissed && (
           <motion.div
-            whileHover={{ scale: 1.01, boxShadow: "0 0 30px 0 oklch(0.715 0.139 199.2 / 0.15)" }}
-            transition={{ duration: 0.2 }}
-            className="glass-card rounded-2xl p-5 h-full flex flex-col justify-between gap-4"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
           >
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Run AI Forecast</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Analyse the last 30 days of consumption and predict the next 14-day stockout risk.
-              </p>
+            <div className="rounded-2xl border border-[rgba(255,149,0,0.35)] bg-[rgba(255,149,0,0.08)] px-4 py-3 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-[#ff9500] shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  {expiringSoon.length} item{expiringSoon.length === 1 ? "" : "s"} expiring this week —{" "}
+                  <Link href="/dashboard/inventory" className="text-[#0071a3] underline-offset-2 hover:underline">
+                    view list
+                  </Link>
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1"
+                aria-label="Dismiss"
+                onClick={() => {
+                  setBannerDismissed(true);
+                  try {
+                    localStorage.setItem("neumas-dismiss-expiry", "1");
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                ×
+              </button>
             </div>
-            <button
-              onClick={handleTriggerForecast}
-              disabled={triggeringForecast}
-              className="w-full h-10 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {triggeringForecast ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Queuing…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Run forecast
-                </>
-              )}
-            </button>
           </motion.div>
-        </motion.div>
-      </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="grid lg:grid-cols-[1fr_300px] gap-6 items-start">
+        {/* Inventory */}
+        <div className="space-y-4 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Inventory overview</h2>
+            <Link
+              href="/dashboard/scans/new"
+              className="text-xs font-medium text-[#0071a3] hover:underline"
+            >
+              New scan
+            </Link>
+          </div>
+
+          <div className="relative flex gap-1 border-b border-[var(--border)] overflow-x-auto pb-px">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  "relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
+                  tab === t ? "text-[#0071a3]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                )}
+              >
+                {t}
+                {tab === t && (
+                  <motion.div
+                    layoutId="dash-tab"
+                    className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-[#0071a3]"
+                    transition={{ type: "spring", stiffness: 400, damping: 34 }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-36 rounded-2xl bg-[var(--surface-elevated)] animate-pulse" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <GlassCard className="p-10 text-center">
+              <div className="mx-auto w-16 h-16 text-[#0071a3] mb-4">
+                <svg viewBox="0 0 64 64" fill="none" className="w-full h-full" aria-hidden>
+                  <rect x="8" y="12" width="48" height="40" rx="8" stroke="currentColor" strokeWidth="2" />
+                  <path d="M20 28h24M20 36h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">No items in this view</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                Run a scan or switch category tabs.
+              </p>
+              <Link
+                href="/dashboard/scans/new"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "lg" }),
+                  "mt-4 inline-flex bg-[#0071a3] hover:bg-[#005a82] text-white border-0"
+                )}
+              >
+                Start a scan
+              </Link>
+            </GlassCard>
+          ) : (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {filtered.map((item, i) => {
+                const exp = getExpiryIso(item);
+                const days = daysUntilExpiry(exp);
+                const tone = expiryTone(days);
+                const dot =
+                  tone === "none"
+                    ? "bg-[var(--text-muted)]"
+                    : tone === "fresh"
+                      ? "bg-[#34c759]"
+                      : tone === "soon"
+                        ? "bg-[#f5c15c]"
+                        : tone === "urgent" || tone === "expired"
+                          ? "bg-[#ff3b30]"
+                          : "bg-[var(--text-muted)]";
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.45) }}
+                  >
+                    <GlassCard className="p-4 h-full flex flex-col">
+                      <div className="flex gap-3">
+                        <div className="text-2xl leading-none pt-0.5" aria-hidden>
+                          {categoryEmoji(pantryCategoryTab(item.category?.name))}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-[var(--text-primary)] truncate">{item.name}</p>
+                          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                            {item.category?.name ?? "Uncategorized"}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2 text-xs font-mono text-[var(--text-secondary)]">
+                            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", dot)} />
+                            {exp
+                              ? new Date(exp).toLocaleDateString("en-SG", { timeZone: "Asia/Singapore" })
+                              : "No expiry"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--border)]">
+                        <div className="flex items-center gap-1">
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.92 }}
+                            className="h-8 w-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center hover:bg-[var(--surface-elevated)]"
+                            onClick={() => bumpQty(item, -1)}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </motion.button>
+                          <span className="font-mono text-sm w-10 text-center tabular-nums">
+                            {item.quantity}
+                          </span>
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.92 }}
+                            className="h-8 w-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center hover:bg-[var(--surface-elevated)]"
+                            onClick={() => bumpQty(item, 1)}
+                            aria-label="Increase quantity"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                        <span className="text-[11px] text-[var(--text-muted)]">{item.unit}</span>
+                      </div>
+                    </GlassCard>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Recent scans */}
+        <aside className="lg:sticky lg:top-4 space-y-3 w-full max-w-[300px] mx-auto lg:mx-0 lg:max-w-none">
+          <GlassCard className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Recent scans</h3>
+              <Sparkles className="w-4 h-4 text-[#0071a3]" />
+            </div>
+            <ul className="space-y-3">
+              {scans.length === 0 && !loading && (
+                <li className="text-xs text-[var(--text-secondary)]">No scans yet.</li>
+              )}
+              {scans.map((s, i) => (
+                <motion.li
+                  key={s.id}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="text-sm border-b border-[var(--border)] last:border-0 pb-3 last:pb-0"
+                >
+                  <p className="font-mono text-[11px] text-[var(--text-muted)]">
+                    {new Date(s.created_at).toLocaleString("en-SG", {
+                      timeZone: "Asia/Singapore",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                  <p className="text-[var(--text-primary)] mt-1">
+                    {s.items_detected} items found
+                  </p>
+                </motion.li>
+              ))}
+            </ul>
+            <div className="mt-5 space-y-2">
+              <Link
+                href="/dashboard/scans"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "w-full justify-center border-[var(--border)]"
+                )}
+              >
+                View all
+              </Link>
+              <Link
+                href="/dashboard/scans/new"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "lg" }),
+                  "w-full justify-center bg-[#0071a3] hover:bg-[#005a82] text-white border-0"
+                )}
+              >
+                Start new scan
+              </Link>
+            </div>
+          </GlassCard>
+        </aside>
+      </div>
     </div>
   );
 }

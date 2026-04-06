@@ -15,7 +15,7 @@ function getPageName(path: string): string {
   if (path.startsWith("/dashboard/shopping/")) return "Shopping List Detail";
   if (path === "/dashboard/analytics")       return "Analytics";
   if (path === "/dashboard/settings")        return "Settings";
-  if (path === "/login")                     return "Login";
+  if (path === "/auth" || path === "/login")  return "Login";
   if (path === "/signup")                    return "Signup";
   return path;
 }

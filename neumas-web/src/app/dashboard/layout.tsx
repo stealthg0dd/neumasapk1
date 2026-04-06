@@ -33,10 +33,10 @@ export default function DashboardLayout({
       });
   }, []);
 
-  // Client-side auth guard — redirect to /login if not authenticated
+  // Client-side auth guard — redirect to /auth if not authenticated
   useEffect(() => {
     if (hasHydrated && !isAuth) {
-      router.replace("/login");
+      router.replace("/auth");
     }
   }, [hasHydrated, isAuth, router]);
 

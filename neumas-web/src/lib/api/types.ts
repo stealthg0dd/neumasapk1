@@ -119,6 +119,24 @@ export interface InventoryListResponse {
   low_stock_count: number;
 }
 
+/** POST /api/inventory/update — upsert by name */
+export interface InventoryUpdateRequest {
+  property_id: string;
+  item_name: string;
+  new_qty: number;
+  unit?: string;
+  trigger_prediction?: boolean;
+}
+
+export interface InventoryUpdateResponse {
+  item_id: string;
+  item_name: string;
+  previous_qty: number | null;
+  new_qty: number;
+  created?: boolean;
+  prediction_task_id?: string | null;
+}
+
 // ============================================================================
 // Scans
 // ============================================================================

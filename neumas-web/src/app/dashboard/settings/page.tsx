@@ -117,7 +117,7 @@ export default function SettingsPage() {
     track("user_signed_out", {});
     resetAnalytics();
     clearAuth();
-    router.replace("/login");
+    router.replace("/auth");
   }
 
   return (

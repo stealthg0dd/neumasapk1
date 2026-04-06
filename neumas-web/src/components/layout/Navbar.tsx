@@ -21,7 +21,7 @@ export function Navbar() {
   async function handleLogout() {
     try { await logout(); } catch { /* swallow */ }
     clearAuth();
-    router.replace("/login");
+    router.replace("/auth");
   }
 
   const initials = profile?.full_name

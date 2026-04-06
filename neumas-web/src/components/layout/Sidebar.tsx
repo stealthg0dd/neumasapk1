@@ -47,7 +47,7 @@ export function Sidebar() {
   async function handleLogout() {
     try { await logout(); } catch { /* swallow */ }
     clearAuth();
-    router.replace("/login");
+    router.replace("/auth");
   }
 
   return (
@@ -59,8 +59,8 @@ export function Sidebar() {
       {/* ── Logo ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center h-16 px-4 border-b border-border/40">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-[#0071a3]/10 flex items-center justify-center shrink-0">
+            <Zap className="w-4 h-4 text-[#0071a3]" />
           </div>
           <AnimatePresence>
             {!collapsed && (
@@ -69,7 +69,7 @@ export function Sidebar() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.2 }}
-                className="text-lg font-bold gradient-text tracking-tight whitespace-nowrap"
+                className="text-lg font-bold text-[#0071a3] tracking-tight whitespace-nowrap"
               >
                 Neumas
               </motion.span>
@@ -89,8 +89,8 @@ export function Sidebar() {
               className={[
                 "flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium transition-all group",
                 active
-                  ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/25"
-                  : "text-muted-foreground hover:text-foreground hover:bg-surface-2",
+                  ? "bg-[rgba(0,113,163,0.1)] text-[#0071a3] border border-[rgba(0,113,163,0.2)]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-elevated)]",
               ].join(" ")}
               title={collapsed ? label : undefined}
             >
@@ -118,7 +118,7 @@ export function Sidebar() {
               {active && (
                 <motion.div
                   layoutId="nav-active"
-                  className="ml-auto w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"
+                  className="ml-auto w-1.5 h-1.5 rounded-full bg-[#0071a3] shrink-0"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
@@ -164,7 +164,7 @@ export function Sidebar() {
       {/* ── Collapse toggle ────────────────────────────────────────────────── */}
       <button
         onClick={toggle}
-        className="absolute -right-3 top-20 z-10 w-6 h-6 rounded-full bg-surface-2 border border-border/60 flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-cyan-500/50 transition-all shadow-sm"
+        className="absolute -right-3 top-20 z-10 w-6 h-6 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-[#0071a3]/40 transition-all shadow-sm"
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {collapsed

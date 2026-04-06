@@ -21,12 +21,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
       {children}
       <Toaster
         position="bottom-right"
-        theme="dark"
+        theme="light"
         toastOptions={{
+          classNames: {
+            success:
+              "!bg-[var(--surface)] !border !border-[rgba(0,113,163,0.25)] !text-[var(--text-primary)] [&_[data-icon]]:!text-[#0071a3]",
+            error:
+              "!bg-[var(--surface)] !border !border-[rgba(255,59,48,0.35)] !text-[var(--text-primary)] [&_[data-icon]]:!text-[#ff3b30]",
+            warning:
+              "!bg-[var(--surface)] !border !border-[rgba(255,149,0,0.35)] !text-[var(--text-primary)] [&_[data-icon]]:!text-[#ff9500]",
+          },
           style: {
-            background: "oklch(0.13 0.008 240)",
-            border: "1px solid oklch(0.22 0.01 240 / 0.6)",
-            color: "oklch(0.95 0.005 240)",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
           },
         }}
       />

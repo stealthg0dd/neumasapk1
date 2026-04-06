@@ -141,7 +141,7 @@ apiClient.interceptors.response.use(
         _redirectingToLogin = true;
         localStorage.removeItem("neumas_access_token");
         localStorage.removeItem("neumas-auth"); // Zustand persist key
-        window.location.href = "/login";
+        window.location.href = "/auth";
       }
     } else if (error.response?.status === 403) {
       message = "You do not have permission to perform this action.";

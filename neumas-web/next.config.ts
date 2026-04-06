@@ -9,11 +9,18 @@ const nextConfig: NextConfig = {
   // Produce a standalone build for Docker deployments.
   // Bundles the server and minimal node_modules into .next/standalone.
   output: "standalone",
+  async redirects() {
+    return [
+      { source: "/inventory", destination: "/dashboard/inventory", permanent: false },
+      { source: "/scans/new", destination: "/dashboard/scans/new", permanent: false },
+      { source: "/scans", destination: "/dashboard/scans", permanent: false },
+    ];
+  },
   async rewrites() {
     return [
       {
         // Proxy /api/* → Railway backend /api/*
-        // Keeps backend URL out of browser network tab in production
+        // Next.js API routes under src/app/api/** take precedence over this rewrite.
         source: "/api/:path*",
         destination: `${BACKEND_URL}/api/:path*`,
       },

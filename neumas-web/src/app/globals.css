@@ -84,10 +84,10 @@
   --color-sidebar-border:             var(--sidebar-border);
   --color-sidebar-ring:               var(--sidebar-ring);
 
-  /* ── Font variables ──────────────────────────────────────────────────── */
-  --font-sans:    var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono:    var(--font-geist-mono), monospace;
-  --font-heading: var(--font-geist-sans), system-ui, sans-serif;
+  /* ── Font variables (Plus Jakarta Sans + IBM Plex Mono from layout) ───── */
+  --font-sans:    var(--font-neumas-sans), system-ui, sans-serif;
+  --font-mono:    var(--font-neumas-mono), ui-monospace, monospace;
+  --font-heading: var(--font-neumas-sans), system-ui, sans-serif;
 
   /* ── Radius ──────────────────────────────────────────────────────────── */
   --radius-sm:  calc(var(--radius) * 0.6);
@@ -138,93 +138,90 @@
    ── We ship a single dark palette and let .dark class toggle it.
    ============================================================================ */
 :root {
-  /* shadcn semantic vars — light mode (mostly unused; app forces dark) */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* Primary → Cyan 500 */
-  --primary: oklch(0.715 0.139 199.2);
-  --primary-foreground: oklch(0.984 0.019 196.5);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  /* Accent → Electric Purple 500 */
-  --accent: oklch(0.699 0.220 303.9);
-  --accent-foreground: oklch(0.977 0.017 308.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.715 0.139 199.2); /* cyan ring */
-  /* Charts → brand palette */
-  --chart-1: oklch(0.715 0.139 199.2);  /* cyan  */
-  --chart-2: oklch(0.699 0.220 303.9);  /* purple */
-  --chart-3: oklch(0.627 0.194 149.2);  /* mint  */
-  --chart-4: oklch(0.769 0.163 70.1);   /* amber */
-  --chart-5: oklch(0.637 0.237 25.3);   /* red   */
-  --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.715 0.139 199.2);
-  --sidebar-primary-foreground: oklch(0.984 0.019 196.5);
-  --sidebar-accent: oklch(0.699 0.220 303.9);
-  --sidebar-accent-foreground: oklch(0.977 0.017 308.9);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.715 0.139 199.2);
+  /* Neumas — Apple-clean IoT palette (light) */
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-elevated: #f5f5f7;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-accent: rgba(0, 113, 163, 0.3);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #aeaeb2;
+  --neumas-teal: #0071a3;
+  --accent-warm: #f5c15c;
+  --success-apple: #34c759;
+  --warning-apple: #ff9500;
+  --danger-apple: #ff3b30;
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.06);
 
-  /* Neumas raw design tokens */
-  --neumas-cyan:   #06b6d4;
-  --neumas-purple: #d946ef;
-  --neumas-bg:     #030712;
-  --neumas-surface:#111827;
+  /* shadcn semantic bridge */
+  --foreground: var(--text-primary);
+  --card: var(--surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface);
+  --popover-foreground: var(--text-primary);
+  --primary: #0071a3;
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-elevated);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-elevated);
+  --muted-foreground: var(--text-secondary);
+  --accent: #0071a3;
+  --accent-foreground: #ffffff;
+  --destructive: #ff3b30;
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: rgba(0, 113, 163, 0.45);
+  --chart-1: #0071a3;
+  --chart-2: #f5c15c;
+  --chart-3: #34c759;
+  --chart-4: #ff9500;
+  --chart-5: #ff3b30;
+  --radius: 0.875rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: #0071a3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--surface-elevated);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border);
+  --sidebar-ring: rgba(0, 113, 163, 0.35);
+
+  /* Legacy brand aliases (used in some components) */
+  --neumas-cyan: #0071a3;
+  --neumas-purple: #0071a3;
+  --neumas-bg:     #fafafa;
+  --neumas-surface: #ffffff;
 }
 
-/* ── Dark mode (primary theme for Neumas) ─────────────────────────────────── */
+/* Optional dark — not default */
 .dark {
-  /* Deep dark background with imperceptible teal tint */
   --background: oklch(0.075 0.005 240);
   --foreground: oklch(0.96 0.005 210);
-  /* Elevated surfaces */
   --card: oklch(0.115 0.008 230);
   --card-foreground: oklch(0.96 0.005 210);
-  --popover: oklch(0.130 0.010 230);
+  --popover: oklch(0.13 0.01 230);
   --popover-foreground: oklch(0.96 0.005 210);
-  /* Primary → Cyan 500 */
-  --primary: oklch(0.715 0.139 199.2);
-  --primary-foreground: oklch(0.075 0.005 240);
-  /* Secondary — subtle surface */
-  --secondary: oklch(0.180 0.010 230);
-  --secondary-foreground: oklch(0.85 0.010 210);
-  /* Muted */
+  --primary: oklch(0.55 0.12 230);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.18 0.01 230);
+  --secondary-foreground: oklch(0.9 0.01 210);
   --muted: oklch(0.165 0.008 230);
   --muted-foreground: oklch(0.58 0.015 220);
-  /* Accent → Electric Purple 500 */
-  --accent: oklch(0.699 0.220 303.9);
-  --accent-foreground: oklch(0.075 0.005 240);
-  /* Destructive → Red 500 */
+  --accent: oklch(0.55 0.12 230);
+  --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.637 0.237 25.3);
-  /* Borders — very subtle */
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.715 0.139 199.2); /* cyan ring */
-  /* Charts */
-  --chart-1: oklch(0.715 0.139 199.2);
-  --chart-2: oklch(0.699 0.220 303.9);
-  --chart-3: oklch(0.627 0.194 149.2);
-  --chart-4: oklch(0.769 0.163 70.1);
-  --chart-5: oklch(0.637 0.237 25.3);
-  /* Sidebar */
+  --ring: oklch(0.55 0.12 230);
   --sidebar: oklch(0.095 0.007 235);
   --sidebar-foreground: oklch(0.96 0.005 210);
-  --sidebar-primary: oklch(0.715 0.139 199.2);
+  --sidebar-primary: oklch(0.55 0.12 230);
   --sidebar-primary-foreground: oklch(0.075 0.005 240);
-  --sidebar-accent: oklch(0.699 0.220 303.9);
-  --sidebar-accent-foreground: oklch(0.977 0.017 308.9);
+  --sidebar-accent: oklch(0.18 0.01 230);
+  --sidebar-accent-foreground: oklch(0.96 0.005 210);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.715 0.139 199.2);
+  --sidebar-ring: oklch(0.55 0.12 230);
 }
 
 /* ============================================================================
@@ -237,8 +234,7 @@
 
   html {
     @apply font-sans;
-    /* dark class is applied in layout.tsx to <html> — Neumas is dark-first */
-    color-scheme: dark;
+    color-scheme: light;
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -255,15 +251,14 @@
     @apply font-heading tracking-tight;
   }
 
-  /* Smooth scrollbar (dark) */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.3 0.02 240);
+    background: rgba(0, 0, 0, 0.12);
     border-radius: 99px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--neumas-cyan);
+    background: rgba(0, 113, 163, 0.35);
   }
 }
 
@@ -273,13 +268,13 @@
 @layer utilities {
   /* ── Glassmorphism ───────────────────────────────────────────────────────── */
 
-  /* Standard glass card — use for panels, widgets, cards */
+  /* Refined glass — light IoT */
   .glass-card {
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    background: oklch(1 0 0 / 4%);
-    border: 1px solid oklch(1 0 0 / 9%);
-    box-shadow: 0 8px 32px oklch(0 0 0 / 30%), inset 0 1px 0 oklch(1 0 0 / 8%);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
   }
 
   /* Lighter glass — chips, badges, inline highlights */
@@ -290,13 +285,13 @@
     border: 1px solid oklch(1 0 0 / 12%);
   }
 
-  /* Heavier glass — modals, sidebars, overlays */
+  /* Heavier glass — nav, sidebar */
   .glass-heavy {
-    backdrop-filter: blur(32px) saturate(200%);
-    -webkit-backdrop-filter: blur(32px) saturate(200%);
-    background: oklch(0.075 0.005 240 / 80%);
-    border: 1px solid oklch(1 0 0 / 10%);
-    box-shadow: 0 16px 64px oklch(0 0 0 / 50%);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 12px 40px rgba(0, 0, 0, 0.06);
   }
 
   /* Glass button — squishy, tactile */
