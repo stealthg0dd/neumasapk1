@@ -22,7 +22,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
+export const supabase = createClient(
+  supabaseUrl || "https://placeholder.supabase.co",
+  supabaseAnonKey || "placeholder-anon-key-for-build"
+);
 
 /** Initiate Google OAuth sign-in via Supabase. */
 export async function signInWithGoogle(): Promise<void> {
