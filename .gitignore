@@ -79,3 +79,5 @@ Thumbs.db
 # ── Misc ──────────────────────────────────────────────────────────────────────
 celerybeat-schedule
 *.log
+.railway/
+.turbo/
