@@ -5,10 +5,10 @@
 
 ## Active frontend
 
-The production frontend is **`neumas-web`** — a Next.js 16 (App Router) application deployed on Railway:
+The production frontend is **`neumas-web`** — a Next.js 16 (App Router) application deployed on Vercel:
 
 ```
-https://neumas-production.up.railway.app
+https://neumasfinal.vercel.app
 ```
 
 ## Why this directory still exists
