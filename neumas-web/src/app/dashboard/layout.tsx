@@ -4,12 +4,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 
 import { Sidebar } from "@/components/layout/Sidebar";
-import { Navbar } from "@/components/layout/Navbar";
 import { useAuthStore, selectIsAuthenticated } from "@/lib/store/auth";
-import { fadeIn } from "@/lib/design-system";
 import { get } from "@/lib/api/client";
 
 export default function DashboardLayout({
@@ -57,43 +54,15 @@ export default function DashboardLayout({
   if (!isAuth) return null; // redirect in progress
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-[#f8fafc]">
       <Sidebar />
-
-      {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Navbar />
-
-        {/* Scrollable page area */}
-        <motion.main
-          variants={fadeIn}
-          initial="hidden"
-          animate="visible"
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"
-        >
+        <main className="flex-1 overflow-y-auto p-6">
           {children}
-        </motion.main>
-
-        {/* Footer */}
-        <footer className="shrink-0 h-10 flex items-center justify-between px-6 border-t border-border/40 text-xs text-muted-foreground">
-          <span>Neumas v0.1.0</span>
-          <div className="flex items-center gap-1.5">
-            {workerOk === null ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-border animate-pulse" />
-            ) : workerOk ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-mint-500 animate-pulse" />
-            ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            )}
-            <span>
-              {workerOk === null
-                ? "Checking status…"
-                : workerOk
-                ? "All systems operational"
-                : "Background worker unavailable"}
-            </span>
-          </div>
+        </main>
+        <footer className="h-10 px-6 border-t border-gray-100 bg-white flex items-center justify-between text-xs text-gray-500">
+          <span>Neumas</span>
+          <span>{workerOk === null ? "Checking status..." : workerOk ? "Systems operational" : "Worker unavailable"}</span>
         </footer>
       </div>
     </div>

@@ -24,7 +24,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(
   supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder-anon-key-for-build"
+  supabaseAnonKey || "placeholder-anon-key-for-build",
+  {
+    auth: {
+      flowType: "pkce",
+      detectSessionInUrl: true,
+      persistSession: true,
+      autoRefreshToken: true,
+      storageKey: "neumas-auth-token",
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+    },
+  }
 );
 
 /** Initiate Google OAuth sign-in via Supabase. */
