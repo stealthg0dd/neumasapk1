@@ -1,0 +1,12 @@
+Neumas Open Graph image (og-image.png) — create manually in Canva or similar
+
+Dimensions: 1200 × 630 px (1.91:1)
+Format: PNG or JPG, export as og-image.png in this public/ folder
+
+Design:
+- Background: white
+- Left: NEUMAS wordmark + headline "Your grocery autopilot"
+- Right: screenshot of the prediction alert card (from the Neumas dashboard)
+- Bottom strip: "Trusted by households across Singapore and Southeast Asia"
+
+After exporting, save as: public/og-image.png

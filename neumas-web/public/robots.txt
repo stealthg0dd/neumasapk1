@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /insights/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /onboard/
+
+User-agent: GPTBot
+Allow: /
+Allow: /insights/
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /insights/
+
+Sitemap: https://neumasfinal.vercel.app/sitemap.xml

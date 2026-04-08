@@ -1,0 +1,38 @@
+# Neumas — Grocery Autopilot Platform
+# https://neumasfinal.vercel.app
+# info@neumas.ai
+
+## What Neumas Does
+Neumas is an AI-powered grocery intelligence platform that predicts
+household stockouts before they happen, generates smart shopping lists,
+and enables one-tap reordering through partner retailers.
+
+## Core Capabilities
+- Receipt scanning using Claude AI vision (OCR)
+- Consumption pattern learning from scan history
+- Stockout prediction with confidence scoring
+- AI-generated shopping list creation
+- One-tap ordering through affiliate retail partners
+- Family sync for shared households
+- Weekly research blog on grocery trends
+
+## Target Markets
+Singapore, Malaysia, Thailand, Vietnam, Indonesia, UAE, EU (Estonia HQ)
+
+## Compliance
+PDPA (Singapore, Malaysia) | GDPR (EU) | PDPL (Indonesia) | SSL Encrypted
+
+## Pricing
+Free: 14-day trial (full platform access)
+Premium: $3.99/month or $39.99/year
+Revenue: Subscription + affiliate commissions
+
+## Company
+Neumas — A unit of CTech Ventures
+Contact: info@neumas.ai
+
+## Technical Stack
+Frontend: Next.js 16, Vercel
+Backend: FastAPI, Railway, Celery, Redis
+AI: Claude 3.5 Sonnet (vision + generation), GPT-4 (optimization)
+Database: Supabase PostgreSQL
