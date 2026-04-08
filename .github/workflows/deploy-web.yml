@@ -1,3 +1,14 @@
+# Deploy neumas-web to Vercel (production).
+#
+# Railway does NOT trigger Vercel. Pushing to Git deploys Railway services from
+# their own GitHub integration; this workflow is what updates the Vercel project
+# via the Vercel CLI (requires repo secrets below). Alternatively you can connect
+# the same GitHub repo in the Vercel dashboard (root: neumas-web) — then disable
+# this workflow or keep one path only to avoid double deploys.
+#
+# Required GitHub Actions secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_NEUMAS
+# See .github/SECRETS.md
+
 name: Deploy Web
 
 on:
@@ -5,27 +16,28 @@ on:
     branches: [main]
     paths:
       - "neumas-web/**"
-      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+    inputs:
+      skip_ci_wait:
+        description: "Skip waiting for the CI web job (only if CI already passed for this commit)"
+        required: false
+        default: false
+        type: boolean
 
-# Only one deploy runs at a time.  A new push cancels a queued but
+# Only one deploy runs at a time. A new push cancels a queued but
 # not-yet-started deploy; an in-progress deploy always finishes.
 concurrency:
   group: deploy-web
   cancel-in-progress: false
 
-jobs:
-  # Gate: require CI to pass before deploying
-  ci-gate:
-    name: Wait for CI
-    runs-on: ubuntu-latest
-    steps:
-      - name: CI must pass first
-        run: echo "CI gate satisfied — proceeding to deploy"
+permissions:
+  contents: read
+  checks: read
 
+jobs:
   deploy:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
-    needs: ci-gate
     environment: production
 
     outputs:
@@ -33,6 +45,33 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require Vercel GitHub secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
+        run: |
+          missing=()
+          [ -z "$VERCEL_TOKEN" ] && missing+=("VERCEL_TOKEN")
+          [ -z "$VERCEL_ORG_ID" ] && missing+=("VERCEL_ORG_ID")
+          [ -z "$VERCEL_PROJECT_ID" ] && missing+=("VERCEL_PROJECT_ID_NEUMAS")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing GitHub Actions secrets: ${missing[*]}. Railway deploys do not trigger Vercel. Add them under Settings → Secrets and variables → Actions. See .github/SECRETS.md"
+            exit 1
+          fi
+
+      - name: Wait for CI web build to pass
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.skip_ci_wait != 'true')
+        uses: lewagon/wait-on-check-action@v1.6.1
+        with:
+          ref: ${{ github.sha }}
+          check-name: "Web — build & type-check"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+          allowed-conclusions: success
+          running-workflow-name: Deploy Web
+          checks-discovery-timeout: 300
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -44,20 +83,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Check Vercel configuration
-        id: vercel-check
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          if [ -n "$VERCEL_TOKEN" ]; then
-            echo "configured=true" >> $GITHUB_OUTPUT
-          else
-            echo "configured=false" >> $GITHUB_OUTPUT
-            echo "⚠️ VERCEL_TOKEN not set — skipping Vercel deploy steps"
-          fi
-
       - name: Pull Vercel environment
-        if: steps.vercel-check.outputs.configured == 'true'
         working-directory: neumas-web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -66,7 +92,6 @@ jobs:
         run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
 
       - name: Build for Vercel
-        if: steps.vercel-check.outputs.configured == 'true'
         working-directory: neumas-web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -77,7 +102,6 @@ jobs:
         run: vercel build --prod --token=$VERCEL_TOKEN
 
       - name: Deploy to Vercel (production)
-        if: steps.vercel-check.outputs.configured == 'true'
         id: deploy
         working-directory: neumas-web
         env:

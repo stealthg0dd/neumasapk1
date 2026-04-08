@@ -17,6 +17,13 @@ All secrets are set at **repository level** in Settings → Secrets and variable
 | `VERCEL_ORG_ID` | Vercel team/org ID | `vercel env ls` output or Vercel team settings URL |
 | `VERCEL_PROJECT_ID_NEUMAS` | Vercel project ID for `neumas-web` | `cat neumas-web/.vercel/project.json` after `vercel link` |
 
+### Why Vercel might not update when you push
+
+- **Railway does not deploy Vercel.** Railway’s Git integration only deploys whatever services you connected in Railway (e.g. API/worker). Updating production on Vercel is done either by **this repo’s** `deploy-web.yml` workflow (Vercel CLI + the secrets above) or by **Vercel’s own** Git integration in the Vercel project settings. Do not use both paths for the same branch unless you intend to double-deploy.
+- **Missing secrets:** If `VERCEL_TOKEN`, `VERCEL_ORG_ID`, or `VERCEL_PROJECT_ID_NEUMAS` are not set in GitHub, `deploy-web.yml` fails at the first step with an explicit error (it no longer skips deploy silently).
+- **Environment protection:** If the `production` environment has required reviewers, deployments stay pending until someone approves in **Actions → Deploy Web → Review deployments**.
+- **Native Vercel Git:** If the Vercel project is connected to GitHub with auto-deploy but you disabled it or pointed the wrong **Root Directory** (must be `neumas-web` for this monorepo), the dashboard deployment will not match pushes from this repo.
+
 ## Sentry
 
 | Secret | Description | How to obtain |
