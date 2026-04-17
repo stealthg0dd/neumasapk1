@@ -105,6 +105,7 @@ from app.api.routes import (
     scans,
     shopping,
     vendors,
+    vendor_analytics,
 )
 
 # Safe import for logging module
@@ -546,6 +547,13 @@ app.include_router(
     vendors.router,
     prefix="/api/vendors",
     tags=["Vendors"],
+)
+
+# Vendor Analytics routes
+app.include_router(
+    vendor_analytics.router,
+    prefix="/api/vendor-analytics",
+    tags=["Vendor Analytics"],
 )
 
 # Alerts routes
