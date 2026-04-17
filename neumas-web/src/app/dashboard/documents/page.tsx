@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { FileText } from "lucide-react";
 import {
   getDocumentReviewQueue,
   listDocuments,
   approveDocument,
   type Document,
 } from "@/lib/api/endpoints";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -90,9 +92,17 @@ export default function DocumentsPage() {
           {error}
         </div>
       ) : !documents.length ? (
-        <div className="border border-gray-100 rounded-xl bg-white p-8 text-center text-gray-400 text-sm">
-          No documents
-        </div>
+        <EmptyState
+          icon={FileText}
+          badge="No documents yet"
+          headline={tab === "review" ? "Review queue is clear" : "No documents uploaded yet"}
+          body={
+            tab === "review"
+              ? "All invoices and delivery notes have been reviewed. Upload more to keep inventory current."
+              : "Upload an invoice, delivery note, or receipt to start building your live inventory."
+          }
+          cta={{ label: "Upload your first document", href: "/dashboard/scans/new" }}
+        />
       ) : (
         <div className="space-y-3">
           {documents.map((doc) => (

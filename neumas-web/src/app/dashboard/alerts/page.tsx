@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { listAlerts, snoozeAlert, resolveAlert, type Alert, type AlertsResponse } from "@/lib/api/endpoints";
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -170,10 +172,25 @@ export default function AlertsPage() {
           {error}
         </div>
       ) : !visibleAlerts.length ? (
-        <div className="border border-gray-100 rounded-xl bg-white p-8 text-center text-gray-400 text-sm">
-          No {stateFilter !== "all" ? stateFilter : ""} alerts
-          {(typeFilter || severityFilter) ? " matching filters" : ""}
-        </div>
+        <EmptyState
+          icon={ShieldCheck}
+          badge="All clear"
+          headline={
+            stateFilter === "open"
+              ? "No open alerts"
+              : stateFilter === "snoozed"
+              ? "No snoozed alerts"
+              : "No alerts"
+          }
+          body={
+            stateFilter === "open"
+              ? typeFilter || severityFilter
+                ? "No alerts match your current filters — try clearing them."
+                : "Your inventory levels are healthy. We'll alert you immediately if anything needs attention."
+              : "Nothing here right now."
+          }
+          secondaryCta={typeFilter || severityFilter ? { label: "Clear filters", href: "#" } : undefined}
+        />
       ) : (
         <AnimatePresence initial={false}>
           {visibleAlerts.map((alert) => (

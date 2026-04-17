@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { BarChart2 } from "lucide-react";
 import { listReports, requestReport, type Report } from "@/lib/api/endpoints";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const STATUS_COLORS: Record<string, string> = {
   queued: "bg-gray-100 text-gray-600",
@@ -88,9 +90,14 @@ export default function ReportsPage() {
           {error}
         </div>
       ) : !reports.length ? (
-        <div className="border border-gray-100 rounded-xl bg-white p-8 text-center text-gray-400 text-sm">
-          No reports yet
-        </div>
+        <EmptyState
+          icon={BarChart2}
+          badge="No reports yet"
+          headline="Generate your first procurement report"
+          body="Weekly summaries, vendor spend breakdowns, waste analysis, and forecast accuracy — all auto-generated from your uploaded documents."
+          cta={{ label: "Generate weekly report", href: "#" }}
+          secondaryCta={{ label: "Upload documents first", href: "/dashboard/scans/new" }}
+        />
       ) : (
         <div className="space-y-3">
           {reports.map((report) => (

@@ -37,14 +37,14 @@ export function FinalCTA() {
 
           <div className="relative mt-10 flex flex-wrap items-center justify-center gap-3">
             <Link
-              href="/auth"
+              href="/pilot"
               className="group inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3.5 text-[14px] font-semibold text-[#0071a3] shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5 hover:shadow-xl"
             >
               Book a demo
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/auth"
+              href="/pilot"
               className="inline-flex items-center gap-2 rounded-xl border border-white/25 px-8 py-3.5 text-[14px] font-semibold text-white transition-all hover:border-white/40 hover:bg-white/10 hover:-translate-y-0.5"
             >
               Start 14-day pilot

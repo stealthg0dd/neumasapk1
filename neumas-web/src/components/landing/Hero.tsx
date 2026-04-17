@@ -189,14 +189,14 @@ export function Hero() {
               className="mt-9 flex flex-wrap items-center gap-3"
             >
               <Link
-                href="/auth"
+                href="/pilot"
                 className="group inline-flex items-center gap-2 rounded-xl bg-[#0071a3] px-7 py-3.5 text-[14px] font-semibold text-white shadow-md shadow-[#0071a3]/25 transition-all hover:bg-[#005f8a] hover:shadow-lg hover:shadow-[#0071a3]/30 hover:-translate-y-0.5"
               >
                 Book a demo
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
-                href="/auth"
+                href="/pilot"
                 className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-7 py-3.5 text-[14px] font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5"
               >
                 Start pilot

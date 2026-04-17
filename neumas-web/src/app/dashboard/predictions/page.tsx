@@ -139,17 +139,22 @@ export default function PredictionsPage() {
           ))}
         </div>
       ) : sorted.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center">
-          <p className="text-sm font-medium text-gray-900">No predictions yet</p>
-          <p className="mt-2 text-sm text-gray-500">
-            Scan receipts so we can learn your patterns, then run a forecast.
+        <div className="rounded-2xl border border-black/[0.06] bg-white p-10 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f0f7fb]">
+            <svg className="h-7 w-7 text-[#0071a3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <p className="text-[17px] font-bold text-gray-900">No forecasts yet</p>
+          <p className="mt-2 max-w-sm mx-auto text-[14px] text-gray-500">
+            Upload 3+ invoices or receipts so the AI can learn your consumption patterns, then run your first forecast.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
               href="/dashboard/scans/new"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0071a3] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#005f8a] transition-colors"
             >
-              Scan a receipt
+              Upload an invoice
             </Link>
             <Button type="button" variant="outline" disabled={triggering} onClick={handleRunForecast}>
               Run new forecast

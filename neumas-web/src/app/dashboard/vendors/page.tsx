@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { Building2 } from "lucide-react";
 import { listVendors, listCatalogItems, type Vendor } from "@/lib/api/endpoints";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -104,9 +106,13 @@ export default function VendorsPage() {
         </div>
       ) : tab === "vendors" ? (
         !filteredVendors.length ? (
-          <div className="border border-gray-100 rounded-xl bg-white p-8 text-center text-gray-400 text-sm">
-            No vendors found
-          </div>
+          <EmptyState
+            icon={Building2}
+            badge="No vendors yet"
+            headline="Vendors are auto-detected from invoices"
+            body="Upload your first supplier invoice or delivery note and Neumas will automatically identify and track every vendor you work with."
+            cta={{ label: "Upload an invoice", href: "/dashboard/scans/new" }}
+          />
         ) : (
           <div className="space-y-3">
             {filteredVendors.map((vendor) => (
@@ -153,9 +159,12 @@ export default function VendorsPage() {
       ) : (
         // Catalog tab
         !catalogItems.length ? (
-          <div className="border border-gray-100 rounded-xl bg-white p-8 text-center text-gray-400 text-sm">
-            No catalog items found
-          </div>
+          <EmptyState
+            icon={Building2}
+            headline="No catalog items yet"
+            body="Your product catalog is built automatically from uploaded invoices and delivery notes."
+            cta={{ label: "Upload a document", href: "/dashboard/scans/new" }}
+          />
         ) : (
           <div className="overflow-x-auto border border-gray-100 rounded-xl bg-white">
             <table className="w-full text-sm">

@@ -71,7 +71,7 @@ export function Nav() {
             Sign in
           </Link>
           <Link
-            href="/auth"
+            href="/pilot"
             className="rounded-lg bg-[#0071a3] px-5 py-2 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-[#005f8a] hover:shadow-md"
           >
             Book a demo

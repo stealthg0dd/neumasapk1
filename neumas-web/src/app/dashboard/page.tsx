@@ -19,6 +19,7 @@ import { IntelligencePanel } from "@/components/dashboard/IntelligencePanel";
 import { SecondaryInsights } from "@/components/dashboard/SecondaryInsights";
 import { ActionZone } from "@/components/dashboard/ActionZone";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { WelcomeBanner } from "@/components/dashboard/WelcomeBanner";
 
 function formatRelativeUpdated(iso: string | undefined): string {
   if (!iso) return "just now";
@@ -114,6 +115,9 @@ export default function DashboardPage() {
             Refresh
           </button>
         </div>
+
+        {/* Welcome banner (shown to new users until dismissed) */}
+        <WelcomeBanner scanCount={scans.length} />
 
         {/* Zone 1: KPI band */}
         <KPIBand
