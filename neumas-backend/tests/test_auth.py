@@ -167,3 +167,74 @@ class TestPermissions:
             status.HTTP_401_UNAUTHORIZED,
             status.HTTP_404_NOT_FOUND,
         ]
+
+
+class TestTokenRefresh:
+    """Tests for token refresh endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_missing_token(self, client: AsyncClient):
+        """Test refresh with missing body returns 422."""
+        response = await client.post("/api/auth/refresh", json={})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_refresh_invalid_token(self, client: AsyncClient):
+        """Test refresh with invalid token returns 401."""
+        with patch(
+            "app.services.auth_service.AuthService.refresh_session",
+            side_effect=Exception("Token expired"),
+        ):
+            response = await client.post(
+                "/api/auth/refresh",
+                json={"refresh_token": "invalid-token"},
+            )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_refresh_success(self, client: AsyncClient):
+        """Test successful token refresh returns new tokens."""
+        from app.schemas.auth import TokenResponse
+
+        mock_token_response = TokenResponse(
+            access_token="new-access-token",
+            refresh_token="new-refresh-token",
+            expires_in=3600,
+            token_type="bearer",
+        )
+
+        with patch(
+            "app.services.auth_service.AuthService.refresh_session",
+            new_callable=AsyncMock,
+            return_value=mock_token_response,
+        ):
+            response = await client.post(
+                "/api/auth/refresh",
+                json={"refresh_token": "valid-refresh-token"},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["access_token"] == "new-access-token"
+        assert data["refresh_token"] == "new-refresh-token"
+        assert data["expires_in"] == 3600
+        assert data["token_type"] == "bearer"
+
+    @pytest.mark.asyncio
+    async def test_refresh_propagates_token_validation_error(self, client: AsyncClient):
+        """Test that TokenValidationError from service returns 401."""
+        from app.core.security import TokenValidationError
+
+        with patch(
+            "app.services.auth_service.AuthService.refresh_session",
+            new_callable=AsyncMock,
+            side_effect=TokenValidationError("Refresh token is invalid or expired"),
+        ):
+            response = await client.post(
+                "/api/auth/refresh",
+                json={"refresh_token": "expired-token"},
+            )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "expired" in response.json()["detail"].lower() or "invalid" in response.json()["detail"].lower()
+

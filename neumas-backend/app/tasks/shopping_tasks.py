@@ -9,7 +9,7 @@ import asyncio
 from typing import Any
 
 from app.core.celery_app import neumas_task
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_business_event
 
 logger = get_logger(__name__)
 
@@ -44,7 +44,7 @@ def generate_shopping_list(
     # Delegate to the agent pipeline task synchronously
     from app.tasks.agent_tasks import _generate_shopping_list_async
 
-    return asyncio.get_event_loop().run_until_complete(
+    result = asyncio.get_event_loop().run_until_complete(
         _generate_shopping_list_async(
             task=self,
             property_id=property_id,
@@ -59,3 +59,15 @@ def generate_shopping_list(
             optimize_budget=True,
         )
     )
+
+    # Emit business event on success
+    if isinstance(result, dict) and result.get("shopping_list_id"):
+        log_business_event(
+            "reorder.generated",
+            property_id=property_id,
+            user_id=user_id,
+            shopping_list_id=str(result.get("shopping_list_id", "")),
+            item_count=result.get("items_count", 0),
+        )
+
+    return result

@@ -64,6 +64,13 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // Mobile / API client version headers (used by backend for analytics and
+    // compatibility checks, and required by the mobile API contract).
+    if (config.headers) {
+      config.headers["X-Client-Version"] = process.env.NEXT_PUBLIC_APP_VERSION ?? "web";
+      config.headers["X-Client-Platform"] = "web";
+    }
+
     // Development logging
     if (IS_DEV) {
       console.debug(
@@ -134,15 +141,30 @@ apiClient.interceptors.response.use(
         )
         .join("; ");
     } else if (error.response?.status === 401) {
-      message = "Session expired. Please log in again.";
-      // Only the first 401 should clear state and redirect — subsequent ones
-      // (from requests that fired before the redirect completes) are no-ops.
+      // Attempt token refresh before giving up.
+      // Import dynamically to avoid circular dependency with auth-session.
       if (typeof window !== "undefined" && !_redirectingToLogin) {
+        try {
+          const { attemptRefresh, getAccessToken } = await import("@/lib/auth-session");
+          const refreshed = await attemptRefresh();
+          if (refreshed) {
+            // Retry the original request with the new token
+            const newToken = getAccessToken();
+            if (newToken && config.headers) {
+              config.headers.Authorization = `Bearer ${newToken}`;
+            }
+            return apiClient(config);
+          }
+        } catch {
+          // Fall through to logout
+        }
+        // Refresh failed — log the user out
         _redirectingToLogin = true;
-        localStorage.removeItem("neumas_access_token");
-        localStorage.removeItem("neumas-auth"); // Zustand persist key
+        const { clearTokens } = await import("@/lib/auth-session");
+        clearTokens();
         window.location.href = "/auth";
       }
+      message = "Session expired. Please log in again.";
     } else if (error.response?.status === 403) {
       message = "You do not have permission to perform this action.";
     } else if (error.response?.status === 404) {

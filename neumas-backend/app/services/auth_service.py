@@ -645,14 +645,48 @@ class AuthService:
             role=role,
         )
 
+    async def refresh_session(self, refresh_token: str) -> "TokenResponse":
+        """
+        Exchange a Supabase refresh token for a new access token.
+
+        Supabase handles refresh token rotation — a new refresh token is
+        returned alongside the new access token. The old refresh token is
+        invalidated by Supabase after use.
+
+        Returns:
+            TokenResponse with new access_token, refresh_token, and expires_in.
+
+        Raises:
+            TokenValidationError: If the refresh token is invalid or expired.
+        """
+        from app.schemas.auth import TokenResponse
+
+        # Use a transient client to avoid mutating the singleton admin client's session.
+        refresh_client = await create_async_client(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_ROLE_KEY,
+        )
+        try:
+            response = await refresh_client.auth.refresh_session(refresh_token)
+        except Exception as e:
+            logger.warning("Token refresh failed", error=str(e))
+            raise TokenValidationError("Refresh token is invalid or expired") from e
+
+        if not response.session:
+            raise TokenValidationError("Refresh returned no session")
+
+        session = response.session
+        logger.info("Session refreshed", user_id=str(response.user.id) if response.user else "unknown")
+
+        return TokenResponse(
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+            expires_in=session.expires_in or 3600,
+            token_type="bearer",
+        )
 
 
 async def get_auth_service() -> AuthService:
     """Get auth service instance."""
     return AuthService()
 
-
-# TODO: Add session management
-# TODO: Add refresh token rotation
-# TODO: Add multi-factor authentication support
-# TODO: Add API key authentication for service accounts

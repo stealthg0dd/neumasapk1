@@ -95,13 +95,24 @@ async def login(request: LoginRequest) -> LoginResponse:
     description="Exchange refresh token for new access token.",
 )
 async def refresh_token(request: RefreshTokenRequest) -> TokenResponse:
-    """Refresh JWT access token using refresh token."""
-    # Note: Refresh token handling depends on Supabase Auth
-    # For now, return a placeholder error
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Refresh token endpoint not yet implemented. Use /login for new tokens.",
-    )
+    """Refresh JWT access token using a Supabase refresh token.
+
+    Returns a new access_token and rotated refresh_token. The old
+    refresh token is invalidated by Supabase after this call.
+    """
+    try:
+        return await auth_service.refresh_session(request.refresh_token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.warning("Token refresh failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+        )
 
 
 @router.get(

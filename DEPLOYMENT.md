@@ -189,3 +189,55 @@ The `/api/health` response:
   "supabase_connected": true
 }
 ```
+
+---
+
+## 9. Database Schema and Migrations
+
+### Canonical Schema
+
+The canonical schema is `neumas-backend/supabase/schema.sql`.
+
+**Never use `setup_schema.sql` for new deployments** — it is legacy and non-authoritative.
+
+### Applying the Schema (first-time setup)
+
+1. Go to Supabase dashboard → SQL Editor
+2. Copy the contents of `neumas-backend/supabase/schema.sql`
+3. Paste and run
+
+### Migration Procedure
+
+All schema changes after the baseline use forward-only migration files in `neumas-backend/migrations/`.
+
+**To apply a migration:**
+
+1. Open Supabase SQL Editor
+2. Open the migration file (e.g. `0002_inventory_movements.sql`)
+3. Paste and run
+4. Record the migration as applied (manual tracking for now)
+
+**To add a new migration:**
+
+1. Create `neumas-backend/migrations/NNNN_description.sql` (next sequential number)
+2. Write forward-only DDL (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`)
+3. Update `neumas-backend/supabase/schema.sql` to include the new DDL
+4. Document the migration in this file (section 10 below)
+
+**Rules:**
+- Never edit a migration that has been applied to any environment
+- Always use `IF NOT EXISTS` / `IF NOT EXISTS` to make migrations idempotent
+- Never use `DROP` in a migration unless there is a separate cleanup sprint
+- Add the migration to `supabase/schema.sql` so it is part of the canonical schema
+
+### Migration History
+
+| Migration | Description | Date Applied |
+|-----------|-------------|--------------|
+| `0001_baseline.sql` | Baseline checkpoint | Apply with schema.sql |
+| `0002_inventory_movements.sql` | Append-only inventory ledger | — |
+| `0003_documents_and_line_items.sql` | Normalized documents + extracted line items | — |
+| `0004_vendors_and_aliases.sql` | Vendor registry + raw name mapping | — |
+| `0005_canonical_items_and_aliases.sql` | Canonical item catalog + alias mapping | — |
+| `0006_alerts_and_audit_logs.sql` | Alerts state machine + immutable audit trail | — |
+| `0007_reports_and_usage.sql` | Report metadata + usage metering events | — |

@@ -103,6 +103,16 @@ export async function logout(): Promise<void> {
   await post<void>("/api/auth/logout");
 }
 
+/** POST /api/auth/refresh */
+export async function refreshToken(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token?: string | null;
+  expires_in: number;
+  token_type: string;
+}> {
+  return post("/api/auth/refresh", { refresh_token: refreshToken });
+}
+
 // ============================================================================
 // Scans
 // ============================================================================
@@ -320,3 +330,343 @@ export async function markItemPurchased(
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   return get<AnalyticsSummary>("/api/analytics/summary");
 }
+
+// ============================================================================
+// Alerts
+// ============================================================================
+
+export interface Alert {
+  id: string;
+  org_id: string;
+  property_id: string | null;
+  item_id: string | null;
+  alert_type: string;
+  severity: "critical" | "high" | "medium" | "low";
+  state: "open" | "snoozed" | "resolved";
+  title: string;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  snooze_until: string | null;
+  resolved_at: string | null;
+  resolved_by_id: string | null;
+  created_at: string;
+}
+
+export interface AlertsResponse {
+  alerts: Alert[];
+  open_count: number;
+  page: number;
+  page_size: number;
+}
+
+/** GET /api/alerts/ */
+export async function listAlerts(params?: {
+  state?: string;
+  alert_type?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<AlertsResponse> {
+  return get<AlertsResponse>("/api/alerts/", params);
+}
+
+/** GET /api/alerts/{alertId} */
+export async function getAlert(alertId: string): Promise<Alert> {
+  return get<Alert>(`/api/alerts/${alertId}`);
+}
+
+/** POST /api/alerts/{alertId}/snooze */
+export async function snoozeAlert(alertId: string, snoozeUntil: string): Promise<Alert> {
+  return post<Alert>(`/api/alerts/${alertId}/snooze`, { snooze_until: snoozeUntil });
+}
+
+/** POST /api/alerts/{alertId}/resolve */
+export async function resolveAlert(alertId: string): Promise<Alert> {
+  return post<Alert>(`/api/alerts/${alertId}/resolve`, {});
+}
+
+// ============================================================================
+// Reports
+// ============================================================================
+
+export interface Report {
+  id: string;
+  org_id: string;
+  property_id: string | null;
+  requested_by_id: string;
+  report_type: string;
+  params: Record<string, unknown>;
+  status: "queued" | "processing" | "ready" | "failed";
+  result_url: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+  deduplicated?: boolean;
+}
+
+/** POST /api/reports/ */
+export async function requestReport(
+  reportType: string,
+  params: Record<string, unknown> = {}
+): Promise<Report> {
+  return post<Report>("/api/reports/", { report_type: reportType, params });
+}
+
+/** GET /api/reports/ */
+export async function listReports(params?: {
+  report_type?: string;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ reports: Report[]; page: number; page_size: number }> {
+  return get("/api/reports/", params);
+}
+
+/** GET /api/reports/{reportId} */
+export async function getReport(reportId: string): Promise<Report> {
+  return get<Report>(`/api/reports/${reportId}`);
+}
+
+// ============================================================================
+// Documents
+// ============================================================================
+
+export interface DocumentLineItem {
+  id: string;
+  document_id: string;
+  raw_name: string;
+  raw_quantity: number | null;
+  raw_unit: string | null;
+  raw_price: number | null;
+  raw_total: number | null;
+  normalized_name: string | null;
+  normalized_quantity: number | null;
+  normalized_unit: string | null;
+  canonical_item_id: string | null;
+  confidence: number;
+  review_needed: boolean;
+  review_reason: string | null;
+  movement_id: string | null;
+}
+
+export interface Document {
+  id: string;
+  org_id: string;
+  property_id: string | null;
+  scan_id: string | null;
+  document_type: string;
+  status: string;
+  raw_vendor_name: string | null;
+  vendor_id: string | null;
+  overall_confidence: number | null;
+  review_needed: boolean;
+  review_reason: string | null;
+  approved_by_id: string | null;
+  approved_at: string | null;
+  created_at: string;
+  line_items?: DocumentLineItem[];
+}
+
+/** GET /api/documents/ */
+export async function listDocuments(params?: {
+  status?: string;
+  review_needed?: boolean;
+  page?: number;
+  page_size?: number;
+}): Promise<{ documents: Document[]; total: number; page: number; page_size: number }> {
+  return get("/api/documents/", params);
+}
+
+/** GET /api/documents/review-queue */
+export async function getDocumentReviewQueue(): Promise<Document[]> {
+  return get<Document[]>("/api/documents/review-queue");
+}
+
+/** GET /api/documents/{documentId} */
+export async function getDocument(documentId: string): Promise<Document> {
+  return get<Document>(`/api/documents/${documentId}`);
+}
+
+/** POST /api/documents/{documentId}/approve */
+export async function approveDocument(documentId: string, notes?: string): Promise<Record<string, unknown>> {
+  return post(`/api/documents/${documentId}/approve`, { notes });
+}
+
+/** PATCH /api/documents/{documentId}/line-items/{lineItemId} */
+export async function updateDocumentLineItem(
+  documentId: string,
+  lineItemId: string,
+  updates: Partial<DocumentLineItem>
+): Promise<DocumentLineItem> {
+  return patch<DocumentLineItem>(`/api/documents/${documentId}/line-items/${lineItemId}`, updates);
+}
+
+// ============================================================================
+// Vendors
+// ============================================================================
+
+export interface Vendor {
+  id: string;
+  org_id: string;
+  name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** GET /api/vendors/ */
+export async function listVendors(params?: {
+  page?: number;
+  page_size?: number;
+}): Promise<{ vendors: Vendor[]; page: number; page_size: number }> {
+  return get("/api/vendors/", params);
+}
+
+/** GET /api/vendors/{vendorId} */
+export async function getVendor(vendorId: string): Promise<Vendor> {
+  return get<Vendor>(`/api/vendors/${vendorId}`);
+}
+
+/** GET /api/vendors/catalog/items */
+export async function listCatalogItems(params?: {
+  category?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ items: Record<string, unknown>[]; page: number; page_size: number }> {
+  return get("/api/vendors/catalog/items", params);
+}
+
+// ============================================================================
+// Admin
+// ============================================================================
+
+export interface AdminOrg {
+  id: string;
+  name: string;
+  plan: string | null;
+  created_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AdminProperty {
+  id: string;
+  name: string;
+  type: string | null;
+  created_at: string;
+}
+
+export interface AdminUsage {
+  documents_scanned: number;
+  line_items_processed: number;
+  exports_generated: number;
+  active_users: number;
+  active_properties: number;
+  llm_calls: number;
+  llm_cost_usd: number;
+  period_days: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface SystemHealth {
+  [key: string]: string | boolean | number;
+}
+
+export interface AuditEntry {
+  id: string;
+  org_id: string;
+  property_id: string | null;
+  actor_id: string | null;
+  actor_role: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** GET /api/admin/org */
+export async function getAdminOrg(): Promise<AdminOrg> {
+  return get<AdminOrg>("/api/admin/org");
+}
+
+/** GET /api/admin/users */
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  return get<AdminUser[]>("/api/admin/users");
+}
+
+/** GET /api/admin/properties */
+export async function listAdminProperties(): Promise<AdminProperty[]> {
+  return get<AdminProperty[]>("/api/admin/properties");
+}
+
+/** GET /api/admin/usage */
+export async function getAdminUsage(params?: { days?: number }): Promise<AdminUsage> {
+  return get<AdminUsage>("/api/admin/usage", params);
+}
+
+/** GET /api/admin/system-health */
+export async function getSystemHealth(): Promise<SystemHealth> {
+  return get<SystemHealth>("/api/admin/system-health");
+}
+
+/** GET /api/admin/audit-log */
+export async function listAuditLog(params?: {
+  resource_type?: string;
+  resource_id?: string;
+  actor_id?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ entries: AuditEntry[]; total: number }> {
+  return get("/api/admin/audit-log", params);
+}
+
+/** GET /api/admin/feature-flags */
+export async function listFeatureFlags(): Promise<Record<string, boolean>> {
+  return get<Record<string, boolean>>("/api/admin/feature-flags");
+}
+
+/** PATCH /api/admin/feature-flags/{flagName} */
+export async function updateFeatureFlag(
+  flagName: string,
+  enabled: boolean
+): Promise<Record<string, unknown>> {
+  return patch(`/api/admin/feature-flags/${flagName}`, { enabled });
+}
+
+// ============================================================================
+// Reorder
+// ============================================================================
+
+export interface ReorderRecommendation {
+  item_id: string;
+  name: string;
+  unit: string | null;
+  on_hand: number;
+  par_level: number;
+  projected_consumption: number;
+  reorder_qty: number;
+  urgency: "critical" | "urgent" | "soon" | "monitor";
+  horizon_days: number;
+  computed_at: string;
+  reason: string;
+}
+
+/** GET /api/inventory/reorder-recommendations */
+export async function getReorderRecommendations(params?: {
+  horizon_days?: number;
+  min_urgency?: string;
+}): Promise<ReorderRecommendation[]> {
+  return get<ReorderRecommendation[]>("/api/inventory/reorder-recommendations", params);
+}
+

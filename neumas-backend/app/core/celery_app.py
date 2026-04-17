@@ -79,6 +79,9 @@ celery_app.conf.update(
         Queue("agents", neumas_exchange, routing_key="agents"),
         Queue("neumas.predictions", neumas_exchange, routing_key="neumas.predictions"),
         Queue("neumas.shopping", neumas_exchange, routing_key="neumas.shopping"),
+        Queue("alerts", neumas_exchange, routing_key="alerts"),
+        Queue("reports", neumas_exchange, routing_key="reports"),
+        Queue("evaluation", neumas_exchange, routing_key="evaluation"),
     ),
 
     # Task routing - route by task name prefix
@@ -94,6 +97,12 @@ celery_app.conf.update(
         "research.generate_weekly_post": {"queue": "agents", "routing_key": "agents"},
         "app.tasks.scan_tasks.*": {"queue": "scans"},
         "app.tasks.agent_tasks.*": {"queue": "neumas.predictions"},
+        "app.tasks.alert_tasks.*": {"queue": "alerts"},
+        "alerts.*": {"queue": "alerts", "routing_key": "alerts"},
+        "app.tasks.report_tasks.*": {"queue": "reports"},
+        "reports.*": {"queue": "reports", "routing_key": "reports"},
+        "app.tasks.evaluation_tasks.*": {"queue": "evaluation"},
+        "evaluation.*": {"queue": "evaluation", "routing_key": "evaluation"},
     },
 
     # Broker connection retry (important for Railway cold-start)
@@ -157,6 +166,18 @@ celery_app.conf.update(
             "task": "research.generate_weekly_post",
             "schedule": crontab(hour=0, minute=0, day_of_week=1),
             "options": {"queue": "agents"},
+        },
+        # Evaluate inventory alerts every hour
+        "evaluate-inventory-alerts-hourly": {
+            "task": "alerts.evaluate_inventory_alerts",
+            "schedule": crontab(minute=0),
+            "options": {"queue": "alerts"},
+        },
+        # Backfill prediction actual values daily at 03:00 UTC
+        "backfill-actual-values-daily": {
+            "task": "evaluation.backfill_actual_values",
+            "schedule": crontab(hour=3, minute=0),
+            "options": {"queue": "evaluation"},
         },
     },
 )

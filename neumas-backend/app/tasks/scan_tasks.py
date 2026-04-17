@@ -16,7 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.celery_app import neumas_task
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_business_event
 
 logger = get_logger(__name__)
 
@@ -191,6 +191,13 @@ async def _process_scan_async(
         }).eq("id", scan_id).execute()
 
         logger.info("Scan marked as processing", scan_id=scan_id)
+        log_business_event(
+            "scan.started",
+            property_id=property_id,
+            user_id=user_id,
+            scan_id=scan_id,
+            scan_type=scan_type,
+        )
 
         # =================================================================
         # Step 2 -- Run VisionAgent
@@ -219,6 +226,18 @@ async def _process_scan_async(
             items_extracted=len(extracted_items),
             confidence=vision_confidence,
         )
+
+        # Emit review-required event when confidence is below threshold
+        from app.core.constants import CONFIDENCE_REVIEW_THRESHOLD
+        if vision_confidence < CONFIDENCE_REVIEW_THRESHOLD:
+            log_business_event(
+                "scan.document_review_required",
+                property_id=property_id,
+                user_id=user_id,
+                scan_id=scan_id,
+                confidence=vision_confidence,
+                threshold=CONFIDENCE_REVIEW_THRESHOLD,
+            )
 
         # =================================================================
         # Step 3 -- Persist raw + processed results in scans table
@@ -341,6 +360,15 @@ async def _process_scan_async(
         result["processing_time_ms"] = total_ms
         result["receipt_metadata"] = receipt_meta
 
+        log_business_event(
+            "scan.completed",
+            property_id=property_id,
+            user_id=user_id,
+            scan_id=scan_id,
+            items_upserted=len(upserted),
+            elapsed_ms=total_ms,
+            errors=len(result["errors"]),
+        )
         logger.info(
             "Scan processing complete",
             scan_id=scan_id,

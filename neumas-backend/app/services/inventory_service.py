@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Inventory service for managing inventory items and triggering predictions.
 """

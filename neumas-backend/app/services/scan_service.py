@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Scan service for handling scan uploads and status tracking.
 
@@ -32,6 +33,7 @@ from app.schemas.scans import (
     ScanResponse,
     ScanStatusResponse,
 )
+from app.utils.file_hash import compute_hash, is_duplicate_upload
 
 logger = get_logger(__name__)
 
@@ -88,6 +90,38 @@ class ScanService:
             scan_type=scan_type,
             filename=file.filename,
         )
+
+        # Read file bytes once so we can hash AND upload without re-reading
+        file_bytes = await file.read()
+        await file.seek(0)  # reset for downstream readers
+
+        # Dedup check: reject if same file was uploaded within the window
+        if not settings.DEV_MODE:
+            try:
+                import redis as redis_lib
+                from app.core.config import settings as _s
+                _redis = redis_lib.from_url(
+                    _s.REDIS_URL, socket_connect_timeout=1, socket_timeout=1
+                )
+                file_hash = compute_hash(file_bytes)
+                if is_duplicate_upload(
+                    file_hash=file_hash,
+                    org_id=str(tenant.org_id),
+                    property_id=str(tenant.property_id),
+                    redis_client=_redis,
+                ):
+                    logger.warning(
+                        "Duplicate upload rejected",
+                        file_hash=file_hash,
+                        org_id=str(tenant.org_id),
+                        property_id=str(tenant.property_id),
+                    )
+                    raise ValueError("Duplicate upload: identical file submitted within the dedup window")
+            except ValueError:
+                raise
+            except Exception as exc:
+                # Non-fatal: if Redis is unavailable, allow the upload
+                logger.warning("Dedup check skipped", error=str(exc))
 
         # Step 1: Upload image to Supabase Storage (or stub in DEV_MODE)
         storage_path, image_url = await self._upload_to_storage(

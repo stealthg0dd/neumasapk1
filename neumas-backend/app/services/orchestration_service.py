@@ -503,7 +503,30 @@ async def call_agent(
     model = model_candidates[retry_idx]
 
     try:
-        return await execute_llm(agent_name, model, task_payload)
+        result = await execute_llm(agent_name, model, task_payload)
+
+        # Record usage for cost accounting (non-fatal)
+        tenant = task_payload.get("tenant")
+        if tenant is not None:
+            try:
+                from app.core.constants import estimate_llm_cost
+                from app.db.repositories.usage_metering import UsageMeteringRepository
+                input_tokens = int(task_payload.get("_input_tokens", 0))
+                output_tokens = int(task_payload.get("_output_tokens", 0))
+                cost = estimate_llm_cost(model, input_tokens, output_tokens)
+                await UsageMeteringRepository().record(
+                    tenant=tenant,
+                    feature=agent_name.lower(),
+                    event_type="llm_call",
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=cost,
+                )
+            except Exception as _meter_err:
+                logger.debug("Usage metering failed (non-fatal)", error=str(_meter_err))
+
+        return result
 
     except LLMRateLimitError as e:
         logger.warning(

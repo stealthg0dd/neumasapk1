@@ -94,13 +94,17 @@ except ImportError:
 # Import routers explicitly at the top - errors will be visible in logs
 from app.api.routes import (
     admin,
+    alerts,
     analytics,
     auth,
+    documents,
     insights,
     inventory,
     predictions,
+    reports,
     scans,
     shopping,
+    vendors,
 )
 
 # Safe import for logging module
@@ -259,6 +263,15 @@ app.add_middleware(
 # Add request logging middleware (generates request_id, logs req/res)
 if RequestLoggingMiddleware:
     app.add_middleware(RequestLoggingMiddleware)
+
+# Add idempotency middleware (Redis-backed replay for POST/PATCH)
+try:
+    from app.core.idempotency import IdempotencyMiddleware
+    _redis_url = settings.celery_broker or getattr(settings, "REDIS_PRIVATE_URL", None) or getattr(settings, "REDIS_URL", None)
+    if _redis_url and _redis_url != "redis://":
+        app.add_middleware(IdempotencyMiddleware, redis_url=_redis_url)
+except Exception as _idem_err:
+    logger.warning("Idempotency middleware not loaded", error=str(_idem_err))
 
 
 # ============================================================================
@@ -519,6 +532,34 @@ app.include_router(
     admin.router,
     prefix="/api/admin",
     tags=["Admin"],
+)
+
+# Documents routes
+app.include_router(
+    documents.router,
+    prefix="/api/documents",
+    tags=["Documents"],
+)
+
+# Vendors routes
+app.include_router(
+    vendors.router,
+    prefix="/api/vendors",
+    tags=["Vendors"],
+)
+
+# Alerts routes
+app.include_router(
+    alerts.router,
+    prefix="/api/alerts",
+    tags=["Alerts"],
+)
+
+# Reports routes
+app.include_router(
+    reports.router,
+    prefix="/api/reports",
+    tags=["Reports"],
 )
 
 

@@ -1,13 +1,29 @@
 # Neumas — Architecture Reference
 
-> Last updated: 2026-04-03  
+> Last updated: 2026-04-17
 > Scope: full monorepo at `github.com/stealthg0dd/neumasapk1`
+> Status: **Modular Monolith upgrade in progress** (see §14 for ADRs)
 
 ---
 
 ## 1. System Overview
 
-Neumas is a **multi-tenant SaaS platform** for hospitality inventory management. It combines receipt scanning (vision AI), historical consumption analysis, demand forecasting, and LLM-driven shopping-list generation into a single integrated workflow.
+Neumas is a **multi-tenant B2B SaaS platform** for hospitality and food operations. It combines receipt scanning (vision AI), historical consumption analysis, demand forecasting, and LLM-driven shopping-list generation into a single integrated workflow.
+
+### Architecture Target
+
+The system is being evolved from an initial MVP into an **enterprise-grade, modular monolith** with:
+
+- Unified auth and session lifecycle
+- Canonical schema and forward-only migration discipline
+- Append-only inventory ledger alongside snapshot model
+- Vendor normalization and canonical item intelligence
+- Alerts, reorder engine, and forecast evaluation
+- Admin, auditability, and usage metering
+- Idempotency, reliability, and traceability
+- Operator-grade frontend surfaces
+- Mobile-ready backend contracts
+- Retrieval and future copilot readiness
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -307,14 +323,54 @@ next start
 
 ---
 
-## 12. Known Issues & TODOs
+## 12. Known Issues & Mitigations
 
-| Area | Issue | File |
-|------|-------|------|
-| Auth | `POST /api/auth/refresh` returns 501 | `routes/auth.py` |
-| Auth | No session management or refresh token rotation | `services/auth_service.py` |
-| Auth | No MFA support | `services/auth_service.py` |
-| Security | API key validation not implemented (`TODO` in code) | `core/security.py` |
-| Vite frontend | Legacy alternative; production readiness unclear | `neumas-web-vite/` |
-| Admin routes | Endpoint stubs — no implementations | `routes/admin.py` |
-| Predictions | Actual value backfill (`actual_value` column) never written | `db/repositories/predictions.py` |
+| Area | Issue | Status | Mitigation |
+|------|-------|--------|------------|
+| Auth | `POST /api/auth/refresh` was 501 | **Fixed** | Implemented in Layer 1 |
+| Auth | Session drift between backend JWT and Supabase | **Fixed** | `src/lib/auth-session.ts` |
+| Schema | Drift between schema.sql and setup_schema.sql | **Resolved** | setup_schema.sql marked LEGACY |
+| Inventory | No append-only ledger | **Fixed** | `inventory_movements` + ledger service |
+| Vendors | No normalization | **Fixed** | vendors/vendor_aliases + catalog service |
+| Alerts | Page was placeholder only | **Fixed** | Real backend + frontend in Layer 5/8 |
+| Admin | Routes were empty stubs | **Fixed** | Real admin service + routes in Layer 6 |
+| Predictions | `actual_value` never written | **Fixed** | `evaluation_tasks.py` in Layer 5 |
+| Vite frontend | Diverged, unproductive | **Resolved** | Deprecated, no new work |
+
+---
+
+## 13. Deprecated: neumas-web-vite
+
+`neumas-web-vite/` is the original Vite + React 18 frontend.
+
+**Status: DEPRECATED. No new features or bug fixes should be implemented here.**
+
+All frontend work goes into `neumas-web/` (Next.js 16 / React 19).
+
+The Vite frontend may be removed in a future cleanup sprint after all operators have migrated.
+
+---
+
+## 14. Architecture Decision Records
+
+See `docs/adr/` for all significant architectural decisions:
+
+| ADR | Title |
+|-----|-------|
+| [001](docs/adr/001-canonical-schema-strategy.md) | Canonical Schema Strategy |
+| [002](docs/adr/002-auth-session-model.md) | Auth and Session Model |
+| [003](docs/adr/003-inventory-ledger-model.md) | Inventory Ledger Model |
+| [004](docs/adr/004-ai-routing-and-cost-accounting.md) | AI Routing and Cost Accounting |
+| [005](docs/adr/005-retrieval-architecture.md) | Retrieval Architecture |
+
+---
+
+## 15. Migration Procedure
+
+See `DEPLOYMENT.md` for full migration runbook. Summary:
+
+1. Never edit `supabase/schema.sql` without creating a corresponding migration file
+2. Migration files live in `neumas-backend/migrations/` as `NNNN_description.sql`
+3. Apply via Supabase SQL Editor in order
+4. Never modify a migration that has already been applied to production
+5. For schema changes, update `supabase/schema.sql` AND create a new migration

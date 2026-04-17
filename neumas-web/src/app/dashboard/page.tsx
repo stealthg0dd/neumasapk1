@@ -1,26 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Brain } from "lucide-react";
-
 import {
   getAnalyticsSummary,
   listPredictions,
   listScans,
-  listShoppingLists,
-  getShoppingList,
+  listAlerts,
+  getDocumentReviewQueue,
+  listVendors,
 } from "@/lib/api/endpoints";
-import type { AnalyticsSummary, Prediction, Scan, ShoppingListDetail, UrgencyLevel } from "@/lib/api/types";
+import type { Alert, Document, Vendor } from "@/lib/api/endpoints";
+import type { AnalyticsSummary, Prediction, Scan } from "@/lib/api/types";
 import { captureUIError } from "@/lib/analytics";
-import {
-  confidenceToPercent,
-  daysUntilStockout,
-  getFeatures,
-  sortPredictionsByUrgencyThenDays,
-} from "@/lib/prediction-display";
+import { sortPredictionsByUrgencyThenDays } from "@/lib/prediction-display";
 
-const NOTIFICATION_ASKED_KEY = "neumas-notification-asked";
+import { KPIBand } from "@/components/dashboard/KPIBand";
+import { IntelligencePanel } from "@/components/dashboard/IntelligencePanel";
+import { SecondaryInsights } from "@/components/dashboard/SecondaryInsights";
+import { ActionZone } from "@/components/dashboard/ActionZone";
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 
 function formatRelativeUpdated(iso: string | undefined): string {
   if (!iso) return "just now";
@@ -32,372 +30,129 @@ function formatRelativeUpdated(iso: string | undefined): string {
   if (min < 60) return `${min}m ago`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
-const URGENCY_CARD: Record<
-  UrgencyLevel,
-  { wrap: string; border: string; dot: string }
-> = {
-  critical: {
-    wrap: "bg-red-50 border-red-200",
-    border: "border-red-200",
-    dot: "bg-red-400",
-  },
-  urgent: {
-    wrap: "bg-amber-50 border-amber-200",
-    border: "border-amber-200",
-    dot: "bg-amber-400",
-  },
-  soon: {
-    wrap: "bg-yellow-50 border-yellow-100",
-    border: "border-yellow-100",
-    dot: "bg-yellow-300",
-  },
-  later: {
-    wrap: "bg-gray-50 border-gray-100",
-    border: "border-gray-100",
-    dot: "bg-gray-300",
-  },
-};
-
-function scanStatusLabel(s: Scan): string {
-  if (s.status === "pending" || s.status === "processing") return "processing";
-  return s.status;
-}
-
-function NotificationBanner() {
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(NOTIFICATION_ASKED_KEY) === "true") return;
-    setShow(true);
-  }, []);
-
-  if (!show) return null;
-
-  function dismiss() {
-    localStorage.setItem(NOTIFICATION_ASKED_KEY, "true");
-    setShow(false);
-  }
-
-  async function enable() {
-    try {
-      if (typeof Notification !== "undefined") {
-        await Notification.requestPermission();
-      }
-    } finally {
-      localStorage.setItem(NOTIFICATION_ASKED_KEY, "true");
-      setShow(false);
-    }
-  }
-
-  return (
-    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:mb-6">
-      <p className="text-sm font-medium text-gray-900 sm:text-sm">
-        Get alerts before you run out. Enable notifications.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={enable}
-          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          Enable
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Later
-        </button>
-      </div>
-    </div>
-  );
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 export default function DashboardPage() {
-  const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [scans, setScans] = useState<Scan[]>([]);
-  const [listPreview, setListPreview] = useState<ShoppingListDetail | null>(null);
-  const [updatedLabel, setUpdatedLabel] = useState("just now");
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<Document[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<string | undefined>(undefined);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sum, preds, recentScans, lists] = await Promise.all([
-        getAnalyticsSummary(),
-        listPredictions({ limit: 100 }),
-        listScans({ limit: 3 }),
-        listShoppingLists({ limit: 1 }),
+      const [sum, preds, recentScans, alertsRes, reviewDocs, vendorsRes] = await Promise.all([
+        getAnalyticsSummary().catch(() => null),
+        listPredictions({ limit: 10 }).catch(() => []),
+        listScans({ limit: 10 }).catch(() => []),
+        listAlerts({ state: "open", page_size: 10 }).catch(() => ({ alerts: [], open_count: 0, page: 1, page_size: 10 })),
+        getDocumentReviewQueue().catch(() => []),
+        listVendors({ page_size: 5 }).catch(() => ({ vendors: [], page: 1, page_size: 5 })),
       ]);
+
       setAnalytics(sum);
-      setPredictions(preds);
-      setScans(Array.isArray(recentScans) ? recentScans : []);
-
-      const lastHist = sum.confidence_history?.length
-        ? sum.confidence_history[sum.confidence_history.length - 1]?.date
-        : undefined;
-      setUpdatedLabel(formatRelativeUpdated(lastHist));
-
-      if (lists.length > 0) {
-        try {
-          const detail = await getShoppingList(lists[0].id);
-          setListPreview(detail);
-        } catch {
-          setListPreview(null);
-        }
-      } else {
-        setListPreview(null);
-      }
+      setPredictions(sortPredictionsByUrgencyThenDays(preds as Prediction[]));
+      setScans(recentScans as Scan[]);
+      setAlerts(alertsRes.alerts);
+      setReviewQueue(reviewDocs);
+      setVendors(vendorsRes.vendors);
+      setUpdatedAt(new Date().toISOString());
     } catch (err) {
-      captureUIError("dashboard_overview", err);
+      captureUIError("dashboard-load", err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadData();
+  }, [loadData]);
 
-  const sortedPreds = useMemo(() => sortPredictionsByUrgencyThenDays(predictions), [predictions]);
+  const lowStockCount = useMemo(() => {
+    const urgency = analytics?.urgency_breakdown;
+    if (!urgency) return 0;
+    return urgency.critical + urgency.urgent;
+  }, [analytics]);
 
-  const bannerPred = useMemo(() => {
-    return sortedPreds.find(
-      (p) => p.stockout_risk_level === "critical" || p.stockout_risk_level === "urgent"
+  const nextOrderDays = useMemo(() => {
+    const p = predictions.find((pr) =>
+      ["critical", "urgent"].includes(pr.stockout_risk_level ?? "")
     );
-  }, [sortedPreds]);
+    if (!p) return null;
+    const d = new Date(p.prediction_date);
+    const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
+    return Math.max(0, diff);
+  }, [predictions]);
 
-  const topThree = useMemo(() => sortedPreds.slice(0, 3), [sortedPreds]);
-
-  const nextStockoutLabel = useMemo(() => {
-    if (sortedPreds.length === 0) return "—";
-    const nearest = sortedPreds.reduce((best, p) => {
-      const d = daysUntilStockout(p.prediction_date);
-      const bd = daysUntilStockout(best.prediction_date);
-      return d < bd ? p : best;
-    });
-    const d = daysUntilStockout(nearest.prediction_date);
-    if (d === 0) return "Today";
-    if (d === 1) return "1 day";
-    return `${d} days`;
-  }, [sortedPreds]);
-
-  const accuracyPct = analytics ? Math.min(100, Math.max(0, analytics.avg_confidence_pct)) : 0;
-  const hoursToNext = Math.max(1, 24 - new Date().getHours());
+  const updatedLabel = formatRelativeUpdated(updatedAt);
 
   return (
-    <div className="space-y-6">
-      <NotificationBanner />
-
-      <div className="mb-4 sm:mb-6">
-        <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">Overview</h1>
-        <p className="mt-1 text-sm text-gray-500">What you need to do right now</p>
-      </div>
-
-      {loading ? (
-        <div className="space-y-4">
-          <div className="h-24 animate-pulse rounded-xl bg-gray-100" />
-          <div className="h-40 animate-pulse rounded-2xl bg-gray-100" />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div className="h-28 animate-pulse rounded-xl bg-gray-100" />
-            <div className="h-28 animate-pulse rounded-xl bg-gray-100" />
-            <div className="h-28 animate-pulse rounded-xl bg-gray-100 sm:block" />
-          </div>
-        </div>
-      ) : (
-        <>
-          {bannerPred && (
-            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:mb-6">
-              <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden />
-              <p className="min-w-0 flex-1 text-sm font-medium text-red-900">
-                You&apos;re likely to run out of{" "}
-                <span className="font-semibold">
-                  {bannerPred.inventory_item?.name ?? "an item"}
-                </span>{" "}
-                in {daysUntilStockout(bannerPred.prediction_date)} days
-              </p>
-              <Link
-                href="/dashboard/shopping"
-                className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-sm font-medium text-red-700 hover:bg-red-100"
-              >
-                Add to list →
-              </Link>
-            </div>
-          )}
-
-          <section className="mb-4 w-full rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:mb-6 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Brain className="h-6 w-6 shrink-0 text-blue-600" aria-hidden />
-                <h3 className="text-base font-semibold text-gray-900 sm:text-lg">AI Intelligence Center</h3>
-              </div>
-              <span className="text-sm text-blue-400 sm:text-xs">Updated {updatedLabel}</span>
-            </div>
-            <p className="mt-1 text-sm text-blue-700">
-              Learning from {analytics?.items_tracked ?? 0} items across {analytics?.scans_total ?? 0}{" "}
-              receipts
+    <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        {/* Page header */}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-[22px] font-bold tracking-tight text-gray-900">
+              Command center
+            </h1>
+            <p className="mt-0.5 text-[13px] text-gray-400">
+              Your operation at a glance — updated {updatedLabel}
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm text-blue-500 sm:text-xs">Prediction accuracy</span>
-              <div className="h-2 min-w-[120px] flex-1 rounded bg-blue-100">
-                <div
-                  className="h-2 rounded bg-blue-500 transition-all duration-1000"
-                  style={{ width: `${accuracyPct}%` }}
-                />
-              </div>
-              <span className="font-mono text-sm text-blue-700 sm:text-xs">{accuracyPct}%</span>
-            </div>
-            <p className="mt-1 text-sm text-blue-400 sm:text-xs">Accuracy improves with each receipt scan</p>
-            <p className="mt-2 text-sm text-blue-400 sm:text-xs">Next prediction update: in {hoursToNext} hours</p>
-          </section>
-
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:mb-6 sm:grid-cols-3 sm:gap-4">
-            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
-              <p className="text-sm font-medium uppercase tracking-wider text-gray-400 sm:text-xs">Items tracked</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">
-                {analytics?.items_tracked ?? 0}
-              </p>
-              <p className="mt-1 text-sm text-gray-400 sm:text-xs">From your pantry</p>
-            </div>
-            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
-              <p className="text-sm font-medium uppercase tracking-wider text-gray-400 sm:text-xs">Predicted savings</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">
-                ${(analytics?.spend_total ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </p>
-              <p className="mt-1 text-sm text-gray-400 sm:text-xs">Spend tracked (analytics)</p>
-            </div>
-            <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:col-span-1 sm:p-5">
-              <p className="text-sm font-medium uppercase tracking-wider text-gray-400 sm:text-xs">Next stockout</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{nextStockoutLabel}</p>
-              <p className="mt-1 text-sm text-gray-400 sm:text-xs">Nearest forecast</p>
-            </div>
           </div>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1.5 rounded-xl border border-black/[0.06] bg-white px-4 py-2 text-[12px] font-medium text-gray-600 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
 
-          <section className="mb-4 sm:mb-6">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-gray-900">Stockout predictions</h2>
-              <Link
-                href="/dashboard/predictions"
-                className="inline-flex min-h-[44px] items-center text-sm font-medium text-blue-600 hover:underline"
-              >
-                View all →
-              </Link>
-            </div>
-            {topThree.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-8 text-center text-sm text-gray-500">
-                Scan more receipts to get stockout predictions
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {topThree.map((p) => {
-                  const level = p.stockout_risk_level ?? "later";
-                  const u = URGENCY_CARD[level];
-                  const days = daysUntilStockout(p.prediction_date);
-                  const conf = confidenceToPercent(p.confidence);
-                  const feat = getFeatures(p);
-                  const patternLine =
-                    typeof feat?.reason === "string"
-                      ? feat.reason
-                      : feat?.avg_daily_consumption != null
-                        ? `Avg. daily use tracked`
-                        : "Consumption pattern";
+        {/* Zone 1: KPI band */}
+        <KPIBand
+          analytics={analytics}
+          lowStockCount={lowStockCount}
+          docsReviewCount={reviewQueue.length}
+          nextOrderDays={nextOrderDays}
+          loading={loading}
+        />
 
-                  return (
-                    <div
-                      key={p.id}
-                      className={`flex min-h-[80px] flex-wrap items-center gap-4 rounded-xl border p-4 active:bg-black/[0.02] ${u.wrap}`}
-                    >
-                      <span className={`h-3 w-3 shrink-0 rounded-full ${u.dot}`} aria-hidden />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900">{p.inventory_item?.name ?? "Item"}</p>
-                        <p className="text-sm text-gray-500 sm:text-xs">{patternLine}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="font-mono text-sm font-bold text-gray-900">{days} days</span>
-                        <span className="text-sm text-gray-400 sm:text-xs">{conf}% confidence</span>
-                      </div>
-                      <Link
-                        href="/dashboard/shopping"
-                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sm font-medium text-gray-700 underline-offset-4 hover:underline sm:ml-auto"
-                      >
-                        Add to list
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+        {/* Zone 2: Intelligence centerpiece */}
+        <IntelligencePanel
+          analytics={analytics}
+          predictions={predictions}
+          loading={loading}
+          updatedLabel={updatedLabel}
+        />
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
-              <h3 className="text-sm font-semibold text-gray-900">Recent scans</h3>
-              <ul className="mt-3 space-y-2 text-sm">
-                {scans.length === 0 ? (
-                  <li className="text-sm text-gray-500">No scans yet</li>
-                ) : (
-                  scans.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-50 pb-2 text-sm last:border-0"
-                    >
-                      <span className="text-gray-600">
-                        {new Date(s.created_at).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                      <span className="text-gray-900">{s.items_detected} items</span>
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-sm capitalize text-gray-600 sm:text-xs">
-                        {scanStatusLabel(s)}
-                      </span>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <Link
-                href="/dashboard/scans/new"
-                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100"
-              >
-                + Scan new receipt
-              </Link>
-            </section>
+        {/* Zone 3: Secondary insights */}
+        <SecondaryInsights
+          analytics={analytics}
+          vendors={vendors}
+          loading={loading}
+        />
 
-            <section className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
-              <h3 className="text-sm font-semibold text-gray-900">Shopping list preview</h3>
-              {!listPreview ? (
-                <p className="mt-3 text-sm text-gray-500">No shopping list yet</p>
-              ) : (
-                <div className="mt-3 space-y-1 text-sm">
-                  <p className="text-gray-900">
-                    <span className="font-medium">{listPreview.items?.length ?? 0}</span> items ·{" "}
-                    <span className="capitalize text-gray-600">{listPreview.status}</span>
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Total estimate:{" "}
-                    {listPreview.total_estimated_cost != null
-                      ? `$${Number(listPreview.total_estimated_cost).toFixed(2)}`
-                      : "—"}
-                  </p>
-                </div>
-              )}
-              <Link
-                href="/dashboard/shopping"
-                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Generate new list
-              </Link>
-            </section>
-          </div>
-        </>
-      )}
+        {/* Zone 4: Action zone */}
+        <ActionZone
+          alerts={alerts}
+          reviewQueue={reviewQueue}
+          predictions={predictions}
+          loading={loading}
+        />
+
+        {/* Zone 5: Activity feed */}
+        <ActivityFeed
+          scans={scans}
+          loading={loading}
+        />
+      </div>
     </div>
   );
 }

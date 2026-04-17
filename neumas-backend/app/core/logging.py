@@ -284,3 +284,48 @@ def log_shutdown_info() -> None:
     """Log application shutdown information."""
     logger = get_logger("shutdown")
     logger.info("Application shutting down")
+
+
+def log_business_event(
+    event: str,
+    *,
+    user_id: str | None = None,
+    org_id: str | None = None,
+    property_id: str | None = None,
+    **kwargs: Any,
+) -> None:
+    """
+    Emit a structured business-event log entry.
+
+    All business events share the ``business_event`` key so they can be
+    filtered easily in log aggregation tools (Datadog, ELK, etc.).
+
+    Standard fields:
+        event       -- dot-namespaced event name, e.g. "scan.completed"
+        user_id     -- user who triggered the event (optional)
+        org_id      -- organisation context (optional)
+        property_id -- property context (optional)
+        **kwargs    -- arbitrary extra dimensions
+
+    Usage::
+        log_business_event(
+            "scan.completed",
+            scan_id=scan_id,
+            items_upserted=5,
+            elapsed_ms=320,
+        )
+    """
+    event_logger = get_logger("business")
+    extra: dict[str, Any] = {k: v for k, v in kwargs.items() if v is not None}
+    if user_id:
+        extra["user_id"] = user_id
+    if org_id:
+        extra["org_id"] = org_id
+    if property_id:
+        extra["property_id"] = property_id
+
+    event_logger.info(
+        event,
+        business_event=event,
+        **extra,
+    )

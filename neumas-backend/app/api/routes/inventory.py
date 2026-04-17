@@ -258,3 +258,21 @@ async def adjust_quantity(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to adjust quantity",
         )
+
+
+@router.get(
+    "/reorder-recommendations",
+    summary="Reorder recommendations",
+    description="Return reorder recommendations sorted by urgency.",
+)
+async def reorder_recommendations(
+    tenant: Annotated[TenantContext, Depends(require_property)],
+    horizon_days: Annotated[int, Query(ge=1, le=90)] = 14,
+    min_urgency: Annotated[str, Query()] = "soon",
+) -> list[dict]:
+    """Compute and return reorder recommendations for the current property."""
+    from app.services.reorder_service import ReorderService
+    svc = ReorderService()
+    return await svc.get_recommendations(
+        tenant, horizon_days=horizon_days, min_urgency=min_urgency
+    )
