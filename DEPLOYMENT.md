@@ -208,18 +208,18 @@ The canonical schema is `neumas-backend/supabase/schema.sql`.
 
 ### Migration Procedure
 
-All schema changes after the baseline use forward-only migration files in `neumas-backend/migrations/`.
+All schema changes after the baseline use forward-only migration files in `neumas-backend/supabase/migrations/`.
 
 **To apply a migration:**
 
 1. Open Supabase SQL Editor
-2. Open the migration file (e.g. `0002_inventory_movements.sql`)
+2. Open the migration file from `neumas-backend/supabase/migrations/` (e.g. `20260417_operational_model.sql`)
 3. Paste and run
 4. Record the migration as applied (manual tracking for now)
 
 **To add a new migration:**
 
-1. Create `neumas-backend/migrations/NNNN_description.sql` (next sequential number)
+1. Create `neumas-backend/supabase/migrations/YYYYMMDD_description.sql` (date-prefixed filename)
 2. Write forward-only DDL (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`)
 3. Update `neumas-backend/supabase/schema.sql` to include the new DDL
 4. Document the migration in this file (section 10 below)
@@ -234,10 +234,6 @@ All schema changes after the baseline use forward-only migration files in `neuma
 
 | Migration | Description | Date Applied |
 |-----------|-------------|--------------|
-| `0001_baseline.sql` | Baseline checkpoint | Apply with schema.sql |
-| `0002_inventory_movements.sql` | Append-only inventory ledger | — |
-| `0003_documents_and_line_items.sql` | Normalized documents + extracted line items | — |
-| `0004_vendors_and_aliases.sql` | Vendor registry + raw name mapping | — |
-| `0005_canonical_items_and_aliases.sql` | Canonical item catalog + alias mapping | — |
-| `0006_alerts_and_audit_logs.sql` | Alerts state machine + immutable audit trail | — |
-| `0007_reports_and_usage.sql` | Report metadata + usage metering events | — |
+| `schema.sql` (baseline) | Full canonical schema — all 23 tables, RLS, indexes, triggers, storage | Apply fresh DBs with schema.sql directly |
+| `supabase/migrations/20260409_research_posts.sql` | Add research_posts table (agent-generated insights) | 2026-04-09 |
+| `supabase/migrations/20260417_operational_model.sql` | Add 13 new operational tables; fix org_id on scans/inventory_items; add actual_value to predictions | 2026-04-17 |

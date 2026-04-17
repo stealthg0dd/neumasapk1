@@ -137,7 +137,7 @@ neumasapk1/
 | POST | `/api/auth/login` | `routes/auth.py` | None |
 | GET | `/api/auth/me` | `routes/auth.py` | JWT |
 | POST | `/api/auth/logout` | `routes/auth.py` | JWT |
-| POST | `/api/auth/refresh` | `routes/auth.py` | ⚠️ 501 NOT IMPLEMENTED |
+| POST | `/api/auth/refresh` | `routes/auth.py` | JWT (refresh token) |
 | GET | `/api/inventory/` | `routes/inventory.py` | JWT + tenant |
 | GET | `/api/inventory/{id}` | `routes/inventory.py` | JWT + tenant |
 | POST | `/api/inventory/` | `routes/inventory.py` | JWT + tenant |
@@ -236,18 +236,33 @@ JWT custom claims (`org_id`, `property_ids`, `role`) power the RLS policies.
 
 | Table | Key Columns | Notes |
 |-------|-------------|-------|
-| `organizations` | id, name, slug, subscription_tier | Tenant root |
-| `properties` | id, organization_id, name, timezone | Location within org |
-| `users` | id, auth_id, organization_id, role | Mirrors auth.users |
-| `inventory_items` | id, property_id, category_id, name, quantity, min/max/reorder_point | Core stock tracking |
+| `organizations` | id, name, slug, plan, subscription_status | Tenant root; plan: free\|pilot\|pro\|enterprise |
+| `properties` | id, organization_id, name, type, currency, timezone | Outlet within org; type: restaurant\|cafe\|hotel\|bar\|other |
+| `users` | id, auth_id, organization_id, role, is_active | Mirrors auth.users; role: admin\|staff\|resident |
 | `inventory_categories` | id, organization_id, parent_id, name | Nested categories |
-| `scans` | id, property_id, status, image_urls, processed_results | Receipt upload records |
-| `consumption_patterns` | id, item_id, pattern_type, pattern_data, confidence | AI-computed usage patterns |
-| `predictions` | id, property_id, item_id, prediction_type, predicted_value, urgency | Stockout forecasts |
-| `shopping_lists` | id, property_id, status, budget_limit, total_estimated_cost | Generated lists |
+| `inventory_items` | id, property_id, organization_id, category_id, name, quantity | Current-state snapshot; quantity ≥ 0 enforced |
+| `inventory_movements` | id, item_id, property_id, organization_id, movement_type, quantity_delta, idempotency_key | **Append-only ledger**; idempotency_key for Celery safety |
+| `scans` | id, property_id, organization_id, user_id, status, image_urls | Receipt upload records; org_id denormalized |
+| `vendors` | id, organization_id, name, normalized_name, is_active | Supplier registry; UNIQUE(org, normalized_name) |
+| `vendor_aliases` | id, vendor_id, organization_id, alias_name, source | OCR→canonical vendor mapping; UNIQUE(org, alias_name) |
+| `canonical_items` | id, organization_id, canonical_name, canonical_name_tsv | Master item dictionary; tsvector for FTS |
+| `item_aliases` | id, canonical_item_id, organization_id, alias_name, confidence | OCR→canonical item mapping |
+| `documents` | id, property_id, organization_id, scan_id, status, vendor_id, overall_confidence | Normalized extracted document |
+| `document_line_items` | id, document_id, organization_id, raw_name, normalized_name, canonical_item_id | Per-line extraction; raw_* immutable post-creation |
+| `consumption_patterns` | id, item_id, property_id, organization_id, pattern_type, confidence | AI-computed usage patterns |
+| `predictions` | id, property_id, organization_id, item_id, predicted_value, actual_value, accuracy_score | Stockout forecasts; actual_value set retroactively |
+| `shopping_lists` | id, property_id, organization_id, status, budget_limit | Generated procurement lists |
 | `shopping_list_items` | id, shopping_list_id, name, quantity, priority, is_purchased | Individual list items |
+| `alerts` | id, organization_id, property_id, alert_type, severity, state | State: open→acknowledged→resolved\|dismissed |
+| `audit_logs` | id, organization_id, actor_id, action, resource_type, before_state, after_state | **Append-only**; actor_id not a FK |
+| `usage_events` | id, organization_id, feature, event_type, model, cost_usd | **Append-only** cost telemetry; service-role writes only |
+| `reports` | id, organization_id, report_type, status, params_hash, result | Async report jobs; params_hash for dedup |
+| `feature_flags` | id, name, org_id (nullable), enabled | org_id=NULL is global default |
+| `research_posts` | id, slug, title, content, published | Public AI-generated insight articles |
 
 RLS helper functions: `auth.is_org_admin()`, `auth.org_id()`, `auth.can_access_property(p_id)`
+
+> **Append-only tables**: `inventory_movements`, `audit_logs`, `usage_events` have no non-service-role INSERT/UPDATE/DELETE policies by design.
 
 ---
 
@@ -370,7 +385,7 @@ See `docs/adr/` for all significant architectural decisions:
 See `DEPLOYMENT.md` for full migration runbook. Summary:
 
 1. Never edit `supabase/schema.sql` without creating a corresponding migration file
-2. Migration files live in `neumas-backend/migrations/` as `NNNN_description.sql`
+2. Migration files live in `neumas-backend/supabase/migrations/` as `YYYYMMDD_description.sql`
 3. Apply via Supabase SQL Editor in order
 4. Never modify a migration that has already been applied to production
 5. For schema changes, update `supabase/schema.sql` AND create a new migration
