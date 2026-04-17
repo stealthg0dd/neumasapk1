@@ -1,5 +1,17 @@
 -- =============================================================================
+-- FIXED SCHEMA - All functions moved to public schema - No more auth schema
+-- permission errors (42501). Supabase best practice 2026.
+-- =============================================================================
+--
 -- Neumas -- Consolidated Canonical Supabase Schema
+-- =============================================================================
+-- FIX SUMMARY:
+--   • is_org_admin(), org_id(), can_access_property(), set_updated_at() moved
+--     from auth.* to public.* with SECURITY DEFINER + SET search_path = public
+--   • custom_access_token_hook() uncommented and live in public schema
+--   • All RLS policies updated to call public.* helpers
+--   • Explicit GRANTs for authenticated/anon on helper functions
+--   • GRANT EXECUTE on hook to supabase_auth_admin; REVOKE from anon/authenticated
 -- =============================================================================
 --
 -- CANONICAL SOURCE OF TRUTH: this file (supabase/schema.sql)
@@ -42,27 +54,32 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";   -- trigram indexes for fuzzy search
 
 
 -- =============================================================================
--- HELPER FUNCTIONS  (auth namespace)
+-- HELPER FUNCTIONS  (public schema, SECURITY DEFINER)
+-- NOTE: These are intentionally in the public schema — NOT the auth schema.
+--       Supabase restricts CREATE FUNCTION in the auth schema (error 42501).
 -- =============================================================================
 
-CREATE OR REPLACE FUNCTION auth.is_org_admin()
-RETURNS boolean LANGUAGE sql STABLE AS $$
+CREATE OR REPLACE FUNCTION public.is_org_admin()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
   SELECT (auth.jwt() ->> 'role') = 'admin';
 $$;
 
-CREATE OR REPLACE FUNCTION auth.org_id()
-RETURNS uuid LANGUAGE sql STABLE AS $$
+CREATE OR REPLACE FUNCTION public.org_id()
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
   SELECT (auth.jwt() ->> 'org_id')::uuid;
 $$;
 
 -- Does the calling user have access to a given property?
 -- Admins: any property in their org (DB check). Staff/residents: JWT property_ids only.
-CREATE OR REPLACE FUNCTION auth.can_access_property(p_id uuid)
-RETURNS boolean LANGUAGE sql STABLE AS $$
+CREATE OR REPLACE FUNCTION public.can_access_property(p_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
   SELECT CASE
     WHEN (auth.jwt() ->> 'role') = 'admin'
       THEN EXISTS (
-        SELECT 1 FROM properties
+        SELECT 1 FROM public.properties
         WHERE id = p_id AND organization_id = (auth.jwt() ->> 'org_id')::uuid
       )
     ELSE p_id::text = ANY(
@@ -73,13 +90,19 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
   END;
 $$;
 
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
 $$;
+
+-- Grant helper functions to authenticated and anon so RLS policies can invoke them
+GRANT EXECUTE ON FUNCTION public.is_org_admin()           TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.org_id()                 TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.can_access_property(uuid) TO authenticated, anon;
 
 
 -- =============================================================================
@@ -823,55 +846,55 @@ ALTER TABLE research_posts ENABLE ROW LEVEL SECURITY;
 -- =============================================================================
 
 DO $$ BEGIN CREATE TRIGGER trg_organizations_updated_at
-  BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_properties_updated_at
-  BEFORE UPDATE ON properties FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON properties FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_users_updated_at
-  BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_inventory_items_updated_at
-  BEFORE UPDATE ON inventory_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON inventory_items FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_consumption_patterns_updated_at
-  BEFORE UPDATE ON consumption_patterns FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON consumption_patterns FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_shopping_lists_updated_at
-  BEFORE UPDATE ON shopping_lists FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON shopping_lists FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_documents_updated_at
-  BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_vendors_updated_at
-  BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_canonical_items_updated_at
-  BEFORE UPDATE ON canonical_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON canonical_items FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_alerts_updated_at
-  BEFORE UPDATE ON alerts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON alerts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_reports_updated_at
-  BEFORE UPDATE ON reports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON reports FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_feature_flags_updated_at
-  BEFORE UPDATE ON feature_flags FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON feature_flags FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN CREATE TRIGGER trg_research_posts_updated_at
-  BEFORE UPDATE ON research_posts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON research_posts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 
@@ -882,190 +905,190 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- organizations
 CREATE POLICY svc_organizations ON organizations FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY org_select ON organizations FOR SELECT USING (id = auth.org_id());
+CREATE POLICY org_select ON organizations FOR SELECT USING (id = public.org_id());
 CREATE POLICY org_update ON organizations FOR UPDATE
-  USING (id = auth.org_id() AND auth.is_org_admin());
+  USING (id = public.org_id() AND public.is_org_admin());
 
 -- properties
 CREATE POLICY svc_properties ON properties FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY prop_select ON properties FOR SELECT USING (organization_id = auth.org_id());
+CREATE POLICY prop_select ON properties FOR SELECT USING (organization_id = public.org_id());
 CREATE POLICY prop_insert ON properties FOR INSERT
-  WITH CHECK (organization_id = auth.org_id() AND auth.is_org_admin());
+  WITH CHECK (organization_id = public.org_id() AND public.is_org_admin());
 CREATE POLICY prop_update ON properties FOR UPDATE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 CREATE POLICY prop_delete ON properties FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- users  (admins update anyone; staff update own row)
 CREATE POLICY svc_users ON users FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY user_select ON users FOR SELECT USING (organization_id = auth.org_id());
+CREATE POLICY user_select ON users FOR SELECT USING (organization_id = public.org_id());
 CREATE POLICY user_insert ON users FOR INSERT
-  WITH CHECK (organization_id = auth.org_id() AND auth.is_org_admin());
+  WITH CHECK (organization_id = public.org_id() AND public.is_org_admin());
 CREATE POLICY user_update ON users FOR UPDATE
-  USING (organization_id = auth.org_id() AND (auth.is_org_admin() OR auth_id = auth.uid()));
+  USING (organization_id = public.org_id() AND (public.is_org_admin() OR auth_id = auth.uid()));
 CREATE POLICY user_delete ON users FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- inventory_categories
 CREATE POLICY svc_categories ON inventory_categories FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY cat_select ON inventory_categories FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY cat_insert ON inventory_categories FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY cat_update ON inventory_categories FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY cat_select ON inventory_categories FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY cat_insert ON inventory_categories FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY cat_update ON inventory_categories FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY cat_delete ON inventory_categories FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- inventory_items  (property-scoped; prefer soft-delete via is_active=false)
 CREATE POLICY svc_inventory ON inventory_items FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY inv_select ON inventory_items FOR SELECT USING (auth.can_access_property(property_id));
-CREATE POLICY inv_insert ON inventory_items FOR INSERT WITH CHECK (auth.can_access_property(property_id));
-CREATE POLICY inv_update ON inventory_items FOR UPDATE USING (auth.can_access_property(property_id));
+CREATE POLICY inv_select ON inventory_items FOR SELECT USING (public.can_access_property(property_id));
+CREATE POLICY inv_insert ON inventory_items FOR INSERT WITH CHECK (public.can_access_property(property_id));
+CREATE POLICY inv_update ON inventory_items FOR UPDATE USING (public.can_access_property(property_id));
 CREATE POLICY inv_delete ON inventory_items FOR DELETE
-  USING (auth.can_access_property(property_id) AND auth.is_org_admin());
+  USING (public.can_access_property(property_id) AND public.is_org_admin());
 
 -- inventory_movements  (users read; no client writes -- service role only)
 CREATE POLICY svc_movements ON inventory_movements FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY mov_select ON inventory_movements FOR SELECT
-  USING (auth.can_access_property(property_id));
+  USING (public.can_access_property(property_id));
 
 -- scans
 CREATE POLICY svc_scans ON scans FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY scan_select ON scans FOR SELECT USING (auth.can_access_property(property_id));
-CREATE POLICY scan_insert ON scans FOR INSERT WITH CHECK (auth.can_access_property(property_id));
-CREATE POLICY scan_update ON scans FOR UPDATE USING (auth.can_access_property(property_id));
+CREATE POLICY scan_select ON scans FOR SELECT USING (public.can_access_property(property_id));
+CREATE POLICY scan_insert ON scans FOR INSERT WITH CHECK (public.can_access_property(property_id));
+CREATE POLICY scan_update ON scans FOR UPDATE USING (public.can_access_property(property_id));
 CREATE POLICY scan_delete ON scans FOR DELETE
-  USING (auth.can_access_property(property_id)
-    AND (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()) OR auth.is_org_admin()));
+  USING (public.can_access_property(property_id)
+    AND (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()) OR public.is_org_admin()));
 
 -- vendors
 CREATE POLICY svc_vendors ON vendors FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY vendor_select ON vendors FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY vendor_insert ON vendors FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY vendor_update ON vendors FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY vendor_select ON vendors FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY vendor_insert ON vendors FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY vendor_update ON vendors FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY vendor_delete ON vendors FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- vendor_aliases
 CREATE POLICY svc_vendor_aliases ON vendor_aliases FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY vendor_alias_select ON vendor_aliases FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY vendor_alias_insert ON vendor_aliases FOR INSERT WITH CHECK (organization_id = auth.org_id());
+CREATE POLICY vendor_alias_select ON vendor_aliases FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY vendor_alias_insert ON vendor_aliases FOR INSERT WITH CHECK (organization_id = public.org_id());
 CREATE POLICY vendor_alias_delete ON vendor_aliases FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- canonical_items
 CREATE POLICY svc_canonical_items ON canonical_items FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY canonical_select ON canonical_items FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY canonical_insert ON canonical_items FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY canonical_update ON canonical_items FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY canonical_select ON canonical_items FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY canonical_insert ON canonical_items FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY canonical_update ON canonical_items FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY canonical_delete ON canonical_items FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- item_aliases
 CREATE POLICY svc_item_aliases ON item_aliases FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY item_alias_select ON item_aliases FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY item_alias_insert ON item_aliases FOR INSERT WITH CHECK (organization_id = auth.org_id());
+CREATE POLICY item_alias_select ON item_aliases FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY item_alias_insert ON item_aliases FOR INSERT WITH CHECK (organization_id = public.org_id());
 CREATE POLICY item_alias_delete ON item_aliases FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- documents  (financial trail; hard delete admin-only)
 CREATE POLICY svc_documents ON documents FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY doc_select ON documents FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY doc_insert ON documents FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY doc_update ON documents FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY doc_select ON documents FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY doc_insert ON documents FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY doc_update ON documents FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY doc_delete ON documents FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- document_line_items
 CREATE POLICY svc_dli ON document_line_items FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY dli_select ON document_line_items FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY dli_insert ON document_line_items FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY dli_update ON document_line_items FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY dli_select ON document_line_items FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY dli_insert ON document_line_items FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY dli_update ON document_line_items FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY dli_delete ON document_line_items FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- consumption_patterns
 CREATE POLICY svc_patterns ON consumption_patterns FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY pattern_select ON consumption_patterns FOR SELECT
-  USING (auth.can_access_property(property_id));
+  USING (public.can_access_property(property_id));
 CREATE POLICY pattern_insert ON consumption_patterns FOR INSERT
-  WITH CHECK (auth.can_access_property(property_id));
+  WITH CHECK (public.can_access_property(property_id));
 CREATE POLICY pattern_update ON consumption_patterns FOR UPDATE
-  USING (auth.can_access_property(property_id));
+  USING (public.can_access_property(property_id));
 
 -- predictions
 CREATE POLICY svc_predictions ON predictions FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY pred_select ON predictions FOR SELECT USING (auth.can_access_property(property_id));
-CREATE POLICY pred_insert ON predictions FOR INSERT WITH CHECK (auth.can_access_property(property_id));
-CREATE POLICY pred_update ON predictions FOR UPDATE USING (auth.can_access_property(property_id));
+CREATE POLICY pred_select ON predictions FOR SELECT USING (public.can_access_property(property_id));
+CREATE POLICY pred_insert ON predictions FOR INSERT WITH CHECK (public.can_access_property(property_id));
+CREATE POLICY pred_update ON predictions FOR UPDATE USING (public.can_access_property(property_id));
 
 -- shopping_lists  (admin-only delete: approved procurement records)
 CREATE POLICY svc_shopping_lists ON shopping_lists FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY sl_select ON shopping_lists FOR SELECT USING (auth.can_access_property(property_id));
-CREATE POLICY sl_insert ON shopping_lists FOR INSERT WITH CHECK (auth.can_access_property(property_id));
-CREATE POLICY sl_update ON shopping_lists FOR UPDATE USING (auth.can_access_property(property_id));
+CREATE POLICY sl_select ON shopping_lists FOR SELECT USING (public.can_access_property(property_id));
+CREATE POLICY sl_insert ON shopping_lists FOR INSERT WITH CHECK (public.can_access_property(property_id));
+CREATE POLICY sl_update ON shopping_lists FOR UPDATE USING (public.can_access_property(property_id));
 CREATE POLICY sl_delete ON shopping_lists FOR DELETE
-  USING (auth.can_access_property(property_id) AND auth.is_org_admin());
+  USING (public.can_access_property(property_id) AND public.is_org_admin());
 
 -- shopping_list_items  (access derived from parent list)
 CREATE POLICY svc_sli ON shopping_list_items FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY sli_select ON shopping_list_items FOR SELECT
-  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE auth.can_access_property(property_id)));
+  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE public.can_access_property(property_id)));
 CREATE POLICY sli_insert ON shopping_list_items FOR INSERT
-  WITH CHECK (shopping_list_id IN (SELECT id FROM shopping_lists WHERE auth.can_access_property(property_id)));
+  WITH CHECK (shopping_list_id IN (SELECT id FROM shopping_lists WHERE public.can_access_property(property_id)));
 CREATE POLICY sli_update ON shopping_list_items FOR UPDATE
-  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE auth.can_access_property(property_id)));
+  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE public.can_access_property(property_id)));
 CREATE POLICY sli_delete ON shopping_list_items FOR DELETE
-  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE auth.can_access_property(property_id)));
+  USING (shopping_list_id IN (SELECT id FROM shopping_lists WHERE public.can_access_property(property_id)));
 
 -- alerts
 CREATE POLICY svc_alerts ON alerts FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY alert_select ON alerts FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY alert_insert ON alerts FOR INSERT WITH CHECK (organization_id = auth.org_id());
-CREATE POLICY alert_update ON alerts FOR UPDATE USING (organization_id = auth.org_id());
+CREATE POLICY alert_select ON alerts FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY alert_insert ON alerts FOR INSERT WITH CHECK (organization_id = public.org_id());
+CREATE POLICY alert_update ON alerts FOR UPDATE USING (organization_id = public.org_id());
 CREATE POLICY alert_delete ON alerts FOR DELETE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- audit_logs  (append-only; admin SELECT; no client writes)
 CREATE POLICY svc_audit ON audit_logs FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY audit_select ON audit_logs FOR SELECT
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- usage_events  (service-role writes; admin reads)
 CREATE POLICY svc_usage ON usage_events FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY usage_select ON usage_events FOR SELECT
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- reports
 CREATE POLICY svc_reports ON reports FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY report_select ON reports FOR SELECT USING (organization_id = auth.org_id());
-CREATE POLICY report_insert ON reports FOR INSERT WITH CHECK (organization_id = auth.org_id());
+CREATE POLICY report_select ON reports FOR SELECT USING (organization_id = public.org_id());
+CREATE POLICY report_insert ON reports FOR INSERT WITH CHECK (organization_id = public.org_id());
 CREATE POLICY report_update ON reports FOR UPDATE
-  USING (organization_id = auth.org_id() AND auth.is_org_admin());
+  USING (organization_id = public.org_id() AND public.is_org_admin());
 
 -- feature_flags  (admin reads: own org + global; service-role writes)
 CREATE POLICY svc_feature_flags ON feature_flags FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY ff_select ON feature_flags FOR SELECT
-  USING (auth.is_org_admin() AND (org_id = auth.org_id() OR org_id IS NULL));
+  USING (public.is_org_admin() AND (org_id = public.org_id() OR org_id IS NULL));
 
 -- research_posts  (public read; service-role write)
 CREATE POLICY svc_research ON research_posts FOR ALL
@@ -1099,24 +1122,86 @@ CREATE POLICY "storage_users_read_receipts" ON storage.objects FOR SELECT
 -- =============================================================================
 -- JWT CUSTOM CLAIMS HOOK
 -- =============================================================================
--- Dashboard -> Authentication -> Hooks -> Custom Access Token Hook
+-- After running this schema:
+--   Dashboard → Authentication → Hooks → Custom Access Token Hook
+--   Set function to: public.custom_access_token_hook
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public AS $$
+DECLARE
+  claims   jsonb;
+  usr      record;
+  prop_ids text[];
+BEGIN
+  SELECT u.organization_id, u.role INTO usr
+    FROM public.users u
+   WHERE u.auth_id = (event->>'user_id')::uuid;
+
+  IF FOUND THEN
+    SELECT ARRAY(
+      SELECT p.id::text FROM public.properties p
+       WHERE p.organization_id = usr.organization_id
+         AND p.is_active = true
+    ) INTO prop_ids;
+
+    claims := event->'claims';
+    claims := jsonb_set(claims, '{org_id}',       to_jsonb(usr.organization_id::text));
+    claims := jsonb_set(claims, '{role}',         to_jsonb(usr.role));
+    claims := jsonb_set(claims, '{property_ids}', to_jsonb(prop_ids));
+    RETURN jsonb_set(event, '{claims}', claims);
+  END IF;
+
+  RETURN event;
+END;
+$$;
+
+-- Required: supabase_auth_admin must be able to invoke the hook
+GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+-- Security: regular client roles must NOT be able to call the hook directly
+REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM authenticated, anon;
+
+
+-- =============================================================================
+-- IMPLEMENTATION NOTES
+-- =============================================================================
 --
--- CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
--- RETURNS jsonb LANGUAGE plpgsql AS $$
--- DECLARE claims jsonb; usr record; prop_ids text[];
--- BEGIN
---   SELECT u.organization_id, u.role INTO usr
---     FROM public.users u WHERE u.auth_id = (event->>'user_id')::uuid;
---   IF FOUND THEN
---     SELECT ARRAY(SELECT p.id::text FROM public.properties p
---       WHERE p.organization_id = usr.organization_id AND p.is_active = true
---     ) INTO prop_ids;
---     claims := event->'claims';
---     claims := jsonb_set(claims, '{org_id}',       to_jsonb(usr.organization_id::text));
---     claims := jsonb_set(claims, '{role}',         to_jsonb(usr.role));
---     claims := jsonb_set(claims, '{property_ids}', to_jsonb(prop_ids));
---     RETURN jsonb_set(event, '{claims}', claims);
---   END IF;
---   RETURN event;
--- END; $$;
--- GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+-- 1. HOW TO APPLY
+--    Fresh database:
+--      Paste this entire file into Supabase SQL Editor and click Run.
+--      Or: supabase db push (with supabase CLI linked to your project).
+--    Existing database:
+--      Run supabase/migrations/20260417_operational_model.sql first,
+--      then re-run only the HELPER FUNCTIONS + JWT HOOK sections of this file
+--      to update the function definitions in place.
+--
+-- 2. ENABLE THE CUSTOM ACCESS TOKEN HOOK
+--    After applying the schema:
+--      a. Go to Supabase Dashboard → Authentication → Hooks
+--      b. Find "Custom Access Token Hook"
+--      c. Toggle it ON
+--      d. Select function: public.custom_access_token_hook
+--      e. Save. All new JWTs will now include org_id, role, property_ids claims.
+--
+-- 3. VERIFICATION QUERIES
+--    -- Confirm functions are in public schema:
+--    SELECT routine_schema, routine_name, security_type
+--      FROM information_schema.routines
+--     WHERE routine_schema = 'public'
+--       AND routine_name IN (
+--         'is_org_admin','org_id','can_access_property',
+--         'set_updated_at','custom_access_token_hook'
+--       );
+--
+--    -- Confirm 23 tables with RLS enabled:
+--    SELECT tablename, rowsecurity
+--      FROM pg_tables
+--     WHERE schemaname = 'public'
+--     ORDER BY tablename;
+--
+--    -- Confirm hook grant:
+--    SELECT grantee, privilege_type
+--      FROM information_schema.routine_privileges
+--     WHERE routine_name = 'custom_access_token_hook';
+-- =============================================================================
