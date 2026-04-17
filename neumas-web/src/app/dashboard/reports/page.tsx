@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { BarChart2 } from "lucide-react";
 import { listReports, requestReport, type Report } from "@/lib/api/endpoints";
 import { EmptyState } from "@/components/ui/EmptyState";
+import SpendSummary from "@/components/reports/SpendSummary";
+import { ExportButton } from "@/components/reports/ExportButton";
 
 const STATUS_COLORS: Record<string, string> = {
   queued: "bg-gray-100 text-gray-600",
@@ -80,6 +82,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Spend summary and recommendations */}
+      <SpendSummary />
+
       {/* Reports list */}
       {loading ? (
         <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
@@ -129,16 +134,12 @@ export default function ReportsPage() {
                 )}
               </div>
 
-              {report.result_url && (
-                <a
-                  href={report.result_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors shrink-0"
-                >
-                  Download
-                </a>
-              )}
+              <div className="flex gap-2">
+                {report.result_url && (
+                  <ExportButton url={report.result_url} type={report.result_url.endsWith('.pdf') ? 'pdf' : 'csv'} />
+                )}
+                {/* If more export types are available, add more buttons here */}
+              </div>
             </div>
           ))}
         </div>

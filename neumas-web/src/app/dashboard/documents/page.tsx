@@ -10,6 +10,7 @@ import {
   type Document,
 } from "@/lib/api/endpoints";
 import { EmptyState } from "@/components/ui/EmptyState";
+import EditableLineItems from "@/components/documents/EditableLineItems";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -108,43 +109,48 @@ export default function DocumentsPage() {
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="border border-gray-100 rounded-xl bg-white p-4 flex items-start justify-between gap-3"
+              className="border border-gray-100 rounded-xl bg-white p-4 flex flex-col gap-3"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[doc.status] ?? "bg-gray-100 text-gray-600"}`}
-                  >
-                    {doc.status}
-                  </span>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">
-                    {doc.document_type}
-                  </span>
-                  {doc.overall_confidence != null && (
-                    <span className="text-xs text-gray-400">
-                      {Math.round(doc.overall_confidence * 100)}% confidence
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[doc.status] ?? "bg-gray-100 text-gray-600"}`}
+                    >
+                      {doc.status}
                     </span>
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">
+                      {doc.document_type}
+                    </span>
+                    {doc.overall_confidence != null && (
+                      <span className="text-xs text-gray-400">
+                        {Math.round(doc.overall_confidence * 100)}% confidence
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-medium text-gray-900 mt-1 text-sm">
+                    {doc.raw_vendor_name ?? "Unknown vendor"}
+                  </p>
+                  {doc.review_reason && (
+                    <p className="text-xs text-orange-600 mt-0.5">{doc.review_reason}</p>
                   )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {new Date(doc.created_at).toLocaleString()}
+                  </p>
                 </div>
-                <p className="font-medium text-gray-900 mt-1 text-sm">
-                  {doc.raw_vendor_name ?? "Unknown vendor"}
-                </p>
-                {doc.review_reason && (
-                  <p className="text-xs text-orange-600 mt-0.5">{doc.review_reason}</p>
+                {doc.status !== "approved" && (
+                  <button
+                    onClick={() => handleApprove(doc)}
+                    disabled={approvingId === doc.id}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    {approvingId === doc.id ? "Posting…" : "Approve & Post"}
+                  </button>
                 )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(doc.created_at).toLocaleString()}
-                </p>
               </div>
-
-              {doc.status !== "approved" && (
-                <button
-                  onClick={() => handleApprove(doc)}
-                  disabled={approvingId === doc.id}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 transition-colors shrink-0"
-                >
-                  {approvingId === doc.id ? "Posting…" : "Approve & Post"}
-                </button>
+              {/* Editable line items table */}
+              {doc.line_items && doc.line_items.length > 0 && (
+                <EditableLineItems documentId={doc.id} lineItems={doc.line_items} />
               )}
             </div>
           ))}
