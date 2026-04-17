@@ -151,7 +151,7 @@ function KPI({
 }: {
   label: string;
   value: string | number;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   sub?: string;
   highlight?: "green" | "amber" | "red";
 }) {
