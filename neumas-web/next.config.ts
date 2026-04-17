@@ -6,9 +6,9 @@ const BACKEND_URL =
 
 const nextConfig: NextConfig = {
   reactStrictMode: false, // Disable double-invoke in dev; remove once re-render loop is confirmed fixed
-  // Produce a standalone build for Docker deployments.
-  // Bundles the server and minimal node_modules into .next/standalone.
-  output: "standalone",
+  // Produce a standalone build for Docker/Railway deployments.
+  // Disabled on Vercel — Vercel manages its own output format.
+  output: process.env.VERCEL ? undefined : "standalone",
   async redirects() {
     return [
       { source: "/inventory", destination: "/dashboard/inventory", permanent: false },
