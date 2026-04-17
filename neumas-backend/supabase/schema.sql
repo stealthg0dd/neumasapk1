@@ -73,21 +73,26 @@ $$;
 
 -- Does the calling user have access to a given property?
 -- Admins: any property in their org (DB check). Staff/residents: JWT property_ids only.
+-- NOTE: plpgsql (not sql) so the function body is NOT validated against the catalog
+-- at CREATE time — safe to define before the properties table exists on an existing DB.
 CREATE OR REPLACE FUNCTION public.can_access_property(p_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT CASE
-    WHEN (auth.jwt() ->> 'role') = 'admin'
-      THEN EXISTS (
-        SELECT 1 FROM public.properties
-        WHERE id = p_id AND organization_id = (auth.jwt() ->> 'org_id')::uuid
-      )
-    ELSE p_id::text = ANY(
+BEGIN
+  IF (auth.jwt() ->> 'role') = 'admin' THEN
+    RETURN EXISTS (
+      SELECT 1 FROM public.properties
+      WHERE id = p_id
+        AND organization_id = (auth.jwt() ->> 'org_id')::uuid
+    );
+  ELSE
+    RETURN p_id::text = ANY(
       ARRAY(SELECT jsonb_array_elements_text(
         COALESCE(auth.jwt() -> 'property_ids', '[]'::jsonb)
       ))
-    )
-  END;
+    );
+  END IF;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()

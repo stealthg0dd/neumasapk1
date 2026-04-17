@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration 0005 — Canonical Items and Item Aliases
 -- =============================================================================
@@ -27,11 +31,11 @@ CREATE INDEX IF NOT EXISTS idx_canonical_items_org ON canonical_items(org_id);
 ALTER TABLE canonical_items ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY canonical_items_select ON canonical_items FOR SELECT
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 CREATE POLICY canonical_items_insert ON canonical_items FOR INSERT
-  WITH CHECK (org_id = auth.org_id());
+  WITH CHECK (org_id = public.org_id());
 CREATE POLICY canonical_items_update ON canonical_items FOR UPDATE
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 
 DO $$ BEGIN
   CREATE TRIGGER trg_canonical_items_updated_at
@@ -59,10 +63,16 @@ CREATE INDEX IF NOT EXISTS idx_item_aliases_org       ON item_aliases(org_id);
 ALTER TABLE item_aliases ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY item_aliases_select ON item_aliases FOR SELECT
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 CREATE POLICY item_aliases_insert ON item_aliases FOR INSERT
-  WITH CHECK (org_id = auth.org_id());
+  WITH CHECK (org_id = public.org_id());
 
 -- Add FK from document_line_items to canonical_items (deferred)
 ALTER TABLE document_line_items
   ADD COLUMN IF NOT EXISTS canonical_item_id uuid REFERENCES canonical_items(id);
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook

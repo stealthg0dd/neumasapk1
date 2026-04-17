@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration 0002 — Inventory Movements
 -- =============================================================================
@@ -44,10 +48,16 @@ ALTER TABLE inventory_movements ENABLE ROW LEVEL SECURITY;
 
 -- RLS: org members can read movements for their org's properties
 CREATE POLICY movements_select ON inventory_movements FOR SELECT
-  USING (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  USING (org_id = public.org_id() AND public.can_access_property(property_id));
 
 -- RLS: insert allowed for org members with property access
 CREATE POLICY movements_insert ON inventory_movements FOR INSERT
-  WITH CHECK (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  WITH CHECK (org_id = public.org_id() AND public.can_access_property(property_id));
 
 -- No UPDATE/DELETE — ledger is append-only
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook

@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration: 20260417_operational_model
 -- Adds the operational model tables and fixes missing columns on existing tables.
@@ -191,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_vendors_org  ON vendors(organization_id);
 CREATE INDEX IF NOT EXISTS idx_vendors_name ON vendors(organization_id, name);
 ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_vendors_updated_at
-  BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- vendor_aliases
@@ -228,7 +232,7 @@ CREATE INDEX IF NOT EXISTS idx_canonical_items_tsv  ON canonical_items USING gin
 CREATE INDEX IF NOT EXISTS idx_canonical_items_name ON canonical_items(organization_id, canonical_name);
 ALTER TABLE canonical_items ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_canonical_items_updated_at
-  BEFORE UPDATE ON canonical_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON canonical_items FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- item_aliases
@@ -309,7 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_vendor   ON documents(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_documents_created  ON documents(created_at DESC);
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_documents_updated_at
-  BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- document_line_items
@@ -368,7 +372,7 @@ CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
 CREATE INDEX IF NOT EXISTS idx_alerts_item     ON alerts(item_id) WHERE item_id IS NOT NULL;
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_alerts_updated_at
-  BEFORE UPDATE ON alerts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON alerts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- audit_logs  (append-only)
@@ -441,7 +445,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_hash     ON reports(organization_id, para
 CREATE INDEX IF NOT EXISTS idx_reports_property ON reports(property_id);
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_reports_updated_at
-  BEFORE UPDATE ON reports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON reports FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- feature_flags
@@ -459,7 +463,7 @@ CREATE INDEX IF NOT EXISTS idx_feature_flags_name ON feature_flags(name);
 CREATE INDEX IF NOT EXISTS idx_feature_flags_org  ON feature_flags(org_id) WHERE org_id IS NOT NULL;
 ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_feature_flags_updated_at
-  BEFORE UPDATE ON feature_flags FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON feature_flags FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- research_posts
@@ -480,7 +484,7 @@ CREATE INDEX IF NOT EXISTS idx_research_posts_slug     ON research_posts(slug);
 CREATE INDEX IF NOT EXISTS idx_research_posts_category ON research_posts(category);
 ALTER TABLE research_posts ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_research_posts_updated_at
-  BEFORE UPDATE ON research_posts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  BEFORE UPDATE ON research_posts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 
@@ -495,17 +499,17 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY vendor_select ON vendors FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY vendor_select ON vendors FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY vendor_insert ON vendors FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY vendor_insert ON vendors FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY vendor_update ON vendors FOR UPDATE USING (organization_id = auth.org_id());
+  CREATE POLICY vendor_update ON vendors FOR UPDATE USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY vendor_delete ON vendors FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- vendor_aliases
@@ -514,14 +518,14 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY vendor_alias_select ON vendor_aliases FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY vendor_alias_select ON vendor_aliases FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY vendor_alias_insert ON vendor_aliases FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY vendor_alias_insert ON vendor_aliases FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY vendor_alias_delete ON vendor_aliases FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- canonical_items
@@ -530,17 +534,17 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY canonical_select ON canonical_items FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY canonical_select ON canonical_items FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY canonical_insert ON canonical_items FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY canonical_insert ON canonical_items FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY canonical_update ON canonical_items FOR UPDATE USING (organization_id = auth.org_id());
+  CREATE POLICY canonical_update ON canonical_items FOR UPDATE USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY canonical_delete ON canonical_items FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- item_aliases
@@ -549,14 +553,14 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY item_alias_select ON item_aliases FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY item_alias_select ON item_aliases FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY item_alias_insert ON item_aliases FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY item_alias_insert ON item_aliases FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY item_alias_delete ON item_aliases FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- inventory_movements
@@ -566,7 +570,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY mov_select ON inventory_movements FOR SELECT
-    USING (auth.can_access_property(property_id));
+    USING (public.can_access_property(property_id));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- documents
@@ -575,17 +579,17 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY doc_select ON documents FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY doc_select ON documents FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY doc_insert ON documents FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY doc_insert ON documents FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY doc_update ON documents FOR UPDATE USING (organization_id = auth.org_id());
+  CREATE POLICY doc_update ON documents FOR UPDATE USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY doc_delete ON documents FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- document_line_items
@@ -594,17 +598,17 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY dli_select ON document_line_items FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY dli_select ON document_line_items FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY dli_insert ON document_line_items FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY dli_insert ON document_line_items FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY dli_update ON document_line_items FOR UPDATE USING (organization_id = auth.org_id());
+  CREATE POLICY dli_update ON document_line_items FOR UPDATE USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY dli_delete ON document_line_items FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- alerts
@@ -613,17 +617,17 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY alert_select ON alerts FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY alert_select ON alerts FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY alert_insert ON alerts FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY alert_insert ON alerts FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY alert_update ON alerts FOR UPDATE USING (organization_id = auth.org_id());
+  CREATE POLICY alert_update ON alerts FOR UPDATE USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY alert_delete ON alerts FOR DELETE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- audit_logs
@@ -633,7 +637,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY audit_select ON audit_logs FOR SELECT
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- usage_events
@@ -643,7 +647,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY usage_select ON usage_events FOR SELECT
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- reports
@@ -652,14 +656,14 @@ DO $$ BEGIN
     USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY report_select ON reports FOR SELECT USING (organization_id = auth.org_id());
+  CREATE POLICY report_select ON reports FOR SELECT USING (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY report_insert ON reports FOR INSERT WITH CHECK (organization_id = auth.org_id());
+  CREATE POLICY report_insert ON reports FOR INSERT WITH CHECK (organization_id = public.org_id());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY report_update ON reports FOR UPDATE
-    USING (organization_id = auth.org_id() AND auth.is_org_admin());
+    USING (organization_id = public.org_id() AND public.is_org_admin());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- feature_flags
@@ -669,7 +673,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY ff_select ON feature_flags FOR SELECT
-    USING (auth.is_org_admin() AND (org_id = auth.org_id() OR org_id IS NULL));
+    USING (public.is_org_admin() AND (org_id = public.org_id() OR org_id IS NULL));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- research_posts
@@ -680,3 +684,9 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY research_public_read ON research_posts FOR SELECT USING (published = true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook

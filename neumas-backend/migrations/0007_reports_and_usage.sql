@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration 0007 — Reports and Usage Metering
 -- =============================================================================
@@ -41,11 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_reports_params   ON reports(property_id, report_t
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY reports_select ON reports FOR SELECT
-  USING (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  USING (org_id = public.org_id() AND public.can_access_property(property_id));
 CREATE POLICY reports_insert ON reports FOR INSERT
-  WITH CHECK (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  WITH CHECK (org_id = public.org_id() AND public.can_access_property(property_id));
 CREATE POLICY reports_update ON reports FOR UPDATE
-  USING (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  USING (org_id = public.org_id() AND public.can_access_property(property_id));
 
 DO $$ BEGIN
   CREATE TRIGGER trg_reports_updated_at
@@ -87,6 +91,12 @@ ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;
 
 -- Only admins can read raw usage events; others get aggregated via admin API
 CREATE POLICY usage_select ON usage_events FOR SELECT
-  USING (org_id = auth.org_id() AND auth.is_org_admin());
+  USING (org_id = public.org_id() AND public.is_org_admin());
 
 -- Insert via service-role only
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook

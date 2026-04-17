@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration 0004 — Vendors and Vendor Aliases
 -- =============================================================================
@@ -25,11 +29,11 @@ CREATE INDEX IF NOT EXISTS idx_vendors_org  ON vendors(org_id);
 ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY vendors_select ON vendors FOR SELECT
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 CREATE POLICY vendors_insert ON vendors FOR INSERT
-  WITH CHECK (org_id = auth.org_id());
+  WITH CHECK (org_id = public.org_id());
 CREATE POLICY vendors_update ON vendors FOR UPDATE
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 
 DO $$ BEGIN
   CREATE TRIGGER trg_vendors_updated_at
@@ -58,10 +62,16 @@ CREATE INDEX IF NOT EXISTS idx_vendor_aliases_org    ON vendor_aliases(org_id);
 ALTER TABLE vendor_aliases ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY vendor_aliases_select ON vendor_aliases FOR SELECT
-  USING (org_id = auth.org_id());
+  USING (org_id = public.org_id());
 CREATE POLICY vendor_aliases_insert ON vendor_aliases FOR INSERT
-  WITH CHECK (org_id = auth.org_id());
+  WITH CHECK (org_id = public.org_id());
 
 -- Add FK from documents to vendors (deferred — vendors table now exists)
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS vendor_id uuid REFERENCES vendors(id);
 ALTER TABLE document_line_items ADD COLUMN IF NOT EXISTS vendor_id uuid REFERENCES vendors(id);
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook

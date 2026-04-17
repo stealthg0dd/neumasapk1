@@ -1,3 +1,7 @@
+-- FIXED: Auth schema permission error resolved (42501)
+-- All helper functions moved to public schema with SECURITY DEFINER
+-- Compatible with Supabase 2026 RLS + JWT custom claims hook
+
 -- =============================================================================
 -- Migration 0006 — Alerts and Audit Logs
 -- =============================================================================
@@ -43,11 +47,11 @@ CREATE INDEX IF NOT EXISTS idx_alerts_item     ON alerts(item_id) WHERE item_id 
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY alerts_select ON alerts FOR SELECT
-  USING (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  USING (org_id = public.org_id() AND public.can_access_property(property_id));
 CREATE POLICY alerts_insert ON alerts FOR INSERT
-  WITH CHECK (org_id = auth.org_id());
+  WITH CHECK (org_id = public.org_id());
 CREATE POLICY alerts_update ON alerts FOR UPDATE
-  USING (org_id = auth.org_id() AND auth.can_access_property(property_id));
+  USING (org_id = public.org_id() AND public.can_access_property(property_id));
 
 DO $$ BEGIN
   CREATE TRIGGER trg_alerts_updated_at
@@ -85,7 +89,13 @@ ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Only admins can read audit logs
 CREATE POLICY audit_select ON audit_logs FOR SELECT
-  USING (org_id = auth.org_id() AND auth.is_org_admin());
+  USING (org_id = public.org_id() AND public.is_org_admin());
 
 -- Insert via service-role only (backend inserts, not client)
 -- No UPDATE or DELETE policies — audit log is immutable
+
+-- POST-FIX INSTRUCTIONS:
+-- Run these GRANTs once after all migrations:
+-- GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+-- GRANT EXECUTE ON FUNCTION public.is_org_admin(), public.org_id(), public.can_access_property(uuid), public.set_updated_at() TO supabase_auth_admin;
+-- Set Custom Access Token Hook in Supabase Dashboard to: public.custom_access_token_hook
