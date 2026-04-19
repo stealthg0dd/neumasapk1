@@ -1,3 +1,27 @@
+# ============================================================================
+# Item Price History Model
+# ============================================================================
+
+class ItemPriceHistory(Base):
+    """Historical price record for an item from a vendor."""
+
+    __tablename__ = "item_price_history"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
+    property_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("properties.id"))
+    vendor_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("vendors.id"), nullable=False)
+    item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    vendor_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    unit: Mapped[str] = mapped_column(String(50), default="unit")
+    purchase_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    # (optional: add relationships to vendor, item, property, org if needed)
 """
 SQLAlchemy models mirroring Supabase schema.
 These models are for type safety and ORM operations.

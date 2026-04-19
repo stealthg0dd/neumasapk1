@@ -72,11 +72,7 @@ export default function AuthPage() {
             <button
               type="button"
               className="w-full h-11 rounded-xl border border-[var(--border)] bg-white text-sm font-medium text-[var(--text-primary)] flex items-center justify-center gap-2 hover:bg-[var(--surface-elevated)] transition-colors"
-              onClick={() =>
-                toast.info("Google sign-in", {
-                  description: "Connect your Google account when your org enables SSO.",
-                })
-              }
+              onClick={handleGoogleSignIn}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden>
                 <path
