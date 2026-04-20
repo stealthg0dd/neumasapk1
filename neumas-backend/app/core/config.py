@@ -98,8 +98,12 @@ class Settings(BaseSettings):
     )
     # Individual Railway Redis plugin vars — used to reconstruct the URL when
     # REDIS_PRIVATE_URL is missing or carries wrong/empty credentials.
+    # REDISPORT is str (not int) because Railway can inject the literal text
+    # "${REDISPORT}" when variable-substitution references are unresolved, and
+    # pydantic would crash trying to cast that string to int.  We parse it
+    # safely inside _resolved_redis_url using _safe_env().
     REDISHOST: str = Field(default="", description="Railway Redis host")
-    REDISPORT: int = Field(default=6379, description="Railway Redis port")
+    REDISPORT: str = Field(default="6379", description="Railway Redis port (kept as str to survive unresolved Railway var-refs)")
     REDISPASSWORD: str = Field(default="", description="Railway Redis password")
     REDISUSER: str = Field(default="default", description="Railway Redis user")
 
@@ -180,31 +184,43 @@ class Settings(BaseSettings):
         description="Expiry in seconds for signed storage URLs (default: 1 hour)",
     )
 
+    @staticmethod
+    def _safe_env(key: str, default: str) -> str:
+        """Read an env var and fall back to *default* if the value looks like an
+        unresolved Railway variable reference (starts with '$') or is the literal
+        string 'None'.  This prevents pydantic/urllib from choking on values such
+        as '${REDISPORT}' that Railway injects when variable substitution hasn't
+        been wired up in the dashboard.
+        """
+        import os as _os
+        val = _os.getenv(key, default)
+        if not val or val.startswith("$") or val == "None":
+            return default
+        return val
+
     @property
     def _resolved_redis_url(self) -> str:
         """Pick the best available Redis URL and normalise the scheme.
 
-        Priority (as required by Railway monorepo deployment):
-        1. Individual vars (REDISHOST/REDISPORT/REDISPASSWORD) — always present
-           when Railway's Redis plugin is attached; password is quote_plus-encoded
-           here so special characters never corrupt the URL.
+        Priority (Railway monorepo deployment):
+        1. Individual vars (REDISHOST/REDISPORT/REDISPASSWORD) read via
+           _safe_env() — immune to unresolved '${VAR}' Railway references.
         2. CELERY_BROKER_URL — explicit operator override.
-        3. REDIS_PRIVATE_URL — Railway composite internal URL (may omit password).
+        3. REDIS_PRIVATE_URL — Railway composite internal URL (may lack password).
         4. REDIS_URL — external composite URL / local-dev fallback.
         """
         from urllib.parse import quote_plus
 
-        if self.REDISHOST:
-            # Reconstruct from atomic Railway vars — avoids URL-encoding ambiguity
-            # and ensures the password is always present even if the composite URLs
-            # are missing or stale.
-            password = quote_plus(self.REDISPASSWORD) if self.REDISPASSWORD else ""
-            user = self.REDISUSER or "default"
+        host = self._safe_env("REDISHOST", "")
+        if host:
+            port = self._safe_env("REDISPORT", "6379")
+            raw_password = self._safe_env("REDISPASSWORD", "")
+            password = quote_plus(raw_password) if raw_password else ""
             if password:
-                url = f"redis://{user}:{password}@{self.REDISHOST}:{self.REDISPORT}/0"
+                url = f"redis://:{password}@{host}:{port}/0"
             else:
-                url = f"redis://{self.REDISHOST}:{self.REDISPORT}/0"
-        elif self.CELERY_BROKER_URL:
+                url = f"redis://{host}:{port}/0"
+        elif self.CELERY_BROKER_URL and not self.CELERY_BROKER_URL.startswith("$"):
             url = self.CELERY_BROKER_URL
         else:
             url = self.REDIS_PRIVATE_URL or self.REDIS_URL
