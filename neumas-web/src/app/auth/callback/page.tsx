@@ -1,3 +1,11 @@
+
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { googleComplete } from "@/lib/api/endpoints";
+import { saveSession } from "@/lib/auth-session";
+
 export default function AuthCallbackPage() {
   const router = useRouter();
 
