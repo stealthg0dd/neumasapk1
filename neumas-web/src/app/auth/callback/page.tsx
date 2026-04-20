@@ -1,11 +1,4 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { googleComplete } from "@/lib/api/endpoints";
-import { saveSession } from "@/lib/auth-session";
-
+export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
@@ -62,6 +55,13 @@ import { saveSession } from "@/lib/auth-session";
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-[#64748b] text-sm">Signing you in...</p>
+      </div>
+    </div>
+  );
+}
       <div className="text-center">
         <div className="w-8 h-8 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
         <p className="text-[#64748b] text-sm">Signing you in...</p>
