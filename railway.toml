@@ -1,0 +1,14 @@
+# Root-level Railway config for the API service.
+# Required because Railway's service root is the monorepo root, not neumas-backend/.
+# The existing neumas-backend/railway.toml is only used when Railway's root dir
+# is explicitly set to neumas-backend/ in the dashboard.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pip install ./neumas-backend"
+watchPatterns = ["neumas-backend/**"]
+
+[deploy]
+startCommand = "bash start.sh"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

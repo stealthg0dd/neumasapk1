@@ -1,0 +1,14 @@
+# Force Nixpacks to treat this monorepo root as a Python project.
+# Without this, Nixpacks can't detect Python because pyproject.toml
+# lives in neumas-backend/ rather than the repo root.
+
+providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["python312", "gcc", "libpq"]
+
+[phases.install]
+cmds = ["pip install ./neumas-backend"]
+
+[start]
+cmd = "bash start.sh"

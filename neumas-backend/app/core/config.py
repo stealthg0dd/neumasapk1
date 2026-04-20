@@ -87,7 +87,7 @@ class Settings(BaseSettings):
         description="PostgreSQL connection URL for SQLAlchemy",
     )
 
-    # Redis
+    # Redis — composite URL or individual Railway vars (whichever is available)
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
         description="Redis connection URL",
@@ -96,6 +96,12 @@ class Settings(BaseSettings):
         default="",
         description="Railway internal Redis URL (preferred over REDIS_URL when set)",
     )
+    # Individual Railway Redis plugin vars — used to reconstruct the URL when
+    # REDIS_PRIVATE_URL is missing or carries wrong/empty credentials.
+    REDISHOST: str = Field(default="", description="Railway Redis host")
+    REDISPORT: int = Field(default=6379, description="Railway Redis port")
+    REDISPASSWORD: str = Field(default="", description="Railway Redis password")
+    REDISUSER: str = Field(default="default", description="Railway Redis user")
 
     # Internal admin (insights generation, maintenance hooks)
     ADMIN_SECRET_KEY: str = Field(
@@ -164,10 +170,32 @@ class Settings(BaseSettings):
 
     @property
     def _resolved_redis_url(self) -> str:
-        """Pick the best available Redis URL and normalise the scheme."""
-        url = self.CELERY_BROKER_URL or self.REDIS_PRIVATE_URL or self.REDIS_URL
+        """Pick the best available Redis URL and normalise the scheme.
+
+        Priority:
+        1. CELERY_BROKER_URL (explicit override)
+        2. Individual REDISHOST/REDISPASSWORD vars (Railway plugin vars, most reliable
+           because they're never URL-encoded ambiguously)
+        3. REDIS_PRIVATE_URL (Railway internal composite URL)
+        4. REDIS_URL (fallback / local dev)
+        """
+        if self.CELERY_BROKER_URL:
+            url = self.CELERY_BROKER_URL
+        elif self.REDISHOST:
+            # Reconstruct from individual Railway vars so the password is
+            # properly percent-encoded and credentials are never missing.
+            from urllib.parse import quote_plus
+            password = quote_plus(self.REDISPASSWORD) if self.REDISPASSWORD else ""
+            user = self.REDISUSER or "default"
+            if password:
+                url = f"redis://{user}:{password}@{self.REDISHOST}:{self.REDISPORT}/0"
+            else:
+                url = f"redis://{self.REDISHOST}:{self.REDISPORT}/0"
+        else:
+            url = self.REDIS_PRIVATE_URL or self.REDIS_URL
+
         # Railway sometimes provides rediss:// (TLS). Celery needs redis://
-        # on private networking where TLS is not required.
+        # on private networking where TLS termination is not required.
         if url.startswith("rediss://"):
             url = "redis://" + url[len("rediss://"):]
         return url
