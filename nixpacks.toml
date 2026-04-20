@@ -5,7 +5,7 @@
 providers = ["python"]
 
 [phases.setup]
-nixPkgs = ["python312", "gcc", "libpq"]
+nixPkgs = ["python312", "gcc", "postgresql"]
 
 [phases.install]
 cmds = ["pip install ./neumas-backend"]

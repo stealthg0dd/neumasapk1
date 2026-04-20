@@ -30,6 +30,25 @@ _admin_client: Client | None = None
 _async_admin_client: AsyncClient | None = None
 
 
+def _supabase_configured() -> bool:
+    """Return True only when real (non-stub) Supabase credentials are present."""
+    url = settings.SUPABASE_URL
+    key = settings.SUPABASE_SERVICE_ROLE_KEY
+    if not url or not key:
+        logger.warning(
+            "Supabase not configured — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+        )
+        return False
+    # Detect obviously fake/test credentials so we skip network calls in CI.
+    if "test.supabase.co" in url or key.startswith("test-") or key == "placeholder":
+        logger.info(
+            "Supabase configured with test stubs — client skipped (ENV=%s)",
+            settings.ENV,
+        )
+        return False
+    return True
+
+
 def get_supabase_admin() -> Client | None:
     """
     Get synchronous Supabase admin client using SERVICE_ROLE_KEY.
@@ -42,12 +61,11 @@ def get_supabase_admin() -> Client | None:
 
     NEVER expose this client to user-facing endpoints directly.
 
-    Returns None if Supabase is not configured.
+    Returns None if Supabase is not configured or credentials are test stubs.
     """
     global _admin_client
 
-    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
-        logger.warning("Supabase not configured - admin client unavailable")
+    if not _supabase_configured():
         return None
 
     if _admin_client is None:
@@ -71,12 +89,11 @@ async def get_async_supabase_admin() -> AsyncClient | None:
 
     NEVER expose this client to user-facing endpoints directly.
 
-    Returns None if Supabase is not configured.
+    Returns None if Supabase is not configured or credentials are test stubs.
     """
     global _async_admin_client
 
-    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
-        logger.warning("Supabase not configured - async admin client unavailable")
+    if not _supabase_configured():
         return None
 
     if _async_admin_client is None:

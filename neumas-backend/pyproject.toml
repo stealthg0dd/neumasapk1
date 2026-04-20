@@ -68,7 +68,8 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-v --tb=short"
+# tests/manual/ requires live Supabase credentials — excluded from automated CI
+addopts = "-v --tb=short --ignore=tests/manual"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

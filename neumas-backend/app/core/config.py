@@ -127,6 +127,18 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = Field(
         default="", description="Celery result backend URL (defaults to REDIS_URL)"
     )
+    CELERY_TASK_ALWAYS_EAGER: bool = Field(
+        default=False,
+        description=(
+            "Run Celery tasks synchronously in-process. "
+            "Automatically True when ENV=test so CI never needs a live broker."
+        ),
+    )
+
+    @property
+    def celery_always_eager(self) -> bool:
+        """True in test env or when CELERY_TASK_ALWAYS_EAGER is set."""
+        return self.CELERY_TASK_ALWAYS_EAGER or self.ENV == "test"
 
     # Agent OS / Router-system registration
     AGENT_OS_URL: str = Field(

@@ -10,12 +10,19 @@ from uuid import uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-# Set test environment before importing app
+# Set test environment before importing app.
+# These must be set before any app module is imported so that Settings
+# reads the correct values from os.environ (lru_cache is cleared between
+# tests by the reset_settings fixture below).
 os.environ["ENV"] = "test"
 os.environ["DEBUG"] = "true"
 os.environ["SUPABASE_URL"] = "https://test.supabase.co"
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-key"
+os.environ["SUPABASE_JWT_SECRET"] = "test-jwt-secret"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+# Run Celery tasks synchronously so tests don't need a live Redis broker.
+os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
 
 from app.main import app
 from app.schemas.auth import UserInfo
