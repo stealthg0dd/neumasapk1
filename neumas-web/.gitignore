@@ -41,6 +41,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# pnpm lockfile — this project uses npm (package-lock.json is the canonical lockfile)
-pnpm-lock.yaml
 .env*.local
