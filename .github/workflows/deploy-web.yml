@@ -89,24 +89,6 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Pull Vercel environment
-        working-directory: neumas-web
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-
-      - name: Build for Vercel
-        working-directory: neumas-web
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
-          NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: vercel build --prod --token=$VERCEL_TOKEN
-
       - name: Deploy to Vercel (production)
         id: deploy
         working-directory: neumas-web
@@ -114,8 +96,9 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEUMAS }}
+          NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
         run: |
-          URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN)
+          URL=$(vercel deploy --prod --token=$VERCEL_TOKEN --yes 2>&1 | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
           echo "Deployed to: $URL"
 
