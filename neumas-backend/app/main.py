@@ -365,38 +365,58 @@ async def get_redoc(request: Request):
 )
 async def health_check() -> dict:
     """
-    Basic health check endpoint.
+    Liveness probe: verifies Redis PING and Supabase connectivity.
 
-    Returns OK if the service is running.
-    Used by load balancers and orchestrators for basic liveness probes.
+    Returns 200 when all configured dependencies respond.
+    Returns 500 when any configured dependency is unreachable — Railway
+    will restart the container on repeated failures.
     """
-    supabase_connected = False
+    checks: dict[str, bool] = {}
+    failures: list[str] = []
+
+    # --- Supabase / database ---
     if settings.SUPABASE_URL and settings.SUPABASE_SERVICE_ROLE_KEY:
         try:
             from app.db.supabase_client import health_check as db_health
-            supabase_connected = await db_health()
-        except Exception:
-            pass
+            checks["supabase"] = await db_health()
+        except Exception as exc:
+            logger.warning("Supabase health check failed", error=str(exc))
+            checks["supabase"] = False
+        if not checks["supabase"]:
+            failures.append("supabase")
+    else:
+        checks["supabase"] = None  # type: ignore[assignment]  # not configured
 
-    redis_connected = False
-    redis_url = settings.celery_broker or settings.REDIS_PRIVATE_URL or settings.REDIS_URL
-    if redis_url and redis_url != "redis://":
+    # --- Redis ---
+    redis_url = settings.celery_broker  # already resolved with correct priority
+    if redis_url and redis_url != "redis://localhost:6379/0":
         try:
             r = redis_lib.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
             r.ping()
-            redis_connected = True
-        except Exception:
-            # Treat connection errors as connected (Railway private-network DNS quirk)
-            redis_connected = True
+            checks["redis"] = True
+        except Exception as exc:
+            logger.warning(
+                "Redis health check failed",
+                error=str(exc),
+                redis_url=settings.redis_url_redacted,
+            )
+            checks["redis"] = False
+        if not checks["redis"]:
+            failures.append("redis")
     else:
-        redis_connected = True  # Redis not configured — not required
+        checks["redis"] = None  # type: ignore[assignment]  # not configured
+
+    if failures:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "unhealthy", "failed": failures, "checks": checks},
+        )
 
     return {
         "status": "ok",
         "version": settings.APP_VERSION,
         "environment": settings.ENV,
-        "supabase_connected": supabase_connected,
-        "redis_connected": redis_connected,
+        "checks": checks,
     }
 
 

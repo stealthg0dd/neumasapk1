@@ -172,32 +172,49 @@ class Settings(BaseSettings):
     def _resolved_redis_url(self) -> str:
         """Pick the best available Redis URL and normalise the scheme.
 
-        Priority:
-        1. CELERY_BROKER_URL (explicit override)
-        2. Individual REDISHOST/REDISPASSWORD vars (Railway plugin vars, most reliable
-           because they're never URL-encoded ambiguously)
-        3. REDIS_PRIVATE_URL (Railway internal composite URL)
-        4. REDIS_URL (fallback / local dev)
+        Priority (as required by Railway monorepo deployment):
+        1. Individual vars (REDISHOST/REDISPORT/REDISPASSWORD) — always present
+           when Railway's Redis plugin is attached; password is quote_plus-encoded
+           here so special characters never corrupt the URL.
+        2. CELERY_BROKER_URL — explicit operator override.
+        3. REDIS_PRIVATE_URL — Railway composite internal URL (may omit password).
+        4. REDIS_URL — external composite URL / local-dev fallback.
         """
-        if self.CELERY_BROKER_URL:
-            url = self.CELERY_BROKER_URL
-        elif self.REDISHOST:
-            # Reconstruct from individual Railway vars so the password is
-            # properly percent-encoded and credentials are never missing.
-            from urllib.parse import quote_plus
+        from urllib.parse import quote_plus
+
+        if self.REDISHOST:
+            # Reconstruct from atomic Railway vars — avoids URL-encoding ambiguity
+            # and ensures the password is always present even if the composite URLs
+            # are missing or stale.
             password = quote_plus(self.REDISPASSWORD) if self.REDISPASSWORD else ""
             user = self.REDISUSER or "default"
             if password:
                 url = f"redis://{user}:{password}@{self.REDISHOST}:{self.REDISPORT}/0"
             else:
                 url = f"redis://{self.REDISHOST}:{self.REDISPORT}/0"
+        elif self.CELERY_BROKER_URL:
+            url = self.CELERY_BROKER_URL
         else:
             url = self.REDIS_PRIVATE_URL or self.REDIS_URL
 
         # Railway sometimes provides rediss:// (TLS). Celery needs redis://
-        # on private networking where TLS termination is not required.
+        # on private networking where TLS termination is handled upstream.
         if url.startswith("rediss://"):
             url = "redis://" + url[len("rediss://"):]
+        return url
+
+    @property
+    def redis_url_redacted(self) -> str:
+        """Resolved Redis URL with the password masked — safe to log."""
+        url = self._resolved_redis_url
+        try:
+            from urllib.parse import urlparse, urlunparse
+            p = urlparse(url)
+            if p.password:
+                masked_netloc = f"{p.username}:***@{p.hostname}:{p.port}"
+                url = urlunparse(p._replace(netloc=masked_netloc))
+        except Exception:  # noqa: BLE001
+            url = "<unparseable>"
         return url
 
     @property
@@ -223,7 +240,22 @@ def get_settings() -> Settings:
     Get cached settings instance.
     Uses lru_cache to avoid re-reading environment on every call.
     """
-    return Settings()
+    s = Settings()
+    # Emit a single diagnostic line at process startup so Railway logs show
+    # exactly which Redis URL was resolved and which source won.
+    import sys
+    source = (
+        "individual-vars" if s.REDISHOST
+        else "CELERY_BROKER_URL" if s.CELERY_BROKER_URL
+        else "REDIS_PRIVATE_URL" if s.REDIS_PRIVATE_URL
+        else "REDIS_URL"
+    )
+    print(
+        f"[neumas] redis_url={s.redis_url_redacted!r} source={source!r}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return s
 
 
 settings = get_settings()

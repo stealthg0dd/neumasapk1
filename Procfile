@@ -1,2 +1,2 @@
-web: cd neumas-backend && gunicorn app.main:app --workers ${GUNICORN_WORKERS:-4} --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --timeout ${GUNICORN_TIMEOUT:-120} --graceful-timeout 30 --access-logfile - --error-logfile -
-worker: cd neumas-backend && celery -A app.core.celery_app worker --loglevel=info --queues=neumas_default,scans,agents,neumas.predictions,neumas.shopping --concurrency=${CELERY_CONCURRENCY:-2}
+web: bash start.sh
+worker: sh -c 'export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$(pwd)/neumas-backend" && cd neumas-backend && exec celery -A app.core.celery_app worker --loglevel=info --queues=neumas_default,scans,agents,neumas.predictions,neumas.shopping --concurrency=${CELERY_CONCURRENCY:-2} --pool=prefork'

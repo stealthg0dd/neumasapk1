@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Make the installed package importable even if pip editable-install metadata
+# isn't fully propagated in this Nixpacks environment.
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$(pwd)/neumas-backend"
+
 cd neumas-backend
 
 exec gunicorn app.main:app \
