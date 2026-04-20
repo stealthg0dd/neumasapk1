@@ -137,10 +137,15 @@ class LoginResponse(BaseModel):
 
 
 class GoogleCompleteRequest(BaseModel):
-    """Complete profile for a Google OAuth user (first sign-in)."""
+    """Complete profile for a Google OAuth user.
 
-    org_name: str = Field(..., min_length=2, max_length=255, description="Organization name")
-    property_name: str = Field(..., min_length=2, max_length=255, description="Property name")
+    org_name and property_name are optional so that the first probe call from
+    /auth/callback (empty body) passes Pydantic validation.  The route handler
+    raises HTTP 422 explicitly when they are absent and the user is new.
+    """
+
+    org_name: str | None = Field(None, min_length=2, max_length=255, description="Organization name")
+    property_name: str | None = Field(None, min_length=2, max_length=255, description="Property name")
     role: str = Field(default="admin", description="Role for the new account owner")
 
 

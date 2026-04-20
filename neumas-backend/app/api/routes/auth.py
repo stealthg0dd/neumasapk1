@@ -4,7 +4,7 @@ Authentication routes.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.api.deps import UserInfo, get_current_user, get_token
 from app.core.logging import get_logger
@@ -146,25 +146,26 @@ async def get_me(
 @router.post(
     "/google/complete",
     response_model=LoginResponse,
-    status_code=status.HTTP_201_CREATED,
     summary="Complete Google OAuth profile",
     description=(
-        "Called after a first-time Google sign-in to create the Neumas "
-        "org/property/user records.  The caller must supply a valid Supabase "
-        "Bearer token (obtained from supabase.auth.exchangeCodeForSession). "
-        "Idempotent — safe to call if the user already has a DB record."
+        "Called after every Google sign-in. "
+        "First probe (empty body): returns 200 with profile for returning users "
+        "or 422 {detail: 'onboarding_required'} for first-timers. "
+        "Second call (org_name + property_name in body): provisions the account "
+        "and returns 201 with profile."
     ),
 )
 async def complete_google_signup(
     request: GoogleCompleteRequest,
+    response: Response,
     token: Annotated[str, Depends(get_token)],
 ) -> LoginResponse:
     """
-    Provision Neumas DB records for a Google OAuth user.
+    Three-path handler for Google OAuth completion:
 
-    The token is validated against Supabase Auth (local decode first,
-    then Supabase API fallback) without requiring the user to be in the
-    local `users` table — which is the whole point of this endpoint.
+    1. Returning user  (any body)    → 200 + existing profile → dashboard
+    2. New user, no org/property     → 422 onboarding_required → onboard page
+    3. New user, org/property given  → 201 + new profile       → dashboard
     """
     # -- Validate token and extract auth_id without requiring a DB user -------
     auth_id: str | None = None
@@ -200,6 +201,33 @@ async def complete_google_signup(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # -- Path 1: returning user — no provisioning needed ---------------------
+    existing_profile = await auth_service.get_google_user_profile(auth_id)
+    if existing_profile:
+        logger.info("Google OAuth: returning user signed in", auth_id=auth_id, email=email)
+        response.status_code = status.HTTP_200_OK
+        return LoginResponse(
+            access_token=token,
+            expires_in=3600,
+            refresh_token=None,
+            profile=existing_profile,
+        )
+
+    # -- Path 2: new user without org/property — tell frontend to onboard ----
+    if not request.org_name or not request.property_name:
+        logger.info("Google OAuth: new user — onboarding required", auth_id=auth_id, email=email)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="onboarding_required",
+        )
+
+    # -- Path 3: new user completing onboarding — provision their account ----
+    logger.info(
+        "Google OAuth: provisioning new account",
+        auth_id=auth_id,
+        email=email,
+        org_name=request.org_name,
+    )
     try:
         profile = await auth_service.complete_google_signup(
             auth_id=auth_id,
@@ -214,15 +242,13 @@ async def complete_google_signup(
             detail=str(e),
         )
     except Exception as e:
-        logger.error("Google complete-signup failed", error=str(e))
+        logger.error("Google complete-signup failed", error=str(e), auth_id=auth_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to complete account setup. Please try again.",
         )
 
-    # The frontend already holds the Supabase session — return a LoginResponse
-    # with a placeholder token so the shape matches what saveAuth() expects.
-    # The frontend uses the token it already has, not the one returned here.
+    response.status_code = status.HTTP_201_CREATED
     return LoginResponse(
         access_token=token,
         expires_in=3600,

@@ -527,6 +527,55 @@ class AuthService:
             profile=profile,
         )
 
+    async def get_google_user_profile(self, auth_id: str) -> "ProfileResponse | None":
+        """Return the existing Neumas profile for a Google OAuth user, or None.
+
+        Used by the /google/complete route to distinguish returning users
+        (who need no onboarding) from first-time sign-ups.
+        """
+        admin_client = await get_async_supabase_admin()
+        existing = await (
+            admin_client.table("users")
+            .select("id, org_id, email, role")
+            .eq("auth_id", auth_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            return None
+
+        user = existing.data[0]
+        org_id = UUID(user["org_id"])
+
+        org_resp = await (
+            admin_client.table("organizations")
+            .select("name")
+            .eq("id", str(org_id))
+            .single()
+            .execute()
+        )
+        fetched_org_name = org_resp.data.get("name", "") if org_resp.data else ""
+
+        props = await (
+            admin_client.table("properties")
+            .select("id, name")
+            .eq("org_id", str(org_id))
+            .eq("is_active", True)
+            .order("created_at")
+            .limit(1)
+            .execute()
+        )
+        prop = props.data[0] if props.data else None
+        return ProfileResponse(
+            user_id=UUID(user["id"]),
+            email=user["email"],
+            org_id=org_id,
+            org_name=fetched_org_name,
+            property_id=UUID(prop["id"]) if prop else UUID(int=0),
+            property_name=prop.get("name", "") if prop else "",
+            role=user["role"],
+        )
+
     async def complete_google_signup(
         self,
         auth_id: str,

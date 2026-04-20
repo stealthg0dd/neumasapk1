@@ -1,63 +1,54 @@
 
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { googleComplete } from "@/lib/api/endpoints";
 import { saveSession } from "@/lib/auth-session";
+import type { Session } from "@supabase/supabase-js";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  // Prevent double-processing when both onAuthStateChange and getSession fire
+  const handled = useRef(false);
 
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-    // Listen for Supabase sign-in event
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        try {
-          // Try to complete Google onboarding (returns 422 if user is new)
-          try {
-            const loginResp = await googleComplete(session.access_token);
-            saveSession(loginResp);
-            router.replace("/dashboard");
-          } catch (err: any) {
-            // If 422, redirect to onboarding with JWT
-            if (err?.response?.status === 422) {
-              router.replace(`/onboard?supabase_jwt=${encodeURIComponent(session.access_token)}`);
-            } else {
-              router.replace("/login?error=oauth_complete_failed");
-            }
-          }
-        } catch (err) {
+    async function handleSession(session: Session) {
+      if (handled.current) return;
+      handled.current = true;
+
+      try {
+        const loginResp = await googleComplete(session.access_token);
+        saveSession(loginResp);
+        router.replace("/dashboard");
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.status;
+        if (status === 422) {
+          // New user — backend signalled onboarding_required
+          router.replace(
+            `/onboard?supabase_jwt=${encodeURIComponent(session.access_token)}`
+          );
+        } else {
+          console.error("[auth/callback] googleComplete failed", err);
           router.replace("/login?error=oauth_complete_failed");
         }
+      }
+    }
+
+    // Listen for Supabase SIGNED_IN event (fires after PKCE code exchange)
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        handleSession(session);
       }
     });
-    unsub = () => sub.subscription.unsubscribe();
 
-    // If already signed in, trigger the flow immediately
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        try {
-          try {
-            const loginResp = await googleComplete(session.access_token);
-            saveSession(loginResp);
-            router.replace("/dashboard");
-          } catch (err: any) {
-            if (err?.response?.status === 422) {
-              router.replace(`/onboard?supabase_jwt=${encodeURIComponent(session.access_token)}`);
-            } else {
-              router.replace("/login?error=oauth_complete_failed");
-            }
-          }
-        } catch (err) {
-          router.replace("/login?error=oauth_complete_failed");
-        }
-      }
+    // Also check for an already-active session (page reload / tab switch)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) handleSession(session);
     });
 
     return () => {
-      unsub?.();
+      sub.subscription.unsubscribe();
     };
   }, [router]);
 
@@ -65,7 +56,7 @@ export default function AuthCallbackPage() {
     <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
       <div className="text-center">
         <div className="w-8 h-8 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-[#64748b] text-sm">Signing you in...</p>
+        <p className="text-[#64748b] text-sm">Signing you in…</p>
       </div>
     </div>
   );
