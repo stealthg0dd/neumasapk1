@@ -135,7 +135,7 @@ async def _gen_forecast_accuracy(client, org_id: str, property_id: str | None, p
 
 
 async def _gen_low_stock_summary(client, org_id: str, property_id: str | None, params: dict) -> dict:
-    q = (
+    (
         client.table("inventory_items")
         .select("id, name, quantity, par_level, unit")
         .eq("org_id", org_id)

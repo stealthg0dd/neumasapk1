@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Vendor service — normalises raw vendor names to canonical vendor records.
 

@@ -3,7 +3,6 @@ Usage metering repository — records AI and feature usage for cost attribution.
 """
 
 from typing import Any
-from uuid import UUID
 
 from app.api.deps import TenantContext
 from app.core.logging import get_logger

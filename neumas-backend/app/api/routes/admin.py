@@ -5,6 +5,7 @@ system health summary, and usage metrics.
 All endpoints require role == "admin" (enforced by require_admin_role dependency).
 """
 
+import contextlib
 from typing import Annotated
 from uuid import UUID
 
@@ -178,10 +179,8 @@ async def system_health(tenant: AdminTenant) -> dict:
     from app.db.supabase_client import health_check as db_health
 
     db_ok = False
-    try:
+    with contextlib.suppress(Exception):
         db_ok = await db_health()
-    except Exception:
-        pass
 
     return {
         "database": "ok" if db_ok else "degraded",

@@ -13,7 +13,6 @@ from app.schemas.documents import (
     DocumentApproveRequest,
     DocumentLineItemUpdate,
     DocumentListResponse,
-    DocumentResponse,
 )
 from app.services.document_review_service import DocumentReviewService
 from app.services.document_service import DocumentService

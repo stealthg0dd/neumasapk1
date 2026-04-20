@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Vendors repository — CRUD for vendors and vendor_aliases tables.
 """

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Inventory ledger service — manages the append-only movement ledger
 and keeps inventory_items.quantity in sync.

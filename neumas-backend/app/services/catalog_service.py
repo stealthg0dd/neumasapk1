@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Catalog service — normalises raw item names to canonical_items records.
 

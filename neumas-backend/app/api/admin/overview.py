@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+
 from app.core.security import get_current_admin
 from app.db.repositories.admin import AdminRepository
 

@@ -10,7 +10,6 @@ Design principles:
 - No floating-point string parsing; callers are responsible for parsing.
 """
 
-from typing import NamedTuple
 
 # ---------------------------------------------------------------------------
 # Conversion table — (from_unit, to_unit) -> multiplier

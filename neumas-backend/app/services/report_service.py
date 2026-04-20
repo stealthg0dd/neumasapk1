@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Report service — enqueues report generation and polls status.
 
@@ -15,7 +16,6 @@ from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
-from app.core.constants import REPORT_DEDUP_WINDOW_HOURS
 from app.core.logging import get_logger, log_business_event
 from app.db.repositories.reports import ReportsRepository
 

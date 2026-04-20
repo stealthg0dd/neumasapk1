@@ -21,7 +21,6 @@ import pytest
 
 from app.api.deps import TenantContext
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────────────────────────────────────
@@ -287,7 +286,7 @@ class TestAlertService:
             patch.object(svc, "_repo", repo),
             patch("app.services.alert_service.get_async_supabase_admin", new=AsyncMock(return_value=mock_client)),
         ):
-            alerts = await svc.evaluate_inventory(tenant)
+            await svc.evaluate_inventory(tenant)
 
         repo.create.assert_awaited()
         created_types = [call.kwargs.get("alert_type", "") for call in repo.create.call_args_list]
@@ -379,7 +378,8 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_snooze_transitions_state(self, tenant: TenantContext):
         """Snoozing an alert transitions state to snoozed with snooze_until."""
-        from datetime import datetime, UTC, timedelta
+        from datetime import UTC, datetime, timedelta
+
         from app.services.alert_service import AlertService
 
         svc = AlertService()
@@ -399,7 +399,7 @@ class TestReorderService:
     @pytest.mark.asyncio
     async def test_critical_item_is_included(self, tenant: TenantContext):
         """Item with quantity=0 is classified critical."""
-        from app.services.reorder_service import ReorderService, _compute_urgency
+        from app.services.reorder_service import _compute_urgency
 
         assert _compute_urgency(0, 10) == "critical"
 
@@ -421,7 +421,6 @@ class TestReorderService:
         on_hand = 5.0
         safety = 0.20
         expected = projected * (1 + safety) - on_hand  # 24 - 5 = 19
-        from app.services.reorder_service import ReorderService
         actual = max(0.0, projected * (1 + safety) - on_hand)
         assert actual == pytest.approx(expected)
 
@@ -663,6 +662,7 @@ class TestUsageMetering:
     async def test_get_summary_returns_aggregate(self, tenant: TenantContext):
         """get_summary returns raw rows for the given date range."""
         from datetime import UTC, datetime, timedelta
+
         from app.db.repositories.usage_metering import UsageMeteringRepository
 
         repo = UsageMeteringRepository()

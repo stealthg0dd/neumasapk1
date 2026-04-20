@@ -8,7 +8,6 @@ Provides:
 """
 
 import hashlib
-from typing import Literal
 
 from app.core.constants import FILE_HASH_ALGO, UPLOAD_DEDUP_WINDOW_SECONDS
 from app.core.logging import get_logger

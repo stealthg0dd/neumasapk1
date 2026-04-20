@@ -11,11 +11,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from supabase._async.client import AsyncClient, create_async_client
-
 from app.core.config import settings
 from app.core.logging import get_logger
 from supabase import Client, create_client
+from supabase._async.client import AsyncClient, create_async_client
 
 logger = get_logger(__name__)
 

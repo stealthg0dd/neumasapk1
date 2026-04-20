@@ -127,7 +127,7 @@ async def _record_actual_value_async(
     prediction = rows[0]
     prediction_id = UUID(prediction["id"])
 
-    updated = await repo.record_actual(tenant, prediction_id, actual_qty)
+    await repo.record_actual(tenant, prediction_id, actual_qty)
     logger.info(
         "Recorded actual_value %.3f for prediction %s", actual_qty, prediction_id
     )

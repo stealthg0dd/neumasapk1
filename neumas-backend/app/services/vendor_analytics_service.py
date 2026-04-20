@@ -9,6 +9,7 @@ from uuid import UUID
 from app.api.deps import TenantContext
 from app.db.supabase_client import get_async_supabase_admin
 
+
 class VendorAnalyticsService:
     async def get_vendor_spend(self, tenant: TenantContext, vendor_id: UUID | None, days: int = 90) -> dict[str, Any]:
         client = await get_async_supabase_admin()

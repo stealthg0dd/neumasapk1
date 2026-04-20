@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Organizations repository for database operations.
 
@@ -19,10 +20,9 @@ data isolation. This aligns with Supabase RLS policies:
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from supabase._async.client import AsyncClient
-
 from app.core.logging import get_logger
 from app.db.supabase_client import get_async_supabase_admin
+from supabase._async.client import AsyncClient
 
 if TYPE_CHECKING:
     from app.api.deps import TenantContext
@@ -44,7 +44,7 @@ class OrganizationsRepository:
 
     async def get_by_id(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         org_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """
@@ -80,7 +80,7 @@ class OrganizationsRepository:
 
     async def get_by_slug(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         slug: str,
     ) -> dict[str, Any] | None:
         """
@@ -104,7 +104,7 @@ class OrganizationsRepository:
 
     async def create(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         data: dict[str, Any],
     ) -> dict[str, Any]:
         """
@@ -127,7 +127,7 @@ class OrganizationsRepository:
 
     async def update(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         data: dict[str, Any],
         org_id: UUID | None = None,
     ) -> dict[str, Any]:
@@ -158,7 +158,7 @@ class OrganizationsRepository:
 
     async def delete(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         org_id: UUID | None = None,
     ) -> bool:
         """
@@ -192,7 +192,7 @@ class OrganizationsRepository:
 
     async def list_all(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         limit: int = 100,
         offset: int = 0,
         status: str | None = None,
@@ -223,7 +223,7 @@ class OrganizationsRepository:
 
     async def get_with_properties(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         org_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """
@@ -254,7 +254,7 @@ class OrganizationsRepository:
 
     async def update_settings(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         settings: dict[str, Any],
         org_id: UUID | None = None,
     ) -> dict[str, Any]:
@@ -277,7 +277,7 @@ class OrganizationsRepository:
 
 
 async def get_organizations_repository(
-    tenant: "TenantContext | None" = None,
+    tenant: TenantContext | None = None,
 ) -> OrganizationsRepository:
     """
     Get organizations repository instance.

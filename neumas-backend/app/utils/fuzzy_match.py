@@ -87,9 +87,8 @@ def best_match(
     best: tuple[str, float] | None = None
     for candidate in candidates:
         score = similarity(query, candidate)
-        if score >= threshold:
-            if best is None or score > best[1]:
-                best = (candidate, score)
+        if score >= threshold and (best is None or score > best[1]):
+            best = (candidate, score)
     return best
 
 

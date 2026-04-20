@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Alert service — manages alert lifecycle and reorder trigger evaluation.
 
@@ -15,7 +16,6 @@ from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
-from app.core.constants import ALERT_SEVERITY_ORDER, NO_RECENT_SCAN_DAYS, VALID_ALERT_STATES
 from app.core.logging import get_logger
 from app.db.repositories.alerts import AlertsRepository
 from app.db.supabase_client import get_async_supabase_admin

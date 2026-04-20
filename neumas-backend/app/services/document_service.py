@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Document service — creates and manages document records from scan extractions.
 """

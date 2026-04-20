@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Canonical items repository — manages the canonical_items and item_aliases tables.
 """

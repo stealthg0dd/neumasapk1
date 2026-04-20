@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Scan service for handling scan uploads and status tracking.
 
@@ -99,6 +100,7 @@ class ScanService:
         if not settings.DEV_MODE:
             try:
                 import redis as redis_lib
+
                 from app.core.config import settings as _s
                 _redis = redis_lib.from_url(
                     _s.REDIS_URL, socket_connect_timeout=1, socket_timeout=1
@@ -357,7 +359,7 @@ class ScanService:
         self,
         scan_id: UUID,
         tenant: TenantContext,
-    ) -> "ScanResponse":
+    ) -> ScanResponse:
         """
         Get full scan details.
 
@@ -400,7 +402,7 @@ class ScanService:
         status_filter: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list["ScanResponse"]:
+    ) -> list[ScanResponse]:
         """
         List scans for a property.
 

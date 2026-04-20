@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Alerts repository — CRUD for the alerts table.
 """

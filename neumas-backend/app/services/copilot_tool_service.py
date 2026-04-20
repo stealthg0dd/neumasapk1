@@ -15,10 +15,8 @@ queries — never through a service class that modifies state.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
 from app.api.deps import TenantContext
 from app.core.logging import get_logger
@@ -39,6 +37,8 @@ from app.schemas.copilot import (
 )
 from app.services.retrieval_service import (
     list_recent_vendor_prices,
+)
+from app.services.retrieval_service import (
     search_documents as _search_documents,
 )
 

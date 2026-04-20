@@ -20,10 +20,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from supabase._async.client import AsyncClient
-
 from app.core.logging import get_logger
 from app.db.supabase_client import get_async_supabase_admin
+from supabase._async.client import AsyncClient
 
 if TYPE_CHECKING:
     from app.api.deps import TenantContext

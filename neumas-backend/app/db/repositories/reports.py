@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Reports repository — CRUD for the reports table.
 """

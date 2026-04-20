@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Inventory repository for database operations.
 
@@ -24,10 +25,9 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from supabase._async.client import AsyncClient
-
 from app.core.logging import get_logger
 from app.db.supabase_client import get_async_supabase_admin
+from supabase._async.client import AsyncClient
 
 if TYPE_CHECKING:
     from app.api.deps import TenantContext
@@ -57,7 +57,7 @@ class InventoryRepository:
 
     async def get_item_by_id(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         item_id: UUID,
     ) -> dict[str, Any] | None:
         """
@@ -90,7 +90,7 @@ class InventoryRepository:
 
     async def get_items_by_property(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         active_only: bool = True,
         category_id: UUID | None = None,
         search: str | None = None,
@@ -132,7 +132,7 @@ class InventoryRepository:
 
     async def get_low_stock_items(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """
@@ -191,7 +191,7 @@ class InventoryRepository:
 
     async def create_item(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         data: dict[str, Any],
     ) -> dict[str, Any]:
         """
@@ -219,7 +219,7 @@ class InventoryRepository:
 
     async def update_item(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         item_id: UUID,
         data: dict[str, Any],
     ) -> dict[str, Any]:
@@ -248,7 +248,7 @@ class InventoryRepository:
 
     async def update_quantity(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         item_id: UUID,
         new_quantity: Decimal,
         reason: str | None = None,
@@ -282,7 +282,7 @@ class InventoryRepository:
 
     async def adjust_quantity(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         item_id: UUID,
         adjustment: Decimal,
         reason: str | None = None,
@@ -299,7 +299,7 @@ class InventoryRepository:
 
     async def delete_item(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         item_id: UUID,
     ) -> bool:
         """
@@ -334,7 +334,7 @@ class InventoryRepository:
 
     async def bulk_update_quantities(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         updates: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """
@@ -364,7 +364,7 @@ class InventoryRepository:
 
     async def get_item_by_barcode(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         barcode: str,
     ) -> dict[str, Any] | None:
         """Get item by barcode within tenant's property."""
@@ -391,7 +391,7 @@ class InventoryRepository:
 
     async def get_categories(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         parent_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         """
@@ -415,7 +415,7 @@ class InventoryRepository:
 
     async def create_category(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         data: dict[str, Any],
     ) -> dict[str, Any]:
         """Create a new category for tenant's organization."""
@@ -430,7 +430,7 @@ class InventoryRepository:
 
     async def update_category(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         category_id: UUID,
         data: dict[str, Any],
     ) -> dict[str, Any]:
@@ -450,7 +450,7 @@ class InventoryRepository:
 
     async def list_items(
         self,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         property_id: UUID | None = None,
         category_id: UUID | None = None,
         status_filter: str | None = None,
@@ -480,7 +480,7 @@ class InventoryRepository:
     async def get_by_id(
         self,
         item_id: UUID,
-        tenant: "TenantContext",
+        tenant: TenantContext,
     ) -> dict[str, Any] | None:
         """Alias for get_item_by_id with service-compatible arg order."""
         return await self.get_item_by_id(tenant, item_id)
@@ -488,7 +488,7 @@ class InventoryRepository:
     async def get_by_name(
         self,
         name: str,
-        tenant: "TenantContext",
+        tenant: TenantContext,
         property_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """Get item by name within tenant's property."""
@@ -512,7 +512,7 @@ class InventoryRepository:
     async def create(
         self,
         data: dict[str, Any],
-        tenant: "TenantContext",
+        tenant: TenantContext,
     ) -> dict[str, Any]:
         """Alias for create_item with service-compatible arg order."""
         return await self.create_item(tenant, data)
@@ -521,7 +521,7 @@ class InventoryRepository:
         self,
         item_id: UUID,
         data: dict[str, Any],
-        tenant: "TenantContext",
+        tenant: TenantContext,
     ) -> dict[str, Any]:
         """Alias for update_item with service-compatible arg order."""
         return await self.update_item(tenant, item_id, data)
@@ -529,14 +529,14 @@ class InventoryRepository:
     async def soft_delete(
         self,
         item_id: UUID,
-        tenant: "TenantContext",
+        tenant: TenantContext,
     ) -> bool:
         """Alias for delete_item."""
         return await self.delete_item(tenant, item_id)
 
 
 async def get_inventory_repository(
-    tenant: "TenantContext | None" = None,
+    tenant: TenantContext | None = None,
 ) -> InventoryRepository:
     """
     Get inventory repository instance.

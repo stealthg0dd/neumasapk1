@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Inventory service for managing inventory items and triggering predictions.
 """
@@ -264,7 +265,7 @@ class InventoryService:
 
     async def create_item(
         self,
-        item: "InventoryItemCreate",
+        item: InventoryItemCreate,
         tenant: TenantContext,
     ) -> InventoryItemResponse:
         """Create a new inventory item."""

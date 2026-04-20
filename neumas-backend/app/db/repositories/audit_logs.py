@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Audit logs repository — write-only, immutable audit trail.
 """

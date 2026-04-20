@@ -2,9 +2,10 @@
 vendor_analytics.py — Vendor Intelligence Engine endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Annotated
 from uuid import UUID
+
+from fastapi import APIRouter, Depends
 
 from app.api.deps import TenantContext, get_tenant_context
 from app.services.vendor_analytics_service import VendorAnalyticsService

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Documents repository — normalized document records.
 """
