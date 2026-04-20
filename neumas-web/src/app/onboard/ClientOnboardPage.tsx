@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { postScanUpload, getScanStatus, googleComplete } from "@/lib/api/endpoints";
 import { setOnboardingComplete } from "@/lib/onboarding";
 import { saveSession } from "@/lib/auth-session";
-import { useAuthStore, selectIsAuthenticated } from "@/lib/store/auth";
+import { useAuthStore, selectHasSession } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
@@ -206,7 +206,7 @@ function StepReady({ orgName, onFinish }: { orgName: string; onFinish: () => voi
 export default function ClientOnboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isAuth = useAuthStore(selectIsAuthenticated);
+  const hasSession = useAuthStore(selectHasSession);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const supabaseJwt = searchParams?.get("supabase_jwt");
   const isGoogleOnboarding = Boolean(supabaseJwt);
@@ -214,7 +214,11 @@ export default function ClientOnboardPage() {
   const [orgName, setOrgName] = useState("");
   const [outlets, setOutlets] = useState([{ name: "", type: "Restaurant" }]);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (hasHydrated && !isAuth) { router.replace("/auth"); } }, [hasHydrated, isAuth, router]);
+  useEffect(() => {
+    if (hasHydrated && !hasSession && !isGoogleOnboarding) {
+      router.replace("/auth");
+    }
+  }, [hasHydrated, hasSession, isGoogleOnboarding, router]);
   async function finish() {
     if (isGoogleOnboarding && supabaseJwt) {
       setBusy(true);
@@ -243,7 +247,7 @@ export default function ClientOnboardPage() {
       </div>
     );
   }
-  if (!isAuth && !isGoogleOnboarding) return null;
+  if (!hasSession && !isGoogleOnboarding) return null;
   return (
     <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-10 w-10 animate-pulse rounded-xl bg-gray-200" /></div>}>
       <div className="min-h-screen bg-[#f5f5f7]">

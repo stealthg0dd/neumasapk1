@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { listScans } from "@/lib/api/endpoints";
 import { isOnboardingComplete } from "@/lib/onboarding";
-import { useAuthStore, selectIsAuthenticated } from "@/lib/store/auth";
+import { useAuthStore, selectHasSession } from "@/lib/store/auth";
 import { get } from "@/lib/api/client";
 
 export default function DashboardLayout({
@@ -16,7 +16,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const isAuth = useAuthStore(selectIsAuthenticated);
+  const hasSession = useAuthStore(selectHasSession);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
   const [workerOk, setWorkerOk] = useState<boolean | null>(null);
@@ -32,7 +32,7 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    if (!hasHydrated || !isAuth) return;
+    if (!hasHydrated || !hasSession) return;
     let cancelled = false;
     (async () => {
       try {
@@ -50,13 +50,14 @@ export default function DashboardLayout({
     return () => {
       cancelled = true;
     };
-  }, [hasHydrated, isAuth, router]);
+  }, [hasHydrated, hasSession, router]);
 
   useEffect(() => {
-    if (hasHydrated && !isAuth) {
-      router.replace("/auth");
+    if (hasHydrated && !hasSession) {
+      setAllowDashboard(false);
+      router.replace("/login");
     }
-  }, [hasHydrated, isAuth, router]);
+  }, [hasHydrated, hasSession, router]);
 
   if (!hasHydrated) {
     return (
@@ -69,7 +70,7 @@ export default function DashboardLayout({
     );
   }
 
-  if (!isAuth) return null;
+  if (!hasSession) return null;
 
   if (!allowDashboard) {
     return (

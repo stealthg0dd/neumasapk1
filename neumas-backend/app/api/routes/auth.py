@@ -2,9 +2,10 @@
 Authentication routes.
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from pydantic import ValidationError
 
 from app.api.deps import UserInfo, get_current_user, get_token
 from app.core.logging import get_logger
@@ -156,9 +157,9 @@ async def get_me(
     ),
 )
 async def complete_google_signup(
-    request: GoogleCompleteRequest,
     response: Response,
     token: Annotated[str, Depends(get_token)],
+    raw_payload: Annotated[dict[str, Any] | None, Body()] = None,
 ) -> LoginResponse:
     """
     Three-path handler for Google OAuth completion:
@@ -167,25 +168,51 @@ async def complete_google_signup(
     2. New user, no org/property     → 422 onboarding_required → onboard page
     3. New user, org/property given  → 201 + new profile       → dashboard
     """
+    try:
+        request = GoogleCompleteRequest.model_validate(raw_payload or {})
+    except ValidationError as e:
+        logger.error(
+            "Google OAuth complete payload validation failed",
+            errors=e.errors(),
+            payload=raw_payload,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        ) from e
+
+    logger.info(
+        "Received Google OAuth complete request",
+        payload_keys=sorted((raw_payload or {}).keys()),
+        has_org_name=bool(request.org_name),
+        has_property_name=bool(request.property_name),
+        token_length=len(token),
+    )
+
     # -- Validate token and extract auth_id without requiring a DB user -------
     auth_id: str | None = None
     email: str = ""
     try:
-        payload = decode_jwt(token)
-        auth_id = payload.get("sub")
-        email = payload.get("email", "")
-    except TokenValidationError:
-        logger.debug("Local JWT decode failed for google/complete — trying Supabase API")
+        token_payload = decode_jwt(token)
+        auth_id = token_payload.get("sub")
+        email = token_payload.get("email", "")
+    except TokenValidationError as e:
+        logger.warning(
+            "Local JWT decode failed for google/complete; falling back to Supabase auth lookup",
+            error=str(e),
+        )
 
     if not auth_id:
         auth_client = await get_auth_client()
         if not auth_client:
+            logger.error("Google OAuth complete failed: auth service unavailable")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Auth service unavailable",
             )
         user_data = await auth_client.get_user(token)
         if not user_data:
+            logger.warning("Google OAuth complete failed: invalid or expired token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token",
@@ -195,6 +222,7 @@ async def complete_google_signup(
         email = str(user_data.get("email", ""))
 
     if not auth_id:
+        logger.error("Google OAuth complete failed: token did not contain an auth_id")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not extract identity from token",
@@ -237,12 +265,24 @@ async def complete_google_signup(
             role=request.role,
         )
     except ValueError as e:
+        logger.warning(
+            "Google OAuth complete rejected provisioning payload",
+            auth_id=auth_id,
+            email=email,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
     except Exception as e:
-        logger.error("Google complete-signup failed", error=str(e), auth_id=auth_id)
+        logger.error(
+            "Google complete-signup failed",
+            error=str(e),
+            auth_id=auth_id,
+            email=email,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to complete account setup. Please try again.",

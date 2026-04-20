@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { login } from "@/lib/api/endpoints";
-import { useAuthStore } from "@/lib/store/auth";
+import { selectHasSession, useAuthStore } from "@/lib/store/auth";
 import { track, identifyUser, captureUIError } from "@/lib/analytics";
 import { signInWithGoogle } from "@/lib/supabase";
 
@@ -30,8 +30,16 @@ type FormData = z.infer<typeof schema>;
 export default function AuthPage() {
   const router = useRouter();
   const { saveAuth } = useAuthStore();
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  const hasSession = useAuthStore(selectHasSession);
   const [showPwd, setShowPwd] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (hasHydrated && hasSession) {
+      router.replace("/dashboard");
+    }
+  }, [hasHydrated, hasSession, router]);
 
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
@@ -66,6 +74,7 @@ export default function AuthPage() {
       toast.success("Welcome back!");
       router.replace("/dashboard");
     } catch (err: unknown) {
+      toast.error("Login failed. Please try again.");
       captureUIError("auth_login", err);
     }
   }

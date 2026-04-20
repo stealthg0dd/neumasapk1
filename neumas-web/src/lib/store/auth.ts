@@ -27,6 +27,10 @@ interface JWTPayload {
   iat?: number;
 }
 
+function toNullableString(value: string | null | undefined): string | null {
+  return value ? String(value) : null;
+}
+
 /** Safely decode a JWT and return the payload, or null on any error. */
 function decodeToken(token: string): JWTPayload | null {
   try {
@@ -93,8 +97,8 @@ export const useAuthStore = create<AuthStore>()(
         // truth for property_id / org_id. Profile fields are used as fallback
         // in case the backend omits custom claims from the token.
         const claims = decodeToken(access_token);
-        const propertyId = claims?.property_id ?? profile.property_id ?? null;
-        const orgId      = claims?.org_id      ?? profile.org_id      ?? null;
+        const propertyId = toNullableString(claims?.property_id ?? profile.property_id);
+        const orgId = toNullableString(claims?.org_id ?? profile.org_id);
 
         // Keep localStorage in sync so the Axios interceptor can read it
         if (typeof window !== "undefined") {
@@ -126,7 +130,11 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       setProfile(profile) {
-        set({ profile, orgId: profile.org_id, propertyId: profile.property_id });
+        set({
+          profile,
+          orgId: toNullableString(profile.org_id),
+          propertyId: toNullableString(profile.property_id),
+        });
       },
 
       setHasHydrated(v) {
@@ -198,6 +206,7 @@ export const useAuthStore = create<AuthStore>()(
 // Token expiry is enforced at the Axios layer (401 response clears the token),
 // not here in the hot render path.
 export const selectIsAuthenticated = (s: AuthStore): boolean => !!s.token;
+export const selectHasSession = (s: AuthStore): boolean => !!s.token && !!s.profile;
 
 export const selectIsAdmin = (s: AuthStore): boolean =>
   s.profile?.role === "admin";

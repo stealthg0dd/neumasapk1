@@ -4,18 +4,18 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { LandingPage } from "@/components/landing/LandingPage";
-import { selectIsAuthenticated, useAuthStore } from "@/lib/store/auth";
+import { selectHasSession, useAuthStore } from "@/lib/store/auth";
 
 export default function RootPage() {
   const router = useRouter();
-  const isAuth = useAuthStore(selectIsAuthenticated);
+  const hasSession = useAuthStore(selectHasSession);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
   useEffect(() => {
-    if (hasHydrated && isAuth) {
+    if (hasHydrated && hasSession) {
       router.replace("/dashboard");
     }
-  }, [hasHydrated, isAuth, router]);
+  }, [hasHydrated, hasSession, router]);
 
   if (!hasHydrated) {
     return (
@@ -27,7 +27,7 @@ export default function RootPage() {
     );
   }
 
-  if (isAuth) {
+  if (hasSession) {
     return null;
   }
 

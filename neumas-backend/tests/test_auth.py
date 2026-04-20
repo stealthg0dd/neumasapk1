@@ -10,7 +10,7 @@ from fastapi import status
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.schemas.auth import UserInfo
+from app.schemas.auth import ProfileResponse, UserInfo
 
 
 @pytest.fixture
@@ -122,6 +122,43 @@ class TestAuthEndpoints:
         response = await client.get("/api/auth/me")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_google_complete_existing_user_accepts_empty_body(
+        self,
+        client: AsyncClient,
+    ):
+        """Returning Google OAuth users can probe without sending a JSON body."""
+        profile = ProfileResponse(
+            user_id=uuid4(),
+            email="google-user@example.com",
+            full_name=None,
+            org_id=uuid4(),
+            org_name="Test Org",
+            property_id=uuid4(),
+            property_name="Main Property",
+            role="admin",
+        )
+
+        with (
+            patch(
+                "app.api.routes.auth.decode_jwt",
+                return_value={"sub": str(uuid4()), "email": "google-user@example.com"},
+            ),
+            patch(
+                "app.api.routes.auth.auth_service.get_google_user_profile",
+                new=AsyncMock(return_value=profile),
+            ),
+        ):
+            response = await client.post(
+                "/api/auth/google/complete",
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["access_token"] == "test-token"
+        assert data["profile"]["email"] == "google-user@example.com"
 
 
 class TestAuthDependencies:
@@ -237,4 +274,3 @@ class TestTokenRefresh:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert "expired" in response.json()["detail"].lower() or "invalid" in response.json()["detail"].lower()
-
