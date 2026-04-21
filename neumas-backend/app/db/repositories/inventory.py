@@ -204,7 +204,7 @@ class InventoryRepository:
 
         # Ensure tenant fields are set
         data["property_id"] = str(tenant.property_id)
-        data["org_id"] = str(tenant.org_id)
+        data["organization_id"] = str(tenant.org_id)
         # Strip None values -- PostgREST rejects columns absent from schema cache
         data = {k: v for k, v in data.items() if v is not None}
 
@@ -402,7 +402,7 @@ class InventoryRepository:
         query = (
             self.client.table(self.categories_table)
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
 
         if parent_id:
@@ -419,7 +419,7 @@ class InventoryRepository:
         data: dict[str, Any],
     ) -> dict[str, Any]:
         """Create a new category for tenant's organization."""
-        data["org_id"] = str(tenant.org_id)
+        data["organization_id"] = str(tenant.org_id)
         response = await self.client.table(self.categories_table).insert(data).execute()
         logger.info(
             "Created category",
@@ -439,7 +439,7 @@ class InventoryRepository:
             self.client.table(self.categories_table)
             .update(data)
             .eq("id", str(category_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return response.data[0]

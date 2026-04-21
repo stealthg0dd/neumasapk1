@@ -37,7 +37,7 @@ async def build_property_context(
     """
     client = await get_async_supabase_admin()
     ctx: dict[str, Any] = {
-        "org_id": str(tenant.org_id),
+        "organization_id": str(tenant.org_id),
         "property_id": str(tenant.property_id) if tenant.property_id else None,
     }
 
@@ -45,7 +45,7 @@ async def build_property_context(
         q = (
             client.table("inventory_items")
             .select("name, quantity, unit, par_level, updated_at")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("name")
             .limit(max_items)
         )
@@ -67,7 +67,7 @@ async def build_property_context(
         q = (
             client.table("scans")
             .select("id, status, created_at, scan_type")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .limit(5)
         )
@@ -80,7 +80,7 @@ async def build_property_context(
         resp = await (
             client.table("alerts")
             .select("alert_type, severity, title")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("state", "open")
             .order("created_at", desc=True)
             .limit(10)
@@ -92,7 +92,7 @@ async def build_property_context(
         q = (
             client.table("predictions")
             .select("item_id, predicted_value, prediction_date, urgency")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("prediction_date", desc=True)
             .limit(20)
         )

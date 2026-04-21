@@ -65,7 +65,7 @@ class AnalyticsService:
         q = (
             client.table("inventory_items")
             .select("id, quantity, par_level, updated_at")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
         if prop_filter:
             q = q.eq("property_id", prop_filter)
@@ -103,7 +103,7 @@ class AnalyticsService:
         resp = await (
             client.table("scans")
             .select("id, status, created_at", count="exact")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .gte("created_at", cutoff)
             .execute()
         )

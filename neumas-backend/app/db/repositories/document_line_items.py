@@ -30,7 +30,7 @@ class DocumentLineItemsRepository:
             rows.append({
                 "document_id": str(document_id),
                 "property_id": str(tenant.property_id) if tenant.property_id else None,
-                "org_id": str(tenant.org_id),
+                "organization_id": str(tenant.org_id),
                 "raw_name": item.get("raw_name", ""),
                 "raw_quantity": item.get("raw_quantity"),
                 "raw_unit": item.get("raw_unit"),
@@ -62,7 +62,7 @@ class DocumentLineItemsRepository:
             client.table("document_line_items")
             .select("*")
             .eq("document_id", str(document_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return response.data or []
@@ -86,7 +86,7 @@ class DocumentLineItemsRepository:
             client.table("document_line_items")
             .update(safe_updates)
             .eq("id", str(line_item_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return response.data[0] if response.data else None
@@ -103,7 +103,7 @@ class DocumentLineItemsRepository:
             client.table("document_line_items")
             .update({"inventory_movement_id": str(movement_id)})
             .eq("id", str(line_item_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
 
@@ -117,7 +117,7 @@ class DocumentLineItemsRepository:
         response = await (
             client.table("document_line_items")
             .select("*, documents(id, status, document_type, created_at)")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("review_needed", True)
             .order("created_at", desc=True)
             .limit(limit)

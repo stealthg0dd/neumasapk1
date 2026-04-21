@@ -250,7 +250,7 @@ async def _fetch_inventory_items(
     client = await get_async_supabase_admin()
     response = await (
         client.table("inventory_items")
-        .select("id, org_id, name, unit, quantity")
+        .select("id, organization_id, name, unit, quantity")
         .eq("property_id", str(property_id))
         .eq("is_active", True)
         .execute()
@@ -292,7 +292,7 @@ async def _upsert_pattern(
         "period_end": _period_end.isoformat(),
     }
     if org_id:
-        payload["org_id"] = org_id
+        payload["organization_id"] = org_id
     if property_id:
         payload["property_id"] = property_id
 
@@ -441,7 +441,7 @@ async def recompute_patterns_for_property(
             continue
 
         item_id = UUID(matched["id"])
-        item_org_id: str = matched.get("org_id") or ""
+        item_org_id: str = matched.get("organization_id") or ""
         display_name: str = matched.get("name", raw_name)
 
         # Sort chronologically

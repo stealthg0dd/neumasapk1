@@ -109,7 +109,7 @@ class ReportService:
             raise ValueError(f"Unknown report type: {report_type}")
 
         params_hash = _hash_params({
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "property_id": str(tenant.property_id) if tenant.property_id else None,
             "report_type": report_type,
             **params,
@@ -171,7 +171,7 @@ class ReportService:
         users_resp = await (
             client.table("users")
             .select("*")
-            .eq("org_id", property_row["org_id"])
+            .eq("organization_id", property_row["organization_id"])
             .eq("is_active", True)
             .execute()
         )
@@ -183,7 +183,7 @@ class ReportService:
         active_properties = await (
             client.table("properties")
             .select("id")
-            .eq("org_id", property_row["org_id"])
+            .eq("organization_id", property_row["organization_id"])
             .eq("is_active", True)
             .execute()
         )
@@ -276,7 +276,7 @@ class ReportService:
         response = await (
             client.table("reports")
             .select("id, result, created_at")
-            .eq("org_id", property_row["org_id"])
+            .eq("organization_id", property_row["organization_id"])
             .eq("property_id", str(property_row["id"]))
             .eq("report_type", _WEEKLY_DIGEST_REPORT_TYPE)
             .eq("params_hash", params_hash)
@@ -303,7 +303,7 @@ class ReportService:
     ) -> None:
         client = await get_async_supabase_admin()
         payload = {
-            "org_id": property_row["org_id"],
+            "organization_id": property_row["organization_id"],
             "property_id": str(property_row["id"]),
             "report_type": _WEEKLY_DIGEST_REPORT_TYPE,
             "status": "ready",
@@ -343,7 +343,7 @@ class ReportService:
         vendors_resp = await (
             client.table("vendors")
             .select("id, name")
-            .eq("org_id", property_row["org_id"])
+            .eq("organization_id", property_row["organization_id"])
             .execute()
         )
         line_items_resp = await (
@@ -357,7 +357,7 @@ class ReportService:
         canonical_items_resp = await (
             client.table("canonical_items")
             .select("id, canonical_name, category")
-            .eq("organization_id", property_row["org_id"])
+            .eq("organization_id", property_row["organization_id"])
             .execute()
         )
         movements_resp = await (
@@ -536,7 +536,7 @@ class ReportService:
         digest = {
             "property": {
                 "id": str(property_row["id"]),
-                "org_id": str(property_row["org_id"]),
+                "organization_id": str(property_row["organization_id"]),
                 "name": property_row.get("name", "Property"),
                 "timezone": property_row.get("timezone") or "UTC",
                 "currency": property_row.get("currency") or "USD",

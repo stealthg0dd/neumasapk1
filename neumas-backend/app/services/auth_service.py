@@ -148,7 +148,7 @@ class AuthService:
             email=user["email"],
             full_name=user.get("full_name"),
             role=user["role"],
-            organization_id=UUID(user["org_id"]),
+            organization_id=UUID(user["organization_id"]),
             permissions=user.get("permissions", {}) or {},
             is_active=user["is_active"],
         )
@@ -224,7 +224,7 @@ class AuthService:
             admin_client.table("properties")
             .select("id")
             .eq("id", str(property_id))
-            .eq("org_id", str(user.organization_id))
+            .eq("organization_id", str(user.organization_id))
             .eq("is_active", True)
             .execute()
         )
@@ -364,7 +364,7 @@ class AuthService:
             logger.info("Step 5: Creating property", name=request.property_name, org_id=str(org_id))
             try:
                 prop_response = await admin_client.table("properties").insert({
-                    "org_id": str(org_id),
+                    "organization_id": str(org_id),
                     "name": request.property_name,
                     "type": "hotel",
                 }).execute()
@@ -386,7 +386,7 @@ class AuthService:
                 user_response = await admin_client.table("users").insert({
                     "auth_id": str(auth_id),
                     "email": request.email.lower(),
-                    "org_id": str(org_id),
+                    "organization_id": str(org_id),
                     "default_property_id": str(property_id),
                     "role": request.role,
                     "is_active": True,
@@ -492,7 +492,7 @@ class AuthService:
         org_response = await (
             admin_client.table("organizations")
             .select("*")
-            .eq("id", user["org_id"])
+            .eq("id", user["organization_id"])
             .single()
             .execute()
         )
@@ -503,7 +503,7 @@ class AuthService:
         props_response = await (
             admin_client.table("properties")
             .select("*")
-            .eq("org_id", user["org_id"])
+            .eq("organization_id", user["organization_id"])
             .eq("is_active", True)
             .order("created_at")
             .limit(1)
@@ -531,7 +531,7 @@ class AuthService:
         profile = ProfileResponse(
             user_id=UUID(user["id"]),
             email=user["email"],
-            org_id=UUID(user["org_id"]),
+            org_id=UUID(user["organization_id"]),
             org_name=org_name,
             property_id=UUID(primary_prop["id"]) if primary_prop else None,
             property_name=primary_prop.get("name", "") if primary_prop else None,
@@ -554,7 +554,7 @@ class AuthService:
         admin_client = await get_async_supabase_admin()
         existing = await (
             admin_client.table("users")
-            .select("id, org_id, email, role")
+            .select("id, organization_id, email, role")
             .eq("auth_id", auth_id)
             .limit(1)
             .execute()
@@ -563,7 +563,7 @@ class AuthService:
             return None
 
         user = existing.data[0]
-        org_id = UUID(user["org_id"])
+        org_id = UUID(user["organization_id"])
 
         org_resp = await (
             admin_client.table("organizations")
@@ -577,7 +577,7 @@ class AuthService:
         props = await (
             admin_client.table("properties")
             .select("id, name")
-            .eq("org_id", str(org_id))
+            .eq("organization_id", str(org_id))
             .eq("is_active", True)
             .order("created_at")
             .limit(1)
@@ -632,7 +632,7 @@ class AuthService:
         # -- Idempotency check: user record may already exist -----------------
         existing = await (
             admin_client.table("users")
-            .select("id, org_id, email, role")
+            .select("id, organization_id, email, role")
             .eq("auth_id", auth_id)
             .limit(1)
             .execute()
@@ -640,7 +640,7 @@ class AuthService:
         if existing.data:
             user = existing.data[0]
             user_id = UUID(user["id"])
-            org_id = UUID(user["org_id"])
+            org_id = UUID(user["organization_id"])
 
             org_resp = await (
                 admin_client.table("organizations")
@@ -654,7 +654,7 @@ class AuthService:
             props = await (
                 admin_client.table("properties")
                 .select("id, name")
-                .eq("org_id", str(org_id))
+                .eq("organization_id", str(org_id))
                 .eq("is_active", True)
                 .order("created_at")
                 .limit(1)
@@ -670,7 +670,7 @@ class AuthService:
                     property_name=property_name,
                 )
                 prop_resp = await admin_client.table("properties").insert({
-                    "org_id": str(org_id),
+                    "organization_id": str(org_id),
                     "name": property_name,
                     "type": "hotel",
                 }).execute()
@@ -706,7 +706,7 @@ class AuthService:
             logger.info("Google signup: org created", org_id=str(org_id))
 
             prop_resp = await admin_client.table("properties").insert({
-                "org_id": str(org_id),
+                "organization_id": str(org_id),
                 "name": property_name,
                 "type": "hotel",
             }).execute()
@@ -718,7 +718,7 @@ class AuthService:
             user_resp = await admin_client.table("users").insert({
                 "auth_id": auth_id,
                 "email": email.lower(),
-                "org_id": str(org_id),
+                "organization_id": str(org_id),
                 "default_property_id": str(property_id),
                 "role": role,
                 "is_active": True,

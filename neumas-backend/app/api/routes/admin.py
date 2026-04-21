@@ -70,7 +70,7 @@ async def list_users(tenant: AdminTenant) -> list[dict]:
     resp = await (
         client.table("users")
         .select("id, email, role, full_name, created_at, last_sign_in_at")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .order("created_at")
         .execute()
     )
@@ -84,7 +84,7 @@ async def list_properties(tenant: AdminTenant) -> list[dict]:
     resp = await (
         client.table("properties")
         .select("*")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .order("name")
         .execute()
     )
@@ -153,7 +153,7 @@ async def update_feature_flag(
         .upsert(
             {
                 "name": flag_name,
-                "org_id": str(tenant.org_id),
+                "organization_id": str(tenant.org_id),
                 "enabled": body.enabled,
             },
             on_conflict="name,org_id",
@@ -186,7 +186,7 @@ async def system_health(tenant: AdminTenant) -> dict:
 
     return {
         "database": "ok" if db_ok else "degraded",
-        "org_id": str(tenant.org_id),
+        "organization_id": str(tenant.org_id),
     }
 
 
@@ -203,19 +203,19 @@ async def usage_metrics(tenant: AdminTenant) -> dict:
     items_resp = await (
         client.table("inventory_items")
         .select("id", count="exact")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .execute()
     )
     scans_resp = await (
         client.table("scans")
         .select("id", count="exact")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .execute()
     )
     alerts_resp = await (
         client.table("alerts")
         .select("id", count="exact")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .eq("state", "open")
         .execute()
     )

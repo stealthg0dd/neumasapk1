@@ -95,7 +95,7 @@ class CopilotToolService:
             supabase.table("predictions")
             .select("*")
             .eq("item_id", str(inp.item_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .limit(1)
             .single()
@@ -235,7 +235,7 @@ class CopilotToolService:
         alert_query = (
             supabase.table("alerts")
             .select("id, severity", count="exact")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("property_id", str(inp.property_id))
         )
         if not inp.include_snoozed:
@@ -333,7 +333,7 @@ class CopilotToolService:
                 "item_id, days_to_stockout, reorder_quantity, consumption_rate, "
                 "inventory_items(name, unit, quantity)"
             )
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("property_id", str(inp.property_id))
             .lte("days_to_stockout", inp.days_ahead)
             .order("days_to_stockout")

@@ -61,7 +61,7 @@ class ReorderService:
             client.table("inventory_items")
             .select("id, name, quantity, unit, par_level, category_id")
             .eq("property_id", prop_id)
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .execute()
         )
         items: list[dict[str, Any]] = inv_resp.data or []

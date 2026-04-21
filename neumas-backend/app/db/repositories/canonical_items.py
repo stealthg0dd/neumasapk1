@@ -27,7 +27,7 @@ class CanonicalItemsRepository:
     ) -> dict[str, Any] | None:
         client = await get_async_supabase_admin()
         payload = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "canonical_name": canonical_name,
             "default_unit": default_unit,
             "category": category,
@@ -44,7 +44,7 @@ class CanonicalItemsRepository:
             client.table("canonical_items")
             .select("*")
             .eq("id", str(item_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .single()
             .execute()
         )
@@ -58,7 +58,7 @@ class CanonicalItemsRepository:
         resp = await (
             client.table("canonical_items")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .ilike("canonical_name", canonical_name)
             .limit(1)
             .execute()
@@ -73,7 +73,7 @@ class CanonicalItemsRepository:
         resp = await (
             client.table("item_aliases")
             .select("canonical_item_id, canonical_items(*)")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .ilike("alias_name", raw_name)
             .limit(1)
             .execute()
@@ -93,7 +93,7 @@ class CanonicalItemsRepository:
         resp = await (
             client.table("canonical_items")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .text_search("canonical_name_tsv", query, config="english")
             .limit(limit)
             .execute()
@@ -111,7 +111,7 @@ class CanonicalItemsRepository:
         q = (
             client.table("canonical_items")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("canonical_name")
             .range(offset, offset + limit - 1)
         )
@@ -131,7 +131,7 @@ class CanonicalItemsRepository:
         client = await get_async_supabase_admin()
         payload = {
             "canonical_item_id": str(canonical_item_id),
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "alias_name": alias_name,
             "source": source,
             "confidence": confidence,

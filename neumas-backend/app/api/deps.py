@@ -325,9 +325,9 @@ async def get_tenant_context(
         if admin_client:
             response = await (
                 admin_client.table("properties")
-                .select("id, org_id")
+                .select("id, organization_id")
                 .eq("id", str(effective_property_id))
-                .eq("org_id", str(user.organization_id))
+                .eq("organization_id", str(user.organization_id))
                 .eq("is_active", True)
                 .execute()
             )
@@ -348,7 +348,7 @@ async def get_tenant_context(
         prop_response = await (
             admin_client.table("properties")
             .select("id")
-            .eq("org_id", str(user.organization_id))
+            .eq("organization_id", str(user.organization_id))
             .eq("is_active", True)
             .order("created_at")
             .limit(1)

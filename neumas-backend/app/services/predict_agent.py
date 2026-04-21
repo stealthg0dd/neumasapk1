@@ -216,12 +216,12 @@ async def _get_property_org_id(property_id: UUID) -> UUID | None:
     client = await get_async_supabase_admin()
     resp = await (
         client.table("properties")
-        .select("org_id")
+        .select("organization_id")
         .eq("id", str(property_id))
         .single()
         .execute()
     )
-    raw = (resp.data or {}).get("org_id")
+    raw = (resp.data or {}).get("organization_id")
     return UUID(raw) if raw else None
 
 
@@ -244,7 +244,7 @@ async def _upsert_prediction(
 
     payload: dict[str, Any] = {
         "property_id": str(property_id),
-        "org_id": str(org_id),
+        "organization_id": str(org_id),
         "item_id": str(item_id),
         "prediction_type": "stockout",
         "prediction_date": prediction_date.isoformat(),

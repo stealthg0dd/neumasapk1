@@ -122,7 +122,7 @@ class ScansRepository:
 
         # Ensure tenant fields are set
         data["property_id"] = str(tenant.property_id)
-        data["org_id"] = str(tenant.org_id)
+        data["organization_id"] = str(tenant.org_id)
         # Strip None values -- PostgREST rejects columns absent from schema cache
         data = {k: v for k, v in data.items() if v is not None}
 

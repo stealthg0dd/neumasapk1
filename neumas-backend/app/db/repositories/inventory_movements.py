@@ -45,7 +45,7 @@ class InventoryMovementsRepository:
         payload: dict[str, Any] = {
             "item_id": str(item_id),
             "property_id": str(tenant.property_id) if tenant.property_id else None,
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "movement_type": movement_type,
             "quantity_delta": float(quantity_delta),
             "quantity_before": float(quantity_before),
@@ -108,7 +108,7 @@ class InventoryMovementsRepository:
             client.table("inventory_movements")
             .select("*")
             .eq("item_id", str(item_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
             .execute()
@@ -127,7 +127,7 @@ class InventoryMovementsRepository:
         query = (
             client.table("inventory_movements")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))

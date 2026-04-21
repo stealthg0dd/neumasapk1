@@ -105,7 +105,7 @@ class AuditService:
             q = (
                 client.table("audit_logs")
                 .select("id", count="exact")
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
             )
             if resource_type:
                 q = q.eq("resource_type", resource_type)

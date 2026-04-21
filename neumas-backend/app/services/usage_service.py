@@ -47,7 +47,7 @@ class UsageService:
         doc_resp = await (
             client.table("documents")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .gte("created_at", since.isoformat())
             .execute()
         )
@@ -57,7 +57,7 @@ class UsageService:
         li_resp = await (
             client.table("document_line_items")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .gte("created_at", since.isoformat())
             .execute()
         )
@@ -67,7 +67,7 @@ class UsageService:
         exp_resp = await (
             client.table("reports")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .eq("status", "ready")
             .gte("created_at", since.isoformat())
             .execute()
@@ -79,7 +79,7 @@ class UsageService:
             usr_resp = await (
                 client.table("audit_logs")
                 .select("actor_id")
-                .eq("org_id", org_id)
+                .eq("organization_id", org_id)
                 .gte("created_at", since.isoformat())
                 .execute()
             )
@@ -92,7 +92,7 @@ class UsageService:
             prop_resp = await (
                 client.table("scans")
                 .select("property_id")
-                .eq("org_id", org_id)
+                .eq("organization_id", org_id)
                 .gte("created_at", since.isoformat())
                 .execute()
             )
@@ -105,7 +105,7 @@ class UsageService:
         breakdown = llm_summary.get("by_feature", {})
 
         return {
-            "org_id": org_id,
+            "organization_id": org_id,
             "period_days": days,
             "period_start": since.isoformat(),
             "period_end": now.isoformat(),
@@ -137,7 +137,7 @@ class UsageService:
         doc_resp = await (
             client.table("documents")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .eq("property_id", prop_id)
             .gte("created_at", since.isoformat())
             .execute()
@@ -146,7 +146,7 @@ class UsageService:
         scan_resp = await (
             client.table("scans")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .eq("property_id", prop_id)
             .gte("created_at", since.isoformat())
             .execute()
@@ -155,7 +155,7 @@ class UsageService:
         alert_resp = await (
             client.table("alerts")
             .select("id", count="exact")
-            .eq("org_id", org_id)
+            .eq("organization_id", org_id)
             .eq("property_id", prop_id)
             .gte("created_at", since.isoformat())
             .execute()

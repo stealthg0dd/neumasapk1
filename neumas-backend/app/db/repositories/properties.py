@@ -55,7 +55,7 @@ class PropertiesRepository:
                 self.client.table(self.table)
                 .select("*")
                 .eq("id", str(property_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .single()
                 .execute()
             )
@@ -84,7 +84,7 @@ class PropertiesRepository:
         query = (
             self.client.table(self.table)
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
 
         if active_only:
@@ -112,7 +112,7 @@ class PropertiesRepository:
             raise PermissionError("Only admins can create properties")
 
         # Ensure org_id is set from tenant context
-        data["org_id"] = str(tenant.org_id)
+        data["organization_id"] = str(tenant.org_id)
 
         response = await self.client.table(self.table).insert(data).execute()
         logger.info(
@@ -141,7 +141,7 @@ class PropertiesRepository:
             self.client.table(self.table)
             .update(data)
             .eq("id", str(property_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         logger.info(
@@ -169,7 +169,7 @@ class PropertiesRepository:
                 self.client.table(self.table)
                 .update({"is_active": False})
                 .eq("id", str(property_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .execute()
             )
             logger.info(
@@ -290,9 +290,9 @@ class PropertiesRepository:
         """
         response = await (
             self.client.table(self.table)
-            .select("id, org_id, name")
+            .select("id, organization_id, name")
             .eq("is_active", True)
-            .order("org_id")
+            .order("organization_id")
             .range(0, limit - 1)
             .execute()
         )

@@ -29,7 +29,7 @@ class AlertsRepository:
     ) -> dict[str, Any] | None:
         client = await get_async_supabase_admin()
         payload: dict[str, Any] = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "property_id": str(tenant.property_id) if tenant.property_id else None,
             "alert_type": alert_type,
             "severity": severity,
@@ -52,7 +52,7 @@ class AlertsRepository:
             client.table("alerts")
             .select("*")
             .eq("id", str(alert_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .single()
             .execute()
         )
@@ -71,7 +71,7 @@ class AlertsRepository:
         q = (
             client.table("alerts")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
         )
@@ -114,7 +114,7 @@ class AlertsRepository:
             client.table("alerts")
             .update(updates)
             .eq("id", str(alert_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .neq("state", "resolved")  # Can't transition out of terminal state
             .execute()
         )
@@ -126,7 +126,7 @@ class AlertsRepository:
         query = (
             client.table("alerts")
             .select("id", count="exact")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("state", "open")
         )
         if tenant.property_id:

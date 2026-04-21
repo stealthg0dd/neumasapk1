@@ -187,7 +187,7 @@ def send_weekly_digest(
 
 async def _generate(report: dict, client) -> dict:
     report_type = report["report_type"]
-    org_id = report["org_id"]
+    org_id = report["organization_id"]
     property_id = report.get("property_id")
     params = report.get("params") or {}
 
@@ -207,7 +207,7 @@ async def _generate(report: dict, client) -> dict:
 
 
 async def _gen_inventory_snapshot(client, org_id: str, property_id: str | None, params: dict) -> dict:
-    query = client.table("inventory_items").select("*").eq("org_id", org_id)
+    query = client.table("inventory_items").select("*").eq("organization_id", org_id)
     if property_id:
         query = query.eq("property_id", property_id)
     response = await query.execute()
@@ -215,7 +215,7 @@ async def _gen_inventory_snapshot(client, org_id: str, property_id: str | None, 
 
 
 async def _gen_spend_by_vendor(client, org_id: str, property_id: str | None, params: dict) -> dict:
-    query = client.table("document_line_items").select("raw_total, vendor_id").eq("org_id", org_id)
+    query = client.table("document_line_items").select("raw_total, vendor_id").eq("organization_id", org_id)
     if property_id:
         query = query.eq("property_id", property_id)
     response = await query.execute()
@@ -227,7 +227,7 @@ async def _gen_waste_summary(client, org_id: str, property_id: str | None, param
         client.table("inventory_movements")
         .select("quantity_delta, unit, item_id")
         .eq("movement_type", "waste")
-        .eq("org_id", org_id)
+        .eq("organization_id", org_id)
     )
     if property_id:
         query = query.eq("property_id", property_id)
@@ -239,7 +239,7 @@ async def _gen_forecast_accuracy(client, org_id: str, property_id: str | None, p
     query = (
         client.table("predictions")
         .select("predicted_value, actual_value, prediction_date, item_id")
-        .eq("org_id", org_id)
+        .eq("organization_id", org_id)
         .not_.is_("actual_value", "null")
     )
     if property_id:
@@ -252,7 +252,7 @@ async def _gen_low_stock_summary(client, org_id: str, property_id: str | None, p
     query = (
         client.table("inventory_items")
         .select("id, name, quantity, par_level, unit")
-        .eq("org_id", org_id)
+        .eq("organization_id", org_id)
     )
     if property_id:
         query = query.eq("property_id", property_id)

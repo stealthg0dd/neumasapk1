@@ -32,7 +32,7 @@ class DocumentsRepository:
         client = await get_async_supabase_admin()
         payload: dict[str, Any] = {
             "property_id": str(tenant.property_id) if tenant.property_id else None,
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "document_type": document_type,
             "status": "review" if review_needed else "pending",
             "raw_extraction": raw_extraction,
@@ -55,7 +55,7 @@ class DocumentsRepository:
             client.table("documents")
             .select("*")
             .eq("id", str(document_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .single()
             .execute()
         )
@@ -71,7 +71,7 @@ class DocumentsRepository:
     ) -> list[dict[str, Any]]:
         """List documents for a tenant with optional filters."""
         client = await get_async_supabase_admin()
-        query = client.table("documents").select("*").eq("org_id", str(tenant.org_id))
+        query = client.table("documents").select("*").eq("organization_id", str(tenant.org_id))
         if tenant.property_id:
             query = query.eq("property_id", str(tenant.property_id))
         if status:
@@ -105,7 +105,7 @@ class DocumentsRepository:
             client.table("documents")
             .update(payload)
             .eq("id", str(document_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return response.data[0] if response.data else None
@@ -126,7 +126,7 @@ class DocumentsRepository:
             client.table("documents")
             .update(payload)
             .eq("id", str(document_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return response.data[0] if response.data else None

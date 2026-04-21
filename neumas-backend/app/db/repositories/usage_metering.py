@@ -30,7 +30,7 @@ class UsageMeteringRepository:
         """Record a usage event. Failures are non-fatal."""
         client = await get_async_supabase_admin()
         payload: dict[str, Any] = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "user_id": str(tenant.user_id) if tenant.user_id else None,
             "property_id": str(tenant.property_id) if tenant.property_id else None,
             "feature": feature,
@@ -64,7 +64,7 @@ class UsageMeteringRepository:
         resp = await (
             client.table("usage_events")
             .select("feature, model, input_tokens, output_tokens, cost_usd")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .gte("created_at", period_start)
             .lte("created_at", period_end)
             .execute()

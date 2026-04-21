@@ -301,7 +301,7 @@ class EmailService:
             to_email=str(recipient["email"]),
             subject=subject,
             html_body=html_body,
-            org_id=digest["property"]["org_id"],
+            org_id=digest["property"]["organization_id"],
             property_id=digest["property"]["id"],
             user_id=recipient.get("id"),
             template_name="weekly_digest",

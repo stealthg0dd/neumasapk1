@@ -27,7 +27,7 @@ class AuditLogsRepository:
         """Write a single audit log entry. Failures are non-fatal and logged."""
         client = await get_async_supabase_admin()
         payload: dict[str, Any] = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "actor_id": str(tenant.user_id),
             "actor_role": tenant.role,
             "action": action,
@@ -59,7 +59,7 @@ class AuditLogsRepository:
         q = (
             client.table("audit_logs")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
         )

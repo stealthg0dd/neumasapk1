@@ -26,7 +26,7 @@ class ReportsRepository:
     ) -> dict[str, Any] | None:
         client = await get_async_supabase_admin()
         payload = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "property_id": str(tenant.property_id) if tenant.property_id else None,
             "requested_by_id": str(tenant.user_id),
             "report_type": report_type,
@@ -45,7 +45,7 @@ class ReportsRepository:
             client.table("reports")
             .select("*")
             .eq("id", str(report_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .single()
             .execute()
         )
@@ -59,7 +59,7 @@ class ReportsRepository:
         resp = await (
             client.table("reports")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("params_hash", params_hash)
             .in_("status", ["queued", "processing", "ready"])
             .order("created_at", desc=True)
@@ -80,7 +80,7 @@ class ReportsRepository:
         q = (
             client.table("reports")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
         )

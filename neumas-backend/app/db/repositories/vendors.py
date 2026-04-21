@@ -25,7 +25,7 @@ class VendorsRepository:
     ) -> dict[str, Any] | None:
         client = await get_async_supabase_admin()
         payload = {
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "name": name,
             **{k: v for k, v in kwargs.items() if v is not None},
         }
@@ -40,7 +40,7 @@ class VendorsRepository:
             client.table("vendors")
             .select("*")
             .eq("id", str(vendor_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .single()
             .execute()
         )
@@ -56,7 +56,7 @@ class VendorsRepository:
         resp = await (
             client.table("vendors")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .order("name")
             .range(offset, offset + limit - 1)
             .execute()
@@ -71,7 +71,7 @@ class VendorsRepository:
         resp = await (
             client.table("vendors")
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .ilike("name", name)
             .limit(1)
             .execute()
@@ -87,7 +87,7 @@ class VendorsRepository:
         resp = await (
             client.table("vendor_aliases")
             .select("vendor_id, vendors(*)")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .ilike("alias_name", raw_name)
             .limit(1)
             .execute()
@@ -106,7 +106,7 @@ class VendorsRepository:
         client = await get_async_supabase_admin()
         payload = {
             "vendor_id": str(vendor_id),
-            "org_id": str(tenant.org_id),
+            "organization_id": str(tenant.org_id),
             "alias_name": alias_name,
             "source": source,
         }
@@ -124,7 +124,7 @@ class VendorsRepository:
             client.table("vendors")
             .update(updates)
             .eq("id", str(vendor_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         return resp.data[0] if resp.data else None

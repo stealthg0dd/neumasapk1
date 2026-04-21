@@ -140,12 +140,12 @@ async def _process_scan_async(
         try:
             prop_resp = await (
                 supabase.table("properties")
-                .select("org_id")
+                .select("organization_id")
                 .eq("id", property_id)
                 .single()
                 .execute()
             )
-            org_id = (prop_resp.data or {}).get("org_id", "")
+            org_id = (prop_resp.data or {}).get("organization_id", "")
         except Exception as exc:
             logger.warning("Could not resolve org_id from properties", property_id=property_id, error=str(exc))
 
@@ -469,7 +469,7 @@ async def _upsert_inventory_item(
 
     # Create new item
     insert_payload: dict[str, Any] = {
-        "org_id":      org_id,
+        "organization_id":      org_id,
         "property_id": property_id,
         "name":        item_name,
         "quantity":    str(qty_to_add),

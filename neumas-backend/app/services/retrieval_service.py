@@ -68,7 +68,7 @@ async def _fulltext_search(
     resp = await (
         client.table("canonical_items")
         .select("id, canonical_name, category, default_unit")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .text_search("canonical_name_tsv", query, config="english")
         .limit(limit)
         .execute()
@@ -112,7 +112,7 @@ async def search_vendors(
     resp = await (
         client.table("vendors")
         .select("id, name, contact_name, contact_email")
-        .eq("org_id", str(tenant.org_id))
+        .eq("organization_id", str(tenant.org_id))
         .ilike("name", f"%{query}%")
         .limit(limit)
         .execute()
@@ -151,7 +151,7 @@ async def search_documents(
         q = (
             client.table("documents")
             .select("id, document_type, raw_vendor_name, overall_confidence, status, created_at")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
         if tenant.property_id:
             q = q.eq("property_id", str(tenant.property_id))
@@ -235,7 +235,7 @@ async def get_latest_report(
         resp = await (
             client.table("reports")
             .select("id, report_type, status, result_url, created_at, completed_at")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .eq("report_type", report_type)
             .eq("status", "ready")
             .order("created_at", desc=True)

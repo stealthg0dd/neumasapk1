@@ -59,7 +59,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .select("*")
                 .eq("id", str(target_user_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .single()
                 .execute()
             )
@@ -88,7 +88,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .select("*")
                 .eq("auth_id", str(auth_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .single()
                 .execute()
             )
@@ -116,7 +116,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .select("*")
                 .eq("email", email.lower())
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .single()
                 .execute()
             )
@@ -140,7 +140,7 @@ class UsersRepository:
         query = (
             self.client.table(self.table)
             .select("*")
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
         )
 
         if active_only:
@@ -170,7 +170,7 @@ class UsersRepository:
         # Normalize email and ensure org_id
         if "email" in data:
             data["email"] = data["email"].lower()
-        data["org_id"] = str(tenant.org_id)
+        data["organization_id"] = str(tenant.org_id)
 
         response = await self.client.table(self.table).insert(data).execute()
         logger.info(
@@ -205,7 +205,7 @@ class UsersRepository:
             self.client.table(self.table)
             .update(data)
             .eq("id", str(user_id))
-            .eq("org_id", str(tenant.org_id))
+            .eq("organization_id", str(tenant.org_id))
             .execute()
         )
         logger.info(
@@ -237,7 +237,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .update({"is_active": False})
                 .eq("id", str(user_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .execute()
             )
             logger.info(
@@ -267,7 +267,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .update({"last_login_at": datetime.now(UTC).isoformat()})
                 .eq("id", str(target_user_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .execute()
             )
         except Exception as e:
@@ -294,7 +294,7 @@ class UsersRepository:
                 self.client.table(self.table)
                 .select("*, organization:organizations(*)")
                 .eq("id", str(target_user_id))
-                .eq("org_id", str(tenant.org_id))
+                .eq("organization_id", str(tenant.org_id))
                 .single()
                 .execute()
             )

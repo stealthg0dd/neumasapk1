@@ -39,7 +39,7 @@ class EmailLogsRepository:
     ) -> dict[str, Any] | None:
         client = await get_async_supabase_admin()
         payload: dict[str, Any] = {
-            "org_id": org_id,
+            "organization_id": org_id,
             "property_id": property_id,
             "user_id": user_id,
             "email": email.lower(),
@@ -155,7 +155,7 @@ class EmailLogsRepository:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         client = await get_async_supabase_admin()
-        query = client.table(self.table).select("*").eq("org_id", org_id)
+        query = client.table(self.table).select("*").eq("organization_id", org_id)
         if property_id:
             query = query.eq("property_id", property_id)
         if delivery_status:
