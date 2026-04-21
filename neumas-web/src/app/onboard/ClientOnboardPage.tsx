@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { postScanUpload, getScanStatus, googleComplete } from "@/lib/api/endpoints";
 import { setOnboardingComplete } from "@/lib/onboarding";
-import { saveSession } from "@/lib/auth-session";
+import { saveSession, setAccessToken } from "@/lib/auth-session";
 import { useAuthStore, selectHasSession } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
@@ -214,6 +214,14 @@ export default function ClientOnboardPage() {
   const [orgName, setOrgName] = useState("");
   const [outlets, setOutlets] = useState([{ name: "", type: "Restaurant" }]);
   const [busy, setBusy] = useState(false);
+
+  // Make the Supabase JWT available to the Axios interceptor immediately.
+  // Without this, scan uploads at step 3 have no Authorization header because
+  // saveSession() hasn't been called yet (that happens at step 4 - finish).
+  useEffect(() => {
+    if (supabaseJwt) setAccessToken(supabaseJwt);
+  }, [supabaseJwt]);
+
   useEffect(() => {
     if (hasHydrated && !hasSession && !isGoogleOnboarding) {
       router.replace("/auth");

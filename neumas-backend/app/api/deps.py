@@ -169,10 +169,12 @@ async def get_current_user(
         try:
             payload = decode_jwt(token)
             auth_id = payload.get("sub")
-        except TokenValidationError:
+        except Exception:
             # -- Fallback: verify via Supabase API -----------------------------
-            # Covers: wrong/missing SUPABASE_JWT_SECRET, alg mismatch, RS256
-            # tokens issued by newer Supabase projects.
+            # Catches TokenValidationError (wrong secret, expired) and any
+            # other PyJWT / unexpected exception so misconfig never silently
+            # blocks auth. Covers: missing SUPABASE_JWT_SECRET, InvalidKeyError
+            # (null/wrong-type secret), alg mismatch, RS256 tokens.
             logger.debug("Local JWT decode failed -- falling back to Supabase API")
             auth_client = await get_auth_client()
             if auth_client:

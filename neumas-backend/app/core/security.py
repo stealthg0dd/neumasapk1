@@ -434,7 +434,10 @@ def decode_token(token: str) -> dict[str, Any]:
         return payload
     except jwt.ExpiredSignatureError as e:
         raise TokenValidationError("Token has expired") from e
-    except jwt.InvalidTokenError as e:
+    except jwt.PyJWTError as e:
+        # Catches InvalidTokenError, InvalidKeyError (missing/wrong-type secret),
+        # DecodeError, and all other PyJWT subclasses so the Supabase API
+        # fallback in get_current_user always triggers on local decode failure.
         raise TokenValidationError(f"Invalid token: {e}") from e
 
 
