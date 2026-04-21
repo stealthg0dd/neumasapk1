@@ -10,6 +10,7 @@ Every quantity change must go through this service to ensure:
 - Idempotency key prevents duplicate writes on Celery retries
 """
 
+import inspect
 from typing import Any
 from uuid import UUID
 
@@ -19,6 +20,14 @@ from app.db.repositories.inventory_movements import InventoryMovementsRepository
 from app.db.supabase_client import get_async_supabase_admin
 
 logger = get_logger(__name__)
+
+
+async def _get_table(client: Any, name: str) -> Any:
+    """Support both real Supabase clients and async test doubles."""
+    table = client.table(name)
+    if inspect.isawaitable(table):
+        return await table
+    return table
 
 
 class InventoryLedgerService:
@@ -50,10 +59,11 @@ class InventoryLedgerService:
         The operation is safe to retry — idempotency_key prevents double-writes.
         """
         client = await get_async_supabase_admin()
+        inventory_items = await _get_table(client, "inventory_items")
 
         # Get current quantity
         item_resp = await (
-            client.table("inventory_items")
+            inventory_items
             .select("id, quantity, unit")
             .eq("id", str(item_id))
             .eq("property_id", str(tenant.property_id) if tenant.property_id else "")
@@ -88,7 +98,7 @@ class InventoryLedgerService:
 
         # Update snapshot quantity
         await (
-            client.table("inventory_items")
+            inventory_items
             .update({"quantity": quantity_after})
             .eq("id", str(item_id))
             .execute()
@@ -137,9 +147,10 @@ class InventoryLedgerService:
     ) -> dict[str, Any] | None:
         """Record a manual adjustment to an absolute quantity target."""
         client = await get_async_supabase_admin()
+        inventory_items = await _get_table(client, "inventory_items")
 
         item_resp = await (
-            client.table("inventory_items")
+            inventory_items
             .select("quantity")
             .eq("id", str(item_id))
             .single()

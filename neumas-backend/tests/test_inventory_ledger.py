@@ -34,7 +34,7 @@ class TestInventoryLedgerService:
         current_qty = 10.0
 
         with patch("app.services.inventory_ledger_service.get_async_supabase_admin") as mock_admin:
-            mock_client = AsyncMock()
+            mock_client = MagicMock()
             mock_admin.return_value = mock_client
 
             # Mock item fetch
@@ -91,7 +91,7 @@ class TestInventoryLedgerService:
         }
 
         with patch("app.services.inventory_ledger_service.get_async_supabase_admin") as mock_admin:
-            mock_client = AsyncMock()
+            mock_client = MagicMock()
             mock_admin.return_value = mock_client
             mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute = AsyncMock(
                 return_value=MagicMock(data={"id": str(item_id), "quantity": 10.0, "unit": "unit"})
@@ -137,7 +137,7 @@ class TestInventoryLedgerService:
         expected_delta = new_qty - current_qty  # -5.0
 
         with patch("app.services.inventory_ledger_service.get_async_supabase_admin") as mock_admin:
-            mock_client = AsyncMock()
+            mock_client = MagicMock()
             mock_admin.return_value = mock_client
             mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute = AsyncMock(
                 return_value=MagicMock(data={"id": str(item_id), "quantity": current_qty})
