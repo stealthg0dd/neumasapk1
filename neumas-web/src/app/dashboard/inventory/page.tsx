@@ -15,6 +15,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  adjustQuantity,
   deleteInventoryItem,
   listInventoryItems,
   listPredictions,
@@ -38,6 +40,7 @@ import { captureUIError } from "@/lib/analytics";
 import { confidenceToPercent, getFeatures } from "@/lib/prediction-display";
 import { daysUntilExpiry, expiryTone, getExpiryIso } from "@/lib/inventory-dates";
 import { cn } from "@/lib/utils";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 type FilterKey = "all" | "expiring" | "low" | "category";
 type SortKey = "name" | "expiry" | "recent";
@@ -87,6 +90,10 @@ export default function InventoryPage() {
   const [sort, setSort] = useState<SortKey>("name");
   const [deleteItem, setDeleteItem] = useState<InventoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [editedQuantity, setEditedQuantity] = useState("");
+  const [savingQuantity, setSavingQuantity] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -95,6 +102,7 @@ export default function InventoryPage() {
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [res, preds] = await Promise.all([
         listInventoryItems({
@@ -111,6 +119,7 @@ export default function InventoryPage() {
       }
       setPredByItem(m);
     } catch (err) {
+      setError("We couldn't load inventory items.");
       captureUIError("inventory_list", err);
     } finally {
       setLoading(false);
@@ -174,6 +183,45 @@ export default function InventoryPage() {
       captureUIError("inventory_delete", err);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  function openQuantityEditor(item: InventoryItem) {
+    setEditItem(item);
+    setEditedQuantity(String(item.quantity));
+  }
+
+  async function confirmQuantityUpdate() {
+    if (!editItem) return;
+    const nextQuantity = Number(editedQuantity);
+    if (!Number.isFinite(nextQuantity) || nextQuantity < 0) {
+      toast.error("Quantity must be 0 or greater.");
+      return;
+    }
+
+    const adjustment = nextQuantity - Number(editItem.quantity);
+    if (adjustment === 0) {
+      setEditItem(null);
+      return;
+    }
+
+    setSavingQuantity(true);
+    try {
+      const updated = await adjustQuantity(
+        editItem.id,
+        adjustment,
+        "Manual dashboard quantity update"
+      );
+      setItems((prev) =>
+        prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+      );
+      toast.success("Quantity updated.");
+      setEditItem(null);
+    } catch (err) {
+      captureUIError("inventory_adjust_quantity", err);
+      toast.error("Failed to update quantity.");
+    } finally {
+      setSavingQuantity(false);
     }
   }
 
@@ -253,6 +301,15 @@ export default function InventoryPage() {
         </div>
       </GlassCard>
 
+      {loading ? (
+        <PageLoadingState
+          title="Loading inventory"
+          message="Fetching current stock levels, expiry dates, and predictions."
+        />
+      ) : error ? (
+        <PageErrorState title="Inventory unavailable" message={error} onRetry={() => void fetchItems()} />
+      ) : (
+        <>
       {/* Desktop table */}
       <div className="hidden md:block">
         <GlassCard className="overflow-hidden p-0">
@@ -320,14 +377,24 @@ export default function InventoryPage() {
                           <ConfidenceCell itemId={item.id} predByItem={predByItem} />
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10"
-                            onClick={() => setDeleteItem(item)}
-                            aria-label="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#0071a3] hover:bg-[#0071a3]/10"
+                              onClick={() => openQuantityEditor(item)}
+                              aria-label="Edit quantity"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10"
+                              onClick={() => setDeleteItem(item)}
+                              aria-label="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </motion.tr>
                     );
@@ -416,6 +483,14 @@ export default function InventoryPage() {
                       <button
                         type="button"
                         className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)]"
+                        onClick={() => openQuantityEditor(item)}
+                        aria-label="Edit quantity"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)]"
                         onClick={() => setDeleteItem(item)}
                         aria-label="Delete item"
                       >
@@ -453,6 +528,41 @@ export default function InventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
+        <DialogContent className="bg-[var(--surface)] border-[var(--border)] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit quantity</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--text-secondary)]">
+              Update <span className="font-medium text-[var(--text-primary)]">{editItem?.name}</span>.
+            </p>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={editedQuantity}
+              onChange={(e) => setEditedQuantity(e.target.value)}
+              className="h-10"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditItem(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#0071a3] hover:bg-[#005a82] text-white"
+              disabled={savingQuantity}
+              onClick={confirmQuantityUpdate}
+            >
+              {savingQuantity ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+        </>
+      )}
     </div>
   );
 }

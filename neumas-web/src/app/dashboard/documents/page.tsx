@@ -10,6 +10,9 @@ import {
   type Document,
 } from "@/lib/api/endpoints";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
+import { captureUIError } from "@/lib/analytics";
+import { toast } from "sonner";
 import EditableLineItems from "@/components/documents/EditableLineItems";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -37,8 +40,9 @@ export default function DocumentsPage() {
         const resp = await listDocuments({ page_size: 50 });
         setDocuments(resp.documents);
       }
-    } catch {
-      setError("Failed to load documents");
+    } catch (err) {
+      setError("We couldn't load documents.");
+      captureUIError("load_documents", err);
     } finally {
       setLoading(false);
     }
@@ -51,8 +55,9 @@ export default function DocumentsPage() {
     try {
       await approveDocument(doc.id);
       await load();
-    } catch {
-      // ignore
+      toast.success("Document approved and posted.");
+    } catch (err) {
+      captureUIError("approve_document", err);
     } finally {
       setApprovingId(null);
     }
@@ -85,13 +90,12 @@ export default function DocumentsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-          Loading documents…
-        </div>
+        <PageLoadingState
+          title="Loading documents"
+          message="Fetching invoices, receipts, and review queue items."
+        />
       ) : error ? (
-        <div className="border border-red-200 rounded-xl bg-red-50 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <PageErrorState title="Documents unavailable" message={error} onRetry={() => void load()} />
       ) : !documents.length ? (
         <EmptyState
           icon={FileText}

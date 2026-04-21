@@ -6,17 +6,21 @@ import { useEffect, useState } from "react";
 import { listScans } from "@/lib/api/endpoints";
 import type { Scan } from "@/lib/api/types";
 import { captureUIError } from "@/lib/analytics";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 export default function ScansHistoryPage() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchScans() {
       try {
+        setError(null);
         const data = await listScans({ limit: 50 });
         setScans(data);
       } catch (err) {
+        setError("We couldn't load scan history.");
         captureUIError("load_scan_history", err);
       } finally {
         setLoading(false);
@@ -25,7 +29,13 @@ export default function ScansHistoryPage() {
     fetchScans();
   }, []);
 
-  if (loading) return <div className="p-8">Loading scan history...</div>;
+  if (loading) {
+    return <PageLoadingState title="Loading scan history" message="Fetching your recent receipt scans." />;
+  }
+
+  if (error) {
+    return <PageErrorState title="Scan history unavailable" message={error} onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="p-8">

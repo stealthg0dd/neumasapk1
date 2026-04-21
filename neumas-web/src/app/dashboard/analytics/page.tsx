@@ -16,7 +16,8 @@ import {
   Printer,
 } from "lucide-react";
 import { animate } from "framer-motion";
-import { track } from "@/lib/analytics";
+import { captureUIError, track } from "@/lib/analytics";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 // ── Count-up ──────────────────────────────────────────────────────────────────
 
@@ -173,12 +174,25 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<AnalyticsSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadSummary() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getAnalyticsSummary();
+      setSummary(data);
+    } catch (err) {
+      setSummary(EMPTY_SUMMARY);
+      setError("We couldn't load analytics right now.");
+      captureUIError("load_analytics", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    getAnalyticsSummary()
-      .then(setSummary)
-      .catch(() => {/* keep defaults */})
-      .finally(() => setLoading(false));
+    void loadSummary();
   }, []);
 
   const urgencyData = [
@@ -211,12 +225,16 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      {/* Summary stats */}
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
-        </div>
+        <PageLoadingState
+          title="Loading analytics"
+          message="Calculating spend, confidence, and category trends."
+        />
+      ) : error ? (
+        <PageErrorState title="Analytics unavailable" message={error} onRetry={() => void loadSummary()} />
       ) : (
+        <>
+      {/* Summary stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             icon={DollarSign}
@@ -257,7 +275,6 @@ export default function AnalyticsPage() {
             index={3}
           />
         </div>
-      )}
 
       {/* Charts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -385,6 +402,8 @@ export default function AnalyticsPage() {
           )}
         </ChartCard>
       </div>
+        </>
+      )}
     </div>
   );
 }

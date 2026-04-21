@@ -10,6 +10,7 @@ import type { Prediction, UrgencyLevel } from "@/lib/api/types";
 import { captureUIError } from "@/lib/analytics";
 import { confidenceToPercent, daysUntilStockout, getFeatures, sortPredictionsByUrgencyThenDays } from "@/lib/prediction-display";
 import { Button } from "@/components/ui/button";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 const LEGEND: { level: UrgencyLevel; label: string; className: string }[] = [
   { level: "critical", label: "Critical", className: "bg-red-100 text-red-800 border border-red-200" },
@@ -74,13 +75,16 @@ export default function PredictionsPage() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPredictions = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await listPredictions({ limit: 200 });
       setPredictions(data);
     } catch (err) {
+      setError("We couldn't load stockout predictions.");
       captureUIError("load_predictions", err);
     } finally {
       setLoading(false);
@@ -133,11 +137,16 @@ export default function PredictionsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-36 animate-pulse rounded-xl bg-gray-100" />
-          ))}
-        </div>
+        <PageLoadingState
+          title="Loading predictions"
+          message="Forecasting inventory risk and confidence scores."
+        />
+      ) : error ? (
+        <PageErrorState
+          title="Predictions unavailable"
+          message={error}
+          onRetry={() => void fetchPredictions()}
+        />
       ) : sorted.length === 0 ? (
         <div className="rounded-2xl border border-black/[0.06] bg-white p-10 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f0f7fb]">

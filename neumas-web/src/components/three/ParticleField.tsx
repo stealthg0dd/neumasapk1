@@ -72,10 +72,12 @@ interface OrbProps {
 function Orb({ position, color, speed, radius }: OrbProps) {
   const ref = useRef<THREE.Mesh>(null!);
   const baseY = position[1];
+  const timer = useRef(new THREE.Timer());
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (!ref.current) return;
-    const t = clock.getElapsedTime() * speed;
+    timer.current.update();
+    const t = timer.current.getElapsed() * speed;
     ref.current.position.y = baseY + Math.sin(t) * 0.4;
     ref.current.position.x = position[0] + Math.cos(t * 0.7) * 0.3;
   });

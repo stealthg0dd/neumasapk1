@@ -21,6 +21,7 @@ import { track, captureUIError } from "@/lib/analytics";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -256,6 +257,7 @@ export default function ShoppingPage() {
   const [genOpen,     setGenOpen]     = useState(false);
   const [genLoading,  setGenLoading]  = useState(false);
   const [filter,      setFilter]      = useState<ShoppingListStatus | "all">("all");
+  const [error,       setError]       = useState<string | null>(null);
 
   // Ref-stable fetch so we can call it from handleGenerate without adding it
   // to any effect dependency array (avoids indirect re-render loops).
@@ -265,10 +267,12 @@ export default function ShoppingPage() {
     // Always read the latest propertyId at call time via getState()
     const pid = propertyId ?? useAuthStore.getState().propertyId;
     setLoading(true);
+    setError(null);
     try {
       const data = await listShoppingLists();
       setLists(Array.isArray(data) ? data : []);
     } catch (err) {
+      setError("We couldn't load shopping lists.");
       captureUIError("load_shopping_lists", err);
       setLists([]);
     } finally {
@@ -373,11 +377,16 @@ export default function ShoppingPage() {
 
       {/* List */}
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-32 rounded-2xl shimmer" />
-          ))}
-        </div>
+        <PageLoadingState
+          title="Loading shopping lists"
+          message="Fetching the latest generated lists and approvals."
+        />
+      ) : error ? (
+        <PageErrorState
+          title="Shopping lists unavailable"
+          message={error}
+          onRetry={() => void fetchListsRef.current()}
+        />
       ) : displayed.length === 0 ? (
         <motion.div
           initial={{ opacity: 0 }}

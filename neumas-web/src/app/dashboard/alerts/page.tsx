@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 import { listAlerts, snoozeAlert, resolveAlert, type Alert, type AlertsResponse } from "@/lib/api/endpoints";
+import { captureUIError } from "@/lib/analytics";
+import { toast } from "sonner";
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-800 border-red-200",
@@ -55,8 +58,9 @@ export default function AlertsPage() {
         page_size: 50,
       });
       setData(resp);
-    } catch (e) {
-      setError("Failed to load alerts");
+    } catch (err) {
+      setError("We couldn't load alerts right now.");
+      captureUIError("load_alerts", err);
     } finally {
       setLoading(false);
     }
@@ -75,8 +79,9 @@ export default function AlertsPage() {
     try {
       await snoozeAlert(alert.id, until);
       await load();
-    } catch {
-      // ignore
+      toast.success("Alert snoozed for 24 hours.");
+    } catch (err) {
+      captureUIError("snooze_alert", err);
     } finally {
       setActionId(null);
     }
@@ -87,8 +92,9 @@ export default function AlertsPage() {
     try {
       await resolveAlert(alert.id);
       await load();
-    } catch {
-      // ignore
+      toast.success("Alert resolved.");
+    } catch (err) {
+      captureUIError("resolve_alert", err);
     } finally {
       setActionId(null);
     }
@@ -164,13 +170,12 @@ export default function AlertsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-          Loading alerts…
-        </div>
+        <PageLoadingState
+          title="Loading alerts"
+          message="Checking for low stock, expiry, and other issues."
+        />
       ) : error ? (
-        <div className="border border-red-200 rounded-xl bg-red-50 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <PageErrorState title="Alerts unavailable" message={error} onRetry={() => void load()} />
       ) : !visibleAlerts.length ? (
         <EmptyState
           icon={ShieldCheck}
@@ -251,5 +256,4 @@ export default function AlertsPage() {
     </motion.div>
   );
 }
-
 

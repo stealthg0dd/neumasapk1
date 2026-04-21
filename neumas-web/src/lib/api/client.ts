@@ -162,7 +162,7 @@ apiClient.interceptors.response.use(
         _redirectingToLogin = true;
         const { clearTokens } = await import("@/lib/auth-session");
         clearTokens();
-        window.location.href = "/auth";
+        window.location.href = "/login";
       }
       message = "Session expired. Please log in again.";
     } else if (error.response?.status === 403) {

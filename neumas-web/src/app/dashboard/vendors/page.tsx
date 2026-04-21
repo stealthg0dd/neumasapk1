@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Building2 } from "lucide-react";
 import { listVendors, listCatalogItems, type Vendor } from "@/lib/api/endpoints";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
+import { captureUIError } from "@/lib/analytics";
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -20,8 +22,9 @@ export default function VendorsPage() {
     try {
       const resp = await listVendors({ page_size: 50 });
       setVendors(resp.vendors);
-    } catch {
-      setError("Failed to load vendors");
+    } catch (err) {
+      setError("We couldn't load vendors.");
+      captureUIError("load_vendors", err);
     } finally {
       setLoading(false);
     }
@@ -33,8 +36,9 @@ export default function VendorsPage() {
     try {
       const resp = await listCatalogItems({ q: searchQuery || undefined, page_size: 50 });
       setCatalogItems(resp.items);
-    } catch {
-      setError("Failed to load catalog");
+    } catch (err) {
+      setError("We couldn't load the vendor catalog.");
+      captureUIError("load_vendor_catalog", err);
     } finally {
       setLoading(false);
     }
@@ -97,13 +101,23 @@ export default function VendorsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-          Loading…
-        </div>
+        <PageLoadingState
+          title={tab === "vendors" ? "Loading vendors" : "Loading catalog"}
+          message={
+            tab === "vendors"
+              ? "Fetching supplier contacts and vendor details."
+              : "Fetching vendor catalog items and pricing."
+          }
+        />
       ) : error ? (
-        <div className="border border-red-200 rounded-xl bg-red-50 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+        <PageErrorState
+          title={tab === "vendors" ? "Vendors unavailable" : "Catalog unavailable"}
+          message={error}
+          onRetry={() => {
+            if (tab === "vendors") void loadVendors();
+            else void loadCatalog();
+          }}
+        />
       ) : tab === "vendors" ? (
         !filteredVendors.length ? (
           <EmptyState

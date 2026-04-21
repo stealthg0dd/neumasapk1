@@ -16,6 +16,7 @@ import { use } from "react";
 import { getShoppingList, approveShoppingList, markItemPurchased } from "@/lib/api/endpoints";
 import type { ShoppingListDetail, ShoppingListItem, ItemPriority } from "@/lib/api/types";
 import { track, captureUIError } from "@/lib/analytics";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
 
 // ── Priority config ────────────────────────────────────────────────────────────
 
@@ -125,9 +126,11 @@ export default function ShoppingDetailPage({
   const [loading,   setLoading]   = useState(true);
   const [approving, setApproving] = useState(false);
   const [toggling,  setToggling]  = useState<string | null>(null);
+  const [error,     setError]     = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await getShoppingList(id);
       setList(data);
@@ -140,6 +143,7 @@ export default function ShoppingDetailPage({
         })
       );
     } catch (err) {
+      setError("We couldn't load this shopping list.");
       captureUIError("load_shopping_detail", err);
     } finally {
       setLoading(false);
@@ -208,15 +212,11 @@ export default function ShoppingDetailPage({
   const pctDone        = totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0;
 
   if (loading) {
-    return (
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div className="h-8 w-48 rounded shimmer" />
-        <div className="h-24 rounded-2xl shimmer" />
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-14 rounded-xl shimmer" />)}
-        </div>
-      </div>
-    );
+    return <PageLoadingState title="Loading shopping list" message="Fetching items, totals, and purchase state." />;
+  }
+
+  if (error) {
+    return <PageErrorState title="Shopping list unavailable" message={error} onRetry={() => void fetchList()} />;
   }
 
   if (!list) {
