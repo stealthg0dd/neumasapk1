@@ -79,8 +79,9 @@ import type {
 } from "./types";
 import { normalizeShoppingItem } from "./types";
 /**
- * POST /api/auth/google/complete — exchange Supabase JWT for Neumas JWT
- * If onboarding, pass org/property/role in body. If not, pass empty body.
+ * POST /api/auth/google/complete — deprecated for callback probing.
+ * The Next.js /auth/callback route now exchanges the Supabase code on the
+ * frontend domain. This endpoint remains for Google onboarding provisioning.
  */
 export async function googleComplete(
   supabaseAccessToken: string,

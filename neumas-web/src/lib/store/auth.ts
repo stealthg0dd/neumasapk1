@@ -14,6 +14,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { jwtDecode } from "jwt-decode";
 import { consumePendingAuthSessionCookie } from "@/lib/auth-bootstrap";
 import type { ProfileResponse } from "@/lib/api/types";
+import type { Session } from "@supabase/supabase-js";
 
 // ── JWT claim shape (Neumas custom claims embedded by the backend) ─────────────
 
@@ -39,6 +40,66 @@ function decodeToken(token: string): JWTPayload | null {
   } catch {
     return null;
   }
+}
+
+function getSessionExpirySeconds(session: Session): number {
+  if (typeof session.expires_in === "number" && session.expires_in > 0) {
+    return session.expires_in;
+  }
+
+  if (typeof session.expires_at === "number" && session.expires_at > 0) {
+    return Math.max(1, session.expires_at - Math.floor(Date.now() / 1000));
+  }
+
+  return 3600;
+}
+
+async function fetchProfileFromSupabaseSession(
+  accessToken: string
+): Promise<ProfileResponse | null> {
+  const response = await fetch("/api/auth/me", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as ProfileResponse;
+}
+
+async function bootstrapFromSupabaseSession() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const { createClient } = await import("@/utils/supabase/client");
+  const supabase = createClient();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error || !session?.access_token) {
+    return null;
+  }
+
+  const profile = await fetchProfileFromSupabaseSession(session.access_token);
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token ?? null,
+    expires_in: getSessionExpirySeconds(session),
+    profile,
+  };
 }
 
 // ── State shape ───────────────────────────────────────────────────────────────
@@ -80,7 +141,7 @@ type AuthStore = AuthState & AuthActions;
 
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // ── initial state ────────────────────────────────────────────────────
       token: null,
       refreshToken: null,
@@ -158,48 +219,53 @@ export const useAuthStore = create<AuthStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        void (async () => {
+          if (!state.token) {
+            const pendingSession = consumePendingAuthSessionCookie();
+            if (pendingSession) {
+              state.saveAuth(pendingSession);
+              state.setHasHydrated(true);
+              return;
+            }
 
-        if (!state.token) {
-          const pendingSession = consumePendingAuthSessionCookie();
-          if (pendingSession) {
-            state.saveAuth(pendingSession);
+            const supabaseSession = await bootstrapFromSupabaseSession();
+            if (supabaseSession) {
+              state.saveAuth(supabaseSession);
+            }
+
+            state.setHasHydrated(true);
+            return;
           }
-        }
 
-        state.setHasHydrated(true);
+          // Clear everything if the token is already expired — prevents
+          // stale tokens from reaching the API and causing 401 cascades.
+          if (state.expiresAt != null && state.expiresAt <= Math.floor(Date.now() / 1000)) {
+            state.clearAuth();
+            state.setHasHydrated(true);
+            return;
+          }
 
-        if (!state.token) return;
+          // Sync token to localStorage for the Axios interceptor
+          if (typeof window !== "undefined") {
+            localStorage.setItem("neumas_access_token", state.token);
+          }
 
-        // Clear everything if the token is already expired — prevents
-        // stale tokens from reaching the API and causing 401 cascades.
-        if (state.expiresAt != null && state.expiresAt <= Math.floor(Date.now() / 1000)) {
-          state.clearAuth();
-          return;
-        }
-
-        // Sync token to localStorage for the Axios interceptor
-        if (typeof window !== "undefined") {
-          localStorage.setItem("neumas_access_token", state.token);
-        }
-
-        // If propertyId/orgId are missing from the persisted snapshot (e.g.
-        // user logged in before this fix was deployed), decode the JWT to
-        // recover them without forcing a re-login.
-        if (!state.propertyId || !state.orgId) {
-          const claims = decodeToken(state.token);
-          if (claims) {
-            // setProfile re-derives orgId + propertyId from the profile object;
-            // if profile is present we use it. Otherwise fall back to JWT claims
-            // by calling setProfile with a patched profile.
-            if (state.profile) {
+          // If propertyId/orgId are missing from the persisted snapshot (e.g.
+          // user logged in before this fix was deployed), decode the JWT to
+          // recover them without forcing a re-login.
+          if (!state.propertyId || !state.orgId) {
+            const claims = decodeToken(state.token);
+            if (claims && state.profile) {
               state.setProfile({
                 ...state.profile,
                 property_id: state.profile.property_id || claims.property_id || "",
-                org_id:      state.profile.org_id      || claims.org_id      || "",
+                org_id: state.profile.org_id || claims.org_id || "",
               });
             }
           }
-        }
+
+          state.setHasHydrated(true);
+        })();
       },
     }
   )

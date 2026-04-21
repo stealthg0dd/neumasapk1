@@ -1,38 +1,40 @@
 import { createServerClient } from "@supabase/ssr";
-import type { NextRequest, NextResponse } from "next/server";
+import type { cookies } from "next/headers";
 
-import { getSupabaseCookieOptions, getSupabasePublishableKey, getSupabaseUrl } from "./shared";
+import {
+  getSupabaseCookieOptions,
+  getSupabasePublishableKey,
+  getSupabaseUrl,
+} from "./shared";
 
-export function createRouteHandlerClient(
-  request: NextRequest,
-  response: NextResponse
-) {
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+
+export function createRouteHandlerClient({
+  cookies,
+}: {
+  cookies: () => CookieStore;
+}) {
+  const cookieStore = cookies();
   const cookieOptions = getSupabaseCookieOptions();
 
-  const supabase = createServerClient(
+  return createServerClient(
     getSupabaseUrl(),
     getSupabasePublishableKey(),
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll().map(({ name, value }) => ({ name, value }));
+          return cookieStore.getAll().map(({ name, value }) => ({ name, value }));
         },
-        setAll(cookiesToSet, headers) {
+        setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, {
+            cookieStore.set(name, value, {
               ...cookieOptions,
               ...options,
             });
-          });
-
-          Object.entries(headers).forEach(([key, value]) => {
-            response.headers.set(key, value);
           });
         },
       },
       cookieOptions,
     }
   );
-
-  return { supabase, response };
 }

@@ -1,21 +1,22 @@
-import { getOAuthRedirectUrl } from "@/lib/app-url";
 import { createClient } from "@/utils/supabase/client";
+
+export { createClient as createBrowserClient } from "@/utils/supabase/client";
 
 export const supabase = createClient();
 
 /** Initiate Google OAuth sign-in via Supabase. */
 export async function signInWithGoogle(): Promise<void> {
-  const redirectTo = getOAuthRedirectUrl();
   const supabase = createClient();
 
   // Supabase dashboard reminder:
-  // In Supabase Dashboard -> Auth -> URL Configuration: add
-  // https://neumasfinal.vercel.app/** and https://*.vercel.app/** and
-  // http://localhost:3000/** as redirect URLs (use ** wildcard). Also add
-  // the same in Google Cloud Console OAuth redirect URIs.
+  // In Supabase Dashboard -> Auth -> URL Configuration, set Site URL to
+  // https://neumas-web.vercel.app and add redirect URLs:
+  // https://neumas-web.vercel.app/auth/callback and all Vercel preview domains.
+  // Also add http://localhost:3000/** (use ** wildcard), and mirror the same
+  // callback URL list in Google Cloud Console OAuth redirect URIs.
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo },
+    options: { redirectTo: `${window.location.origin}/auth/callback` },
   });
 
   if (error) {

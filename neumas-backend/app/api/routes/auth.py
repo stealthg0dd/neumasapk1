@@ -5,6 +5,7 @@ Authentication routes.
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app.api.deps import UserInfo, get_current_user, get_token
@@ -244,154 +245,32 @@ async def update_digest_preferences(
 
 @router.post(
     "/google/complete",
-    response_model=LoginResponse,
+    deprecated=True,
     summary="Complete Google OAuth profile",
     description=(
-        "Called after every Google sign-in. "
-        "First probe (empty body): returns 200 with profile for returning users "
-        "or 422 {detail: 'onboarding_required'} for first-timers. "
-        "Second call (org_name + property_name in body): provisions the account "
-        "and returns 201 with profile."
+        "Deprecated route. Moved to Next.js /auth/callback for PKCE cookie support."
     ),
 )
 async def complete_google_signup(
     response: Response,
     token: Annotated[str, Depends(get_token)],
     raw_payload: Annotated[dict[str, Any] | None, Body()] = None,
-) -> LoginResponse:
+) -> JSONResponse:
     """
-    Three-path handler for Google OAuth completion:
+    Deprecated route.
 
-    1. Returning user  (any body)    → 200 + existing profile → dashboard
-    2. New user, no org/property     → 422 onboarding_required → onboard page
-    3. New user, org/property given  → 201 + new profile       → dashboard
+    Moved to Next.js /auth/callback for PKCE cookie support.
     """
-    try:
-        request = GoogleCompleteRequest.model_validate(raw_payload or {})
-    except ValidationError as e:
-        logger.error(
-            "Google OAuth complete payload validation failed",
-            errors=e.errors(),
-            payload=raw_payload,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=e.errors(),
-        ) from e
-
-    logger.info(
-        "Received Google OAuth complete request",
+    logger.warning(
+        "Deprecated Google OAuth completion endpoint called",
         payload_keys=sorted((raw_payload or {}).keys()),
-        has_org_name=bool(request.org_name),
-        has_property_name=bool(request.property_name),
         token_length=len(token),
     )
-
-    # -- Validate token and extract auth_id without requiring a DB user -------
-    auth_id: str | None = None
-    email: str = ""
-    try:
-        token_payload = decode_jwt(token)
-        auth_id = token_payload.get("sub")
-        email = token_payload.get("email", "")
-    except TokenValidationError as e:
-        logger.warning(
-            "Local JWT decode failed for google/complete; falling back to Supabase auth lookup",
-            error=str(e),
-        )
-
-    if not auth_id:
-        auth_client = await get_auth_client()
-        if not auth_client:
-            logger.error("Google OAuth complete failed: auth service unavailable")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Auth service unavailable",
-            )
-        user_data = await auth_client.get_user(token)
-        if not user_data:
-            logger.warning("Google OAuth complete failed: invalid or expired token")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        auth_id = str(user_data.get("id", ""))
-        email = str(user_data.get("email", ""))
-
-    if not auth_id:
-        logger.error("Google OAuth complete failed: token did not contain an auth_id")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not extract identity from token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # -- Path 1: returning user — no provisioning needed ---------------------
-    existing_profile = await auth_service.get_google_user_profile(auth_id)
-    if existing_profile:
-        logger.info("Google OAuth: returning user signed in", auth_id=auth_id, email=email)
-        response.status_code = status.HTTP_200_OK
-        return LoginResponse(
-            access_token=token,
-            expires_in=3600,
-            refresh_token=None,
-            profile=existing_profile,
-        )
-
-    # -- Path 2: new user without org/property — tell frontend to onboard ----
-    if not request.org_name or not request.property_name:
-        logger.info("Google OAuth: new user — onboarding required", auth_id=auth_id, email=email)
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="onboarding_required",
-        )
-
-    # -- Path 3: new user completing onboarding — provision their account ----
-    logger.info(
-        "Google OAuth: provisioning new account",
-        auth_id=auth_id,
-        email=email,
-        org_name=request.org_name,
-    )
-    try:
-        profile = await auth_service.complete_google_signup(
-            auth_id=auth_id,
-            email=email,
-            org_name=request.org_name,
-            property_name=request.property_name,
-            role=request.role,
-        )
-    except ValueError as e:
-        logger.warning(
-            "Google OAuth complete rejected provisioning payload",
-            auth_id=auth_id,
-            email=email,
-            error=str(e),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    except Exception as e:
-        logger.error(
-            "Google complete-signup failed",
-            error=str(e),
-            auth_id=auth_id,
-            email=email,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to complete account setup. Please try again.",
-        )
-
-    response.status_code = status.HTTP_201_CREATED
-    return LoginResponse(
-        access_token=token,
-        expires_in=3600,
-        refresh_token=None,
-        profile=profile,
+    return JSONResponse(
+        status_code=status.HTTP_410_GONE,
+        content={
+            "detail": "Moved to Next.js /auth/callback for PKCE cookie support"
+        },
     )
 
 

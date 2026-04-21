@@ -22,6 +22,9 @@ const CANONICAL_APP_URL = getCanonicalAppUrl();
 
 const nextConfig: NextConfig = {
   reactStrictMode: false, // Disable double-invoke in dev; remove once re-render loop is confirmed fixed
+  turbopack: {
+    root: __dirname,
+  },
   // Produce a standalone build for Docker/Railway deployments.
   // Disabled on Vercel — Vercel manages its own output format.
   output: process.env.VERCEL ? undefined : "standalone",
