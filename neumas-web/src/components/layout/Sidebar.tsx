@@ -3,24 +3,42 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Package, Bell, Settings, LogOut, FileText, BarChart2, Store, Shield,
+  LayoutDashboard,
+  Package,
+  Camera,
+  TrendingUp,
+  ShoppingCart,
+  BarChart3,
+  Bell,
+  Settings,
+  LogOut,
+  FileText,
+  Store,
+  Shield,
 } from "lucide-react";
 
 import { useAuthStore } from "@/lib/store/auth";
 import { logout } from "@/lib/api/endpoints";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/inventory", label: "Inventory", icon: Package },
+  { href: "/dashboard/scans", label: "Scans", icon: Camera },
+  { href: "/dashboard/predictions", label: "Predictions", icon: TrendingUp },
+  { href: "/dashboard/shopping", label: "Shopping", icon: ShoppingCart },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/alerts", label: "Alerts", icon: Bell },
   { href: "/dashboard/documents", label: "Documents", icon: FileText },
-  { href: "/dashboard/reports", label: "Reports", icon: BarChart2 },
   { href: "/dashboard/vendors", label: "Vendors", icon: Store },
-  { href: "/dashboard/admin", label: "Admin", icon: Shield },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+];
+
+const ADMIN_NAV_ITEMS = [
+  { href: "/dashboard/admin", label: "Admin", icon: Shield },
 ];
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -30,11 +48,12 @@ export function Sidebar() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const isAdmin = profile?.role === "admin";
 
   async function handleLogout() {
     try { await logout(); } catch { /* swallow */ }
     clearAuth();
-    router.replace("/auth");
+    router.replace("/login");
   }
 
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "User";
@@ -52,17 +71,42 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 h-10 px-3 rounded-lg text-sm border-l-2 transition-colors ${
+              className={cn(
+                "flex items-center gap-3 h-10 px-3 rounded-lg text-sm border-l-2 transition-colors",
                 active
                   ? "border-blue-600 bg-blue-50 text-blue-700"
                   : "border-transparent text-gray-600 hover:bg-gray-50"
-              }`}
+              )}
             >
               <Icon className="w-4 h-4 shrink-0" />
               <span>{label}</span>
             </Link>
           );
         })}
+
+        {isAdmin && (
+          <>
+            <div className="mx-3 mt-4 mb-2 border-t border-gray-100" />
+            {ADMIN_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-3 h-10 px-3 rounded-lg text-sm border-l-2 transition-colors",
+                    active
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-transparent text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       <div className="border-t border-gray-100 p-4">
