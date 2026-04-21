@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import UserInfo, get_current_user, get_token
 from app.core.logging import get_logger
+from app.core.security import decode_jwt  # noqa: F401 - kept for test compatibility
 from app.db.supabase_client import get_async_supabase_admin
 from app.schemas.auth import (
     DigestPreferencesResponse,
