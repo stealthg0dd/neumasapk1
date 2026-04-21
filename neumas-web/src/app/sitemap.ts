@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 import { BACKEND_URL } from "@/lib/backend-url";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://neumasfinal.vercel.app";
+  const baseUrl = "https://neumas-web.vercel.app";
 
   const staticPages = ["", "/insights", "/onboard"].map((path) => ({
     url: baseUrl + path,

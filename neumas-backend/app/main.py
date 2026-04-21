@@ -241,8 +241,7 @@ app = FastAPI(
 # allow_credentials=True is compatible here because we are NOT using "*".
 
 _EXPLICIT_ORIGINS = [
-    "https://neumas-web.vercel.app",           # production Vercel (current)
-    "https://neumasfinal.vercel.app",          # production Vercel (legacy)
+    "https://neumas-web.vercel.app",           # production Vercel (canonical)
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:5173",
@@ -258,8 +257,8 @@ _cors_origins = list({*_EXPLICIT_ORIGINS, *_env_origins})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    # Regex covers every Vercel preview URL for both neumas-web and neumasfinal projects
-    allow_origin_regex=r"https://(neumas-web|neumasfinal)(-[a-z0-9]+)*\.vercel\.app",
+    # Regex covers every Vercel preview URL for the canonical neumas-web project.
+    allow_origin_regex=r"https://neumas-web(-[a-z0-9]+)*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

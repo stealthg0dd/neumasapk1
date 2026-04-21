@@ -1,5 +1,5 @@
 # Neumas — Grocery Autopilot Platform
-# https://neumasfinal.vercel.app
+# https://neumas-web.vercel.app
 # info@neumas.ai
 
 ## What Neumas Does

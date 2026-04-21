@@ -208,7 +208,7 @@ export default function ClientOnboardPage() {
   const searchParams = useSearchParams();
   const hasSession = useAuthStore(selectHasSession);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
-  const supabaseJwt = searchParams?.get("supabase_jwt");
+  const supabaseJwt = searchParams?.get("supabase_jwt") ?? searchParams?.get("token");
   const isGoogleOnboarding = Boolean(supabaseJwt);
   const [step, setStep] = useState(1);
   const [orgName, setOrgName] = useState("");

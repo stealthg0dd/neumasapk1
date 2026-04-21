@@ -13,4 +13,4 @@ User-agent: ClaudeBot
 Allow: /
 Allow: /insights/
 
-Sitemap: https://neumasfinal.vercel.app/sitemap.xml
+Sitemap: https://neumas-web.vercel.app/sitemap.xml

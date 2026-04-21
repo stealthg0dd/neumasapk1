@@ -565,14 +565,22 @@ class AuthService:
             .limit(1)
             .execute()
         )
-        prop = props.data[0] if props.data else None
+        if not props.data:
+            logger.info(
+                "Google OAuth user exists but has no property yet; onboarding still required",
+                auth_id=auth_id,
+                org_id=str(org_id),
+            )
+            return None
+
+        prop = props.data[0]
         return ProfileResponse(
             user_id=UUID(user["id"]),
             email=user["email"],
             org_id=org_id,
             org_name=fetched_org_name,
-            property_id=UUID(prop["id"]) if prop else UUID(int=0),
-            property_name=prop.get("name", "") if prop else "",
+            property_id=UUID(prop["id"]),
+            property_name=prop.get("name", ""),
             role=user["role"],
         )
 
@@ -614,7 +622,7 @@ class AuthService:
         if existing.data:
             user = existing.data[0]
             user_id = UUID(user["id"])
-            org_id  = UUID(user["org_id"])
+            org_id = UUID(user["org_id"])
 
             org_resp = await (
                 admin_client.table("organizations")
@@ -634,14 +642,31 @@ class AuthService:
                 .limit(1)
                 .execute()
             )
-            prop = props.data[0] if props.data else None
+            if props.data:
+                prop = props.data[0]
+            else:
+                logger.warning(
+                    "Google signup: repairing existing user missing property",
+                    auth_id=auth_id,
+                    org_id=str(org_id),
+                    property_name=property_name,
+                )
+                prop_resp = await admin_client.table("properties").insert({
+                    "org_id": str(org_id),
+                    "name": property_name,
+                    "type": "hotel",
+                }).execute()
+                if not prop_resp.data:
+                    raise ValueError("Failed to create property for existing Google user")
+                prop = prop_resp.data[0]
+
             return ProfileResponse(
                 user_id=user_id,
                 email=user["email"],
                 org_id=org_id,
                 org_name=fetched_org_name,
-                property_id=UUID(prop["id"]) if prop else UUID(int=0),
-                property_name=prop.get("name", "") if prop else "",
+                property_id=UUID(prop["id"]),
+                property_name=prop.get("name", ""),
                 role=user["role"],
             )
 
@@ -738,4 +763,3 @@ class AuthService:
 async def get_auth_service() -> AuthService:
     """Get auth service instance."""
     return AuthService()
-
