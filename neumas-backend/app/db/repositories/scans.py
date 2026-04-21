@@ -127,6 +127,11 @@ class ScansRepository:
         data = {k: v for k, v in data.items() if v is not None}
 
         response = await self.client.table(self.table).insert(data).execute()
+        if not response.data:
+            raise RuntimeError(
+                f"Scan insert returned no data for scan_id={data.get('id')}. "
+                "Check PostgREST RLS INSERT policy on the scans table."
+            )
         logger.info(
             "Created scan",
             scan_id=response.data[0]["id"],
@@ -162,6 +167,10 @@ class ScansRepository:
             scan_id=str(scan_id),
             user_id=str(tenant.user_id),
         )
+        # PostgREST may return empty data if the row wasn't found (RLS filtered it)
+        if not response.data:
+            logger.warning("Scan update returned no data", scan_id=str(scan_id))
+            return {"id": str(scan_id)}
         return response.data[0]
 
     async def update_status(

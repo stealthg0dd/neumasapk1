@@ -313,61 +313,83 @@ async def get_tenant_context(
     No ?property_id= query parameter is accepted — the backend resolves
     it entirely from the authenticated user's database record.
     """
-    admin_client = await get_async_supabase_admin()
+    try:
+        admin_client = await get_async_supabase_admin()
+    except Exception as e:
+        logger.error("Failed to get admin Supabase client", error=str(e))
+        admin_client = None
 
     # Use property_id from user's database record (resolved in get_current_user)
     effective_property_id = user.default_property_id
 
     if effective_property_id:
         # Validate the stored property still belongs to the user's org and is
-        # active. Security is maintained by filtering on org_id so a user can
-        # only reach their own org's properties regardless of RLS state.
+        # active. Security is maintained by filtering on organization_id so a
+        # user can only reach their own org's properties regardless of RLS state.
         if admin_client:
-            response = await (
-                admin_client.table("properties")
-                .select("id, organization_id")
-                .eq("id", str(effective_property_id))
-                .eq("organization_id", str(user.organization_id))
-                .eq("is_active", True)
-                .execute()
-            )
-
-            if not response.data:
-                logger.warning(
-                    "Stored property not found or inactive — attempting self-heal",
-                    user_id=str(user.id),
-                    property_id=str(effective_property_id),
+            try:
+                response = await (
+                    admin_client.table("properties")
+                    .select("id, organization_id")
+                    .eq("id", str(effective_property_id))
+                    .eq("organization_id", str(user.organization_id))
+                    .eq("is_active", True)
+                    .execute()
                 )
-                effective_property_id = None  # fall through to self-heal below
+
+                if not response.data:
+                    logger.warning(
+                        "Stored property not found or inactive — attempting self-heal",
+                        user_id=str(user.id),
+                        property_id=str(effective_property_id),
+                    )
+                    effective_property_id = None  # fall through to self-heal below
+            except Exception as e:
+                logger.warning(
+                    "Property validation query failed — proceeding without validation",
+                    user_id=str(user.id),
+                    error=str(e),
+                )
+                # Keep effective_property_id as-is; don't block login on DB error
 
     # Self-heal: user exists and has an org but no valid default_property_id.
     # Caused by: (a) email/password signup before the default_property_id fix,
     # (b) property deactivated after account creation. Query the org's first
     # active property and backfill the users table so subsequent requests work.
     if not effective_property_id and admin_client:
-        prop_response = await (
-            admin_client.table("properties")
-            .select("id")
-            .eq("organization_id", str(user.organization_id))
-            .eq("is_active", True)
-            .order("created_at")
-            .limit(1)
-            .execute()
-        )
-        if prop_response.data:
-            healed_id = prop_response.data[0]["id"]
-            effective_property_id = UUID(healed_id)
-            # Persist so next request skips this lookup
-            await (
-                admin_client.table("users")
-                .update({"default_property_id": healed_id})
-                .eq("id", str(user.id))
+        try:
+            prop_response = await (
+                admin_client.table("properties")
+                .select("id")
+                .eq("organization_id", str(user.organization_id))
+                .eq("is_active", True)
+                .order("created_at")
+                .limit(1)
                 .execute()
             )
-            logger.info(
-                "Self-healed default_property_id",
+            if prop_response.data:
+                healed_id = prop_response.data[0]["id"]
+                effective_property_id = UUID(healed_id)
+                # Persist so next request skips this lookup
+                try:
+                    await (
+                        admin_client.table("users")
+                        .update({"default_property_id": healed_id})
+                        .eq("id", str(user.id))
+                        .execute()
+                    )
+                except Exception as upd_err:
+                    logger.warning("Self-heal DB backfill failed (non-fatal)", error=str(upd_err))
+                logger.info(
+                    "Self-healed default_property_id",
+                    user_id=str(user.id),
+                    property_id=healed_id,
+                )
+        except Exception as e:
+            logger.warning(
+                "Self-heal property lookup failed — proceeding without property",
                 user_id=str(user.id),
-                property_id=healed_id,
+                error=str(e),
             )
 
     return TenantContext(

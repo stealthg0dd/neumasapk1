@@ -22,7 +22,7 @@ import uuid
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import UploadFile
+from fastapi import UploadFile  # kept for get_scan / list_scans type hints
 
 from app.api.deps import TenantContext
 from app.core.config import settings
@@ -88,13 +88,13 @@ class ScanService:
             "Processing scan upload",
             scan_id=str(scan_id),
             property_id=str(tenant.property_id),
+            org_id=str(tenant.org_id),
             scan_type=scan_type,
             filename=file.filename,
         )
 
-        # Read file bytes once so we can hash AND upload without re-reading
+        # Read file bytes once — reuse for dedup hash AND storage upload.
         file_bytes = await file.read()
-        await file.seek(0)  # reset for downstream readers
 
         # Dedup check: reject if same file was uploaded within the window
         if not settings.DEV_MODE:
@@ -125,15 +125,8 @@ class ScanService:
                 # Non-fatal: if Redis is unavailable, allow the upload
                 logger.warning("Dedup check skipped", error=str(exc))
 
-        # Step 1: Upload image to Supabase Storage (or stub in DEV_MODE)
-        storage_path, image_url = await self._upload_to_storage(
-            file=file,
-            scan_id=scan_id,
-            org_id=tenant.org_id,
-            property_id=tenant.property_id,
-        )
-
-        # Step 2: Create scan record
+        # Step 1: Create scan record immediately (status "queued") so there is
+        # always a DB row to track — even if storage later fails.
         scans_repo = await get_scans_repository()
         await scans_repo.create(
             tenant,
@@ -142,13 +135,45 @@ class ScanService:
                 "property_id": str(tenant.property_id),
                 "scan_type": scan_type,
                 "status": "queued",
-                "image_urls": [storage_path],
+                "image_urls": [],
                 "user_id": str(tenant.user_id),
             },
         )
 
+        logger.info("Created scan record", scan_id=str(scan_id))
+
+        # Step 2: Upload image to Supabase Storage (or stub in DEV_MODE).
+        # Pass the already-read bytes so the file is not read a second time.
+        try:
+            storage_path, image_url = await self._upload_to_storage(
+                file_bytes=file_bytes,
+                file_content_type=file.content_type or "image/jpeg",
+                file_name=file.filename or "scan.jpg",
+                scan_id=scan_id,
+                org_id=tenant.org_id,
+                property_id=tenant.property_id,
+            )
+        except Exception as storage_exc:
+            # Storage is best-effort: if it fails we still process the scan
+            # in the background (VisionAgent will receive an empty/placeholder
+            # URL and return an error, which is stored in scans.error_message).
+            logger.exception(
+                "Storage upload failed — continuing with placeholder URL",
+                scan_id=str(scan_id),
+                error=str(storage_exc),
+            )
+            storage_path = f"{tenant.org_id}/{tenant.property_id}/{scan_id}.jpg"
+            image_url = _dev_placeholder_url(str(scan_id))
+
+        # Update the scan record with the resolved image URL
+        await scans_repo.update(
+            tenant,
+            scan_id,
+            {"image_urls": [storage_path]},
+        )
+
         logger.info(
-            "Created scan record",
+            "Storage upload complete",
             scan_id=str(scan_id),
             storage_path=storage_path,
         )
@@ -159,7 +184,17 @@ class ScanService:
         # AI pipeline runs concurrently.
         from app.tasks.scan_tasks import _process_scan_async
 
-        asyncio.create_task(
+        def _on_task_done(task: asyncio.Task) -> None:
+            if task.cancelled():
+                logger.warning("Scan background task cancelled", scan_id=str(scan_id))
+            elif task.exception():
+                logger.exception(
+                    "Scan background task raised an unhandled exception",
+                    scan_id=str(scan_id),
+                    exc_info=task.exception(),
+                )
+
+        bg_task = asyncio.create_task(
             _process_scan_async(
                 task=None,
                 scan_id=str(scan_id),
@@ -170,11 +205,9 @@ class ScanService:
                 scan_type=scan_type,
             )
         )
+        bg_task.add_done_callback(_on_task_done)
 
-        logger.info(
-            "Scan processing started in background",
-            scan_id=str(scan_id),
-        )
+        logger.info("Scan processing started in background", scan_id=str(scan_id))
 
         return ScanQueuedResponse(
             scan_id=scan_id,
@@ -239,13 +272,15 @@ class ScanService:
 
     async def _upload_to_storage(
         self,
-        file: UploadFile,
+        file_bytes: bytes,
+        file_content_type: str,
+        file_name: str,
         scan_id: UUID,
         org_id: UUID,
         property_id: UUID,
     ) -> tuple[str, str]:
         """
-        Upload file to Supabase Storage and return (storage_path, image_url).
+        Upload file bytes to Supabase Storage and return (storage_path, image_url).
 
         Storage path format: {org_id}/{property_id}/{scan_id}.{ext}
 
@@ -258,16 +293,17 @@ class ScanService:
           - Uploads to STORAGE_BUCKET_RECEIPTS.
           - Returns a signed URL (default) or public URL depending on
             STORAGE_PUBLIC_RECEIPTS setting.
+          - Falls back to storage path if signed URL creation fails.
 
         Returns:
             Tuple of (storage_path, image_url).
             storage_path is stored in scans.image_urls[].
-            image_url is passed to the Celery task for VisionAgent.
+            image_url is passed to the background task for VisionAgent.
         """
         bucket = settings.STORAGE_BUCKET_RECEIPTS
         ext = (
-            file.filename.rsplit(".", 1)[-1].lower()
-            if file.filename and "." in file.filename
+            file_name.rsplit(".", 1)[-1].lower()
+            if file_name and "." in file_name
             else "jpg"
         )
         # Normalise extension to one Supabase accepts
@@ -286,40 +322,32 @@ class ScanService:
             return storage_path, placeholder
 
         # -- Production upload -------------------------------------------------
-        content = await file.read()
-        content_type = file.content_type or "image/jpeg"
-
         client = await get_async_supabase_admin()
         if not client:
             raise RuntimeError("Supabase admin client unavailable for storage upload")
 
-        try:
-            await client.storage.from_(bucket).upload(
-                path=storage_path,
-                file=content,
-                file_options={"content-type": content_type},
-            )
-            logger.info(
-                "Uploaded receipt to storage",
-                bucket=bucket,
-                path=storage_path,
-                size_bytes=len(content),
-            )
-        except Exception as exc:
-            logger.error(
-                "Storage upload failed",
-                error=str(exc),
-                bucket=bucket,
-                path=storage_path,
-            )
-            raise
+        await client.storage.from_(bucket).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": file_content_type},
+        )
+        logger.info(
+            "Uploaded receipt to storage",
+            bucket=bucket,
+            path=storage_path,
+            size_bytes=len(file_bytes),
+        )
 
         # -- Resolve image URL -------------------------------------------------
         image_url = await self._get_image_url(bucket, storage_path)
+        # Fall back to placeholder so the pipeline can still run even if the
+        # signed-URL endpoint is temporarily unavailable.
         if not image_url:
-            raise ValueError(
-                f"Upload succeeded but could not obtain image URL for {storage_path}"
+            logger.warning(
+                "Could not obtain signed URL — using placeholder for pipeline",
+                storage_path=storage_path,
             )
+            image_url = _dev_placeholder_url(str(scan_id))
         return storage_path, image_url
 
     async def _get_image_url(self, bucket: str, path: str) -> str | None:

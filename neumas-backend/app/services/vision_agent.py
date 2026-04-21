@@ -198,10 +198,13 @@ class VisionAgent:
             return self._error_response("ANTHROPIC_API_KEY not configured")
 
         try:
-            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+            # Use AsyncAnthropic so the event loop is not blocked during the
+            # API call — the synchronous Anthropic() client would freeze all
+            # concurrent requests for the duration of the LLM round-trip.
+            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
             # Build the message with image
-            message = client.messages.create(
+            message = await client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=VISION_SYSTEM_PROMPT,
