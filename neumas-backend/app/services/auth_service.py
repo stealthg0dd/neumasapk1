@@ -387,6 +387,7 @@ class AuthService:
                     "auth_id": str(auth_id),
                     "email": request.email.lower(),
                     "org_id": str(org_id),
+                    "default_property_id": str(property_id),
                     "role": request.role,
                     "is_active": True,
                 }).execute()
@@ -509,6 +510,23 @@ class AuthService:
             .execute()
         )
         primary_prop = props_response.data[0] if props_response.data else None
+
+        # Backfill default_property_id if missing (users created before the fix).
+        if primary_prop and not user.get("default_property_id"):
+            try:
+                await (
+                    admin_client.table("users")
+                    .update({"default_property_id": primary_prop["id"]})
+                    .eq("id", user["id"])
+                    .execute()
+                )
+                logger.info(
+                    "Backfilled default_property_id on login",
+                    user_id=user["id"],
+                    property_id=primary_prop["id"],
+                )
+            except Exception as backfill_err:
+                logger.warning("Could not backfill default_property_id", error=str(backfill_err))
 
         profile = ProfileResponse(
             user_id=UUID(user["id"]),
