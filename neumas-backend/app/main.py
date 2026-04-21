@@ -245,7 +245,11 @@ _EXPLICIT_ORIGINS = [
     "https://neumasfinal.vercel.app",          # production Vercel (legacy)
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:5173",
     "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:5173",
 ]
 # Merge any additional origins from the Railway env var (e.g. custom domain)
 _env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip() and o.strip() != "*"]
@@ -406,16 +410,33 @@ async def health_check() -> dict:
     else:
         checks["redis"] = None  # type: ignore[assignment]  # not configured
 
+    def _check_status(value: bool | None) -> str:
+        if value is True:
+            return "ok"
+        if value is False:
+            return "error"
+        return "not_configured"
+
     if failures:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "unhealthy", "failed": failures, "checks": checks},
+            detail={
+                "status": "unhealthy",
+                "service": "neumas-api",
+                "failed": failures,
+                "supabase": _check_status(checks["supabase"]),
+                "redis": _check_status(checks["redis"]),
+                "checks": checks,
+            },
         )
 
     return {
-        "status": "ok",
+        "status": "healthy",
+        "service": "neumas-api",
         "version": settings.APP_VERSION,
         "environment": settings.ENV,
+        "supabase": _check_status(checks["supabase"]),
+        "redis": _check_status(checks["redis"]),
         "checks": checks,
     }
 

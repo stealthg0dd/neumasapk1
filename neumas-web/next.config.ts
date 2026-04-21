@@ -1,8 +1,21 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+const DEFAULT_BACKEND_URL = "https://neumas-production.up.railway.app";
+
+function normalizeAbsoluteUrl(value?: string): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^https?:\/\//.test(trimmed)) {
+    return null;
+  }
+  return trimmed.replace(/\/+$/, "");
+}
+
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://neumas-production.up.railway.app";
+  normalizeAbsoluteUrl(process.env.BACKEND_URL) ??
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_BACKEND_URL) ??
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL) ??
+  DEFAULT_BACKEND_URL;
 
 const nextConfig: NextConfig = {
   reactStrictMode: false, // Disable double-invoke in dev; remove once re-render loop is confirmed fixed

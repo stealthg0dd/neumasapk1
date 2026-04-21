@@ -2,7 +2,8 @@
  * Neumas Axios API client
  *
  * Features:
- * - Base URL from NEXT_PUBLIC_API_URL (direct to Railway) or falls back to /api (Next.js proxy)
+ * - Browser requests go through the Next.js /api proxy to avoid CORS drift
+ * - Server-side fallbacks still target the absolute Railway backend origin
  * - Bearer token injection from localStorage
  * - Request/response logging in development
  * - Automatic retry with exponential backoff (3 attempts) on 5xx / network errors
@@ -23,10 +24,34 @@ import axios, {
 // Once the first 401 fires the redirect, all subsequent 401s are no-ops.
 let _redirectingToLogin = false;
 
-const BASE_URL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL ?? "") // use env var; empty = same origin (proxy)
-    : process.env.NEXT_PUBLIC_API_URL ?? "";
+const DEFAULT_BACKEND_URL = "https://neumas-production.up.railway.app";
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function getBrowserBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured?.startsWith("/")) {
+    return stripTrailingSlash(configured) || "/";
+  }
+  return "/api";
+}
+
+function getServerBaseUrl(): string {
+  const configured =
+    process.env.BACKEND_URL?.trim() ||
+    process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (configured && /^https?:\/\//.test(configured)) {
+    return stripTrailingSlash(configured);
+  }
+
+  return DEFAULT_BACKEND_URL;
+}
+
+const BASE_URL = typeof window !== "undefined" ? getBrowserBaseUrl() : getServerBaseUrl();
 
 const IS_DEV = process.env.NODE_ENV === "development";
 

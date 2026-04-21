@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { InsightsMarketingHeader } from "@/components/insights/InsightsMarketingHeader";
-import { publicConfig } from "@/lib/config";
 
 type Post = {
   id: string;
@@ -50,7 +49,7 @@ export default function InsightsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const u = new URL(`${publicConfig.apiUrl}/api/insights/posts`);
+      const u = new URL("/api/insights/posts", window.location.origin);
       u.searchParams.set("limit", "30");
       if (category) u.searchParams.set("category", category);
       const res = await fetch(u.toString());

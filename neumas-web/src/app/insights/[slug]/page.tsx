@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { InsightsMarketingHeader } from "@/components/insights/InsightsMarketingHeader";
-import { publicConfig } from "@/lib/config";
+import { BACKEND_URL } from "@/lib/backend-url";
 
 type Post = {
   slug: string;
@@ -16,7 +16,7 @@ type Post = {
 };
 
 async function fetchPost(slug: string): Promise<Post | null> {
-  const url = `${publicConfig.apiUrl}/api/insights/posts/${encodeURIComponent(slug)}`;
+  const url = `${BACKEND_URL}/api/insights/posts/${encodeURIComponent(slug)}`;
   const res = await fetch(url, { next: { revalidate: 120 } });
   if (res.status === 404) return null;
   if (!res.ok) return null;

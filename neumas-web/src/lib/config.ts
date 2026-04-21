@@ -12,9 +12,8 @@
 // These carry the NEXT_PUBLIC_ prefix and are inlined by the Next.js bundler.
 
 export const publicConfig = {
-  /** Railway / FastAPI base URL (same default as `next.config.ts` rewrites). */
-  apiUrl:
-    process.env.NEXT_PUBLIC_API_URL ?? "https://neumas-production.up.railway.app",
+  /** Browser-safe API base. Keep this as /api so requests flow through Next.js. */
+  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "/api",
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
   sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN ?? "",

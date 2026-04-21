@@ -291,9 +291,11 @@ async def health_check() -> bool:
 
     Returns True if connected OR if Supabase not configured (degraded mode OK).
     """
-    # If Supabase is not configured, return True (degraded mode)
-    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
-        logger.warning("Supabase not configured - running in degraded mode")
+    # If Supabase is not configured or intentionally stubbed (tests/CI), return
+    # True so health checks reflect that the service can still boot in degraded
+    # mode without a live Supabase dependency.
+    if not _supabase_configured():
+        logger.warning("Supabase health check skipped - running in degraded mode")
         return True
 
     try:

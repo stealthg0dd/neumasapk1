@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { publicConfig } from "@/lib/config";
+import { BACKEND_URL } from "@/lib/backend-url";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://neumasfinal.vercel.app";
@@ -14,11 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let insightPages: MetadataRoute.Sitemap = [];
   try {
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_URL ??
-      process.env.NEXT_PUBLIC_BACKEND_URL ??
-      publicConfig.apiUrl;
-    const res = await fetch(`${apiBase}/api/insights/posts?limit=50`, {
+    const res = await fetch(`${BACKEND_URL}/api/insights/posts?limit=50`, {
       next: { revalidate: 3600 },
     });
     if (res.ok) {
