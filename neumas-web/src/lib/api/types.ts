@@ -259,6 +259,8 @@ export interface Scan {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+  stage_details?: Record<string, unknown> | null;
+  stage_errors?: Array<Record<string, unknown>>;
 }
 
 export interface ExecutiveBriefingResponse {
@@ -289,6 +291,8 @@ export interface ScanStatusResponse {
   confidence_score?: number | null;
   error_message?: string | null;
   created_at: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
   stage_details?: Record<string, unknown> | null;
   stage_errors?: Array<Record<string, unknown>>;
   /** Items extracted by AI (present when status === "completed") */

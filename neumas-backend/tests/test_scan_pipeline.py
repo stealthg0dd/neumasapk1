@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from app.api.deps import TenantContext
+from app.api.routes.scans import upload_scan as upload_scan_route
 from app.services.scan_service import ScanService
 
 
@@ -171,7 +173,7 @@ async def test_upload_scan_success(monkeypatch):
 
     upload = UploadFile(filename="receipt.jpg", file=BytesIO(b"abc123"), headers={"content-type": "image/jpeg"})
 
-    result = await service.upload_scan(upload, "receipt", tenant)
+    result = await service.upload_scan(upload, b"abc123", "receipt", tenant)
     assert result.status == "queued"
     scans_repo.create.assert_awaited_once()
     scans_repo.update.assert_awaited_once()
@@ -191,7 +193,7 @@ async def test_upload_scan_empty_file_fails():
     upload = UploadFile(filename="empty.jpg", file=BytesIO(b""), headers={"content-type": "image/jpeg"})
 
     with pytest.raises(ValueError, match="empty"):
-        await service.upload_scan(upload, "receipt", tenant)
+        await service.upload_scan(upload, b"", "receipt", tenant)
 
 
 @pytest.mark.anyio
@@ -217,9 +219,33 @@ async def test_upload_scan_storage_failure_marks_scan_failed(monkeypatch):
     upload = UploadFile(filename="receipt.jpg", file=BytesIO(b"abc123"), headers={"content-type": "image/jpeg"})
 
     with pytest.raises(RuntimeError, match="Storage upload failed"):
-        await service.upload_scan(upload, "receipt", tenant)
+        await service.upload_scan(upload, b"abc123", "receipt", tenant)
 
     assert scans_repo.update.await_count == 1
+
+
+@pytest.mark.anyio
+async def test_upload_route_invalid_file_rejected():
+    tenant = TenantContext(
+        user_id=uuid4(),
+        org_id=uuid4(),
+        property_id=uuid4(),
+        role="staff",
+        jwt="token",
+    )
+
+    upload = UploadFile(filename="receipt.txt", file=BytesIO(b"plain text"), headers={"content-type": "text/plain"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        await upload_scan_route(
+            request=SimpleNamespace(state=SimpleNamespace(request_id="req-route-invalid")),
+            file=upload,
+            scan_type="receipt",
+            tenant=tenant,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "image" in str(exc_info.value.detail).lower()
 
 
 @pytest.mark.anyio
@@ -245,12 +271,15 @@ async def test_process_scan_ocr_failure_records_stage_error(monkeypatch):
         user_id=str(uuid4()),
         image_url="https://example.test/receipt.jpg",
         scan_type="receipt",
+        request_id="req-ocr-failure",
     )
 
     assert result["status"] == "failed"
     assert fake.scans[scan_id]["status"] == "failed"
     stage_errors = (fake.scans[scan_id].get("processed_results") or {}).get("stage_errors") or []
     assert any(e.get("stage") == "ocr" for e in stage_errors)
+    stage_details = (fake.scans[scan_id].get("processed_results") or {}).get("stage_details") or {}
+    assert stage_details.get("request_id") == "req-ocr-failure"
 
 
 @pytest.mark.anyio
@@ -286,9 +315,14 @@ async def test_process_scan_success_recomputes_baseline_and_predictions(monkeypa
         user_id=str(uuid4()),
         image_url="https://example.test/receipt.jpg",
         scan_type="receipt",
+        request_id="req-success",
     )
 
     assert result["status"] == "completed"
     assert fake.scans[scan_id]["status"] == "completed"
     recompute_patterns.assert_awaited_once()
     recompute_predictions.assert_awaited_once()
+    stage_details = (fake.scans[scan_id].get("processed_results") or {}).get("stage_details") or {}
+    assert stage_details.get("request_id") == "req-success"
+    assert stage_details.get("baseline", {}).get("status") == "completed"
+    assert stage_details.get("predictions", {}).get("status") == "completed"

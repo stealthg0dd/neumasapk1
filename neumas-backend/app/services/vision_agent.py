@@ -88,6 +88,8 @@ class VisionAgent:
         image_url: str,
         scan_type: str = "receipt",
         user_hint: str | None = None,
+        request_id: str | None = None,
+        scan_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Analyze a receipt image and extract items.
@@ -101,15 +103,23 @@ class VisionAgent:
         """
         logger.info(
             "Starting receipt analysis",
+            request_id=request_id,
+            scan_id=scan_id,
             image_url=image_url[:80] + "..." if len(image_url) > 80 else image_url,
             scan_type=scan_type,
         )
 
         try:
-            # Fetch image and convert to base64
-            image_data = await self._fetch_image(image_url)
-            if not image_data:
-                return self._error_response("Failed to fetch image from URL")
+            if settings.DEV_MODE:
+                image_data = {
+                    "data": "",
+                    "media_type": "image/jpeg",
+                }
+            else:
+                # Fetch image and convert to base64
+                image_data = await self._fetch_image(image_url)
+                if not image_data:
+                    return self._error_response("Failed to fetch image from URL")
 
             # Call Claude Vision API
             result = await self._call_claude_vision(image_data, user_hint=user_hint)
@@ -122,6 +132,8 @@ class VisionAgent:
 
             logger.info(
                 "Receipt analysis complete",
+                request_id=request_id,
+                scan_id=scan_id,
                 items_extracted=len(processed.get("items", [])),
                 confidence=processed.get("confidence", 0),
             )
@@ -129,7 +141,12 @@ class VisionAgent:
             return processed
 
         except Exception as e:
-            logger.exception("Receipt analysis failed", error=str(e))
+            logger.exception(
+                "Receipt analysis failed",
+                error=str(e),
+                request_id=request_id,
+                scan_id=scan_id,
+            )
             return self._error_response(str(e))
 
     async def _fetch_image(self, image_url: str) -> dict[str, str] | None:
@@ -248,7 +265,12 @@ class VisionAgent:
                     timeout=45,
                 )
             except asyncio.TimeoutError:
-                logger.error("OCR provider timed out", provider="anthropic", model=self.model, timeout_seconds=45)
+                logger.error(
+                    "OCR provider timed out",
+                    provider="anthropic",
+                    model=self.model,
+                    timeout_seconds=45,
+                )
                 return self._error_response("OCR provider timeout after 45 seconds")
 
             # Extract text response
@@ -274,13 +296,13 @@ class VisionAgent:
             # Check for specific Anthropic errors
             error_name = type(e).__name__
             if "RateLimitError" in error_name:
-                logger.error("Anthropic rate limit exceeded", error=str(e))
+                logger.error("Anthropic rate limit exceeded", error=str(e), model=self.model)
                 return self._error_response(f"Rate limit exceeded: {e}")
             elif "APIError" in error_name:
-                logger.error("Anthropic API error", error=str(e))
+                logger.error("Anthropic API error", error=str(e), model=self.model)
                 return self._error_response(f"API error: {e}")
             else:
-                logger.exception("Claude Vision call failed", error=str(e))
+                logger.exception("Claude Vision call failed", error=str(e), model=self.model)
                 return self._error_response(str(e))
 
     def _parse_json_response(self, response_text: str) -> dict[str, Any] | None:

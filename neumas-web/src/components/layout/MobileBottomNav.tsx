@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Camera, Home, Settings, TrendingUp } from "lucide-react";
+import { Camera, Home, Package, ShoppingCart, TrendingUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -14,34 +14,30 @@ const NAV_ITEMS = [
     isActive: (pathname: string) => pathname === "/dashboard" || pathname === "/dashboard/",
   },
   {
-    label: "Scan",
+    label: "Inventory",
+    icon: Package,
+    href: "/dashboard/inventory",
+    isActive: (pathname: string) => pathname.startsWith("/dashboard/inventory"),
+  },
+  {
+    label: "Scans",
     icon: Camera,
-    href: "/dashboard/scans/new",
+    href: "/dashboard/scans",
     isActive: (pathname: string) => pathname.startsWith("/dashboard/scans"),
   },
   {
-    label: "Predict",
+    label: "Forecast",
     icon: TrendingUp,
     href: "/dashboard/predictions",
     isActive: (pathname: string) => pathname.startsWith("/dashboard/predictions"),
   },
   {
-    label: "Alerts",
-    icon: Bell,
-    href: "/dashboard/alerts",
-    isActive: (pathname: string) => pathname.startsWith("/dashboard/alerts"),
-  },
-  {
-    label: "Settings",
-    icon: Settings,
-    href: "/dashboard/settings",
+    label: "Shopping",
+    icon: ShoppingCart,
+    href: "/dashboard/shopping",
     isActive: (pathname: string) =>
-      pathname.startsWith("/dashboard/settings") ||
-      pathname.startsWith("/dashboard/inventory") ||
       pathname.startsWith("/dashboard/shopping") ||
-      pathname.startsWith("/dashboard/restock") ||
-      pathname.startsWith("/dashboard/predictions") ||
-      pathname.startsWith("/dashboard/analytics"),
+      pathname.startsWith("/dashboard/alerts"),
   },
 ];
 

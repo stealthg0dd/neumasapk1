@@ -54,6 +54,8 @@ class ScanResponse(ScanBase):
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
+    stage_details: dict[str, Any] | None = None
+    stage_errors: list[dict[str, Any]] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -177,6 +179,7 @@ class ScanStatusResponse(BaseModel):
     completed_at: datetime | None = None
     error_message: str | None = None
     items_detected: int | None = None
+    confidence_score: Decimal | None = None
     stage_details: dict[str, Any] | None = None
     stage_errors: list[dict[str, Any]] | None = None
     # Extracted items from processed_results (present when status == "completed")

@@ -154,6 +154,7 @@ async def _process_scan_async(
     image_url: str,
     scan_type: str,
     org_id: str = "",
+    request_id: str | None = None,
     user_hint: str | None = None,
     force_reprocess: bool = False,
 ) -> dict[str, Any]:
@@ -225,7 +226,14 @@ async def _process_scan_async(
         "items_upserted": 0,
         "errors": [],
     }
-    stage_details: dict[str, Any] = {}
+    stage_details: dict[str, Any] = {
+        "request_id": request_id,
+        "storage": {"status": "completed"},
+        "ocr": {"status": "pending"},
+        "inventory": {"status": "pending"},
+        "baseline": {"status": "pending"},
+        "predictions": {"status": "pending"},
+    }
 
     try:
         # =================================================================
@@ -236,6 +244,14 @@ async def _process_scan_async(
             "status": "processing",
             "started_at": datetime.now(UTC).isoformat(),
             "error_message": None,
+            "processed_results": {
+                "stage_details": {
+                    **stage_details,
+                    "current_stage": "ocr",
+                    "ocr": {"status": "running"},
+                },
+                "stage_errors": [],
+            },
         }).eq("id", scan_id).execute()
         stage_details["queue_to_processing_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
@@ -253,15 +269,22 @@ async def _process_scan_async(
         # =================================================================
         stage_started = time.perf_counter()
         vision_agent = await get_vision_agent()
+        stage_details["ocr"] = {"status": "running"}
         vision_result = await vision_agent.analyze_receipt(
             image_url=image_url,
             scan_type=scan_type,
             user_hint=user_hint,
+            request_id=request_id,
+            scan_id=scan_id,
         )
         stage_details["ocr_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         if vision_result.get("error"):
             error_msg: str = vision_result["error"]
+            stage_details["ocr"] = {
+                "status": "failed",
+                "elapsed_ms": stage_details["ocr_ms"],
+            }
             logger.error("VisionAgent failed", scan_id=scan_id, error=error_msg)
             stage_errors = [{"stage": "ocr", "error": error_msg}]
             await _mark_failed(
@@ -285,6 +308,12 @@ async def _process_scan_async(
             items_extracted=len(extracted_items),
             confidence=vision_confidence,
         )
+        stage_details["ocr"] = {
+            "status": "completed",
+            "elapsed_ms": stage_details["ocr_ms"],
+            "items_extracted": len(extracted_items),
+            "confidence": vision_confidence,
+        }
 
         # Emit review-required event when confidence is below threshold
         from app.core.constants import CONFIDENCE_REVIEW_THRESHOLD
@@ -330,6 +359,9 @@ async def _process_scan_async(
                         "confidence":       vision_confidence,
                         "stage_details": {
                             **stage_details,
+                            "inventory": {"status": "skipped", "reason": "duplicate_receipt"},
+                            "baseline": {"status": "skipped", "reason": "duplicate_receipt"},
+                            "predictions": {"status": "skipped", "reason": "duplicate_receipt"},
                             "duplicate_check": "matched",
                         },
                         "stage_errors": [],
@@ -362,7 +394,15 @@ async def _process_scan_async(
 
         await supabase.table("scans").update({
             "raw_results":        raw_results,
-            "processed_results":  processed_results,
+            "processed_results":  {
+                **processed_results,
+                "stage_details": {
+                    **stage_details,
+                    "current_stage": "inventory",
+                    "inventory": {"status": "running"},
+                },
+                "stage_errors": [],
+            },
             "items_detected":     len(extracted_items),
             "confidence_score":   str(vision_confidence),
             "processing_time_ms": ms_after_vision,
@@ -407,6 +447,12 @@ async def _process_scan_async(
 
         result["items_upserted"] = len(upserted)
         stage_details["inventory_upsert_ms"] = int((time.perf_counter() - stage_started) * 1000)
+        stage_details["inventory"] = {
+            "status": "completed" if not result["errors"] else "partial_failed",
+            "elapsed_ms": stage_details["inventory_upsert_ms"],
+            "items_upserted": len(upserted),
+            "items_extracted": len(extracted_items),
+        }
         logger.info(
             "Inventory upsert complete",
             scan_id=scan_id,
@@ -419,10 +465,17 @@ async def _process_scan_async(
         # =================================================================
         try:
             stage_started = time.perf_counter()
+            stage_details["baseline"] = {"status": "running"}
             pattern_result = await recompute_patterns_for_property(
                 UUID(property_id)
             )
             stage_details["baseline_recompute_ms"] = int((time.perf_counter() - stage_started) * 1000)
+            stage_details["baseline"] = {
+                "status": "completed",
+                "elapsed_ms": stage_details["baseline_recompute_ms"],
+                "items_analyzed": pattern_result.get("items_analyzed", 0),
+                "patterns_found": pattern_result.get("patterns_found", 0),
+            }
             logger.info(
                 "Pattern recomputation complete",
                 scan_id=scan_id,
@@ -431,6 +484,7 @@ async def _process_scan_async(
                 patterns_upserted=pattern_result.get("patterns_found", 0),
             )
         except Exception as exc:
+            stage_details["baseline"] = {"status": "failed", "error": str(exc)}
             logger.warning(
                 "Pattern recomputation failed (non-fatal)",
                 scan_id=scan_id,
@@ -443,10 +497,17 @@ async def _process_scan_async(
         # =================================================================
         try:
             stage_started = time.perf_counter()
+            stage_details["predictions"] = {"status": "running"}
             pred_result = await recompute_predictions_for_property(
                 UUID(property_id)
             )
             stage_details["predictions_recompute_ms"] = int((time.perf_counter() - stage_started) * 1000)
+            stage_details["predictions"] = {
+                "status": "completed",
+                "elapsed_ms": stage_details["predictions_recompute_ms"],
+                "predictions_upserted": pred_result.get("predictions_upserted", 0),
+                "critical_count": pred_result.get("critical_count", 0),
+            }
             logger.info(
                 "Prediction recomputation complete",
                 scan_id=scan_id,
@@ -455,6 +516,7 @@ async def _process_scan_async(
                 critical_count=pred_result.get("critical_count", 0),
             )
         except Exception as exc:
+            stage_details["predictions"] = {"status": "failed", "error": str(exc)}
             logger.warning(
                 "Prediction recomputation failed (non-fatal)",
                 scan_id=scan_id,

@@ -1,556 +1,399 @@
-'use client'
-
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Upload, CheckCircle2, XCircle, FileImage, RotateCcw,
-  Plus, Package, ChevronRight,
-} from "lucide-react";
-import { toast } from "sonner";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  ScanLine,
+  Sparkles,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
 
-import { batchInventoryUpdate, getScanStatus, uploadScan } from "@/lib/api/endpoints";
-import type { ScanStatus } from "@/lib/api/types";
-import { useAuthStore } from "@/lib/store/auth";
-import { track, captureUIError } from "@/lib/analytics";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageErrorState, PageLoadingState } from "@/components/ui/PageState";
+import { captureUIError } from "@/lib/analytics";
+import { listAlerts, listPredictions, listScans, type Alert } from "@/lib/api/endpoints";
+import type { Prediction, Scan } from "@/lib/api/types";
 
-const ScanProcessor = dynamic(
-  () => import("@/components/three/ScanProcessor").then((m) => m.ScanProcessor),
-  { ssr: false }
-);
+const POLL_INTERVAL_MS = 3000;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
-
-interface ExtractedItem {
-  name:        string;
-  quantity:    number;
-  unit:        string;
-  confidence:  number; // 0–1
+function getStageBlock(
+  stageDetails: Record<string, unknown> | null | undefined,
+  key: string
+): Record<string, unknown> | null {
+  const value = stageDetails?.[key];
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
-// ── Progress bar ──────────────────────────────────────────────────────────────
-
-function ProgressBar({ progress }: { progress: number }) {
-  return (
-    <div className="w-full h-1 rounded-full bg-surface-2 overflow-hidden">
-      <motion.div
-        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-cyan-500"
-        initial={{ width: 0 }}
-        animate={{ width: `${progress}%` }}
-        transition={{ ease: "easeOut", duration: 0.4 }}
-      />
-    </div>
-  );
-}
-
-// ── Confidence badge ──────────────────────────────────────────────────────────
-
-function ConfidenceBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const cls =
-    pct >= 85 ? "badge-mint" : pct >= 60 ? "badge-amber" : "badge-red";
-  return <span className={cls}>{pct}%</span>;
-}
-
-// ── Extracted item row ────────────────────────────────────────────────────────
-
-function ItemRow({ item, index }: { item: ExtractedItem; index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07, duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-      className="flex items-center gap-3 p-3 rounded-xl glass-button border border-border/30 hover:border-border/60 transition-all group"
-    >
-      <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
-        <Package className="w-4 h-4 text-purple-400" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-        <p className="text-xs text-muted-foreground">
-          {item.quantity} {item.unit}
-        </p>
-      </div>
-      <ConfidenceBadge score={item.confidence} />
-      <button
-        className="shrink-0 p-1.5 rounded-lg bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 transition-all opacity-0 group-hover:opacity-100"
-        title="Add to inventory"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
-    </motion.div>
-  );
-}
-
-// ── Drop zone ─────────────────────────────────────────────────────────────────
-
-function DropZone({
-  onFile,
-  dragging,
-  setDragging,
-}: {
-  onFile:      (f: File) => void;
-  dragging:    boolean;
-  setDragging: (v: boolean) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) validate(file);
+function stageStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case "completed":
+      return "Completed";
+    case "running":
+      return "Running";
+    case "failed":
+      return "Failed";
+    case "partial_failed":
+      return "Completed with warnings";
+    case "skipped":
+      return "Skipped";
+    default:
+      return "Pending";
   }
-
-  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) validate(file);
-  }
-
-  function validate(file: File) {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-    if (!allowed.includes(file.type)) {
-      toast.error("Unsupported file type. Use JPEG, PNG, WebP, or HEIC.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("File too large. Maximum 10 MB.");
-      return;
-    }
-    onFile(file);
-  }
-
-  return (
-    <motion.div
-      animate={dragging ? { scale: 1.02, borderColor: "oklch(0.715 0.139 199.2)" } : { scale: 1 }}
-      transition={{ duration: 0.2 }}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
-      onClick={() => inputRef.current?.click()}
-      className={[
-        "relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed cursor-pointer transition-all",
-        "h-72 gap-5 select-none",
-        dragging
-          ? "border-cyan-500/70 bg-cyan-500/5"
-          : "border-border/40 bg-surface-1/50 hover:border-border/70 hover:bg-surface-1",
-      ].join(" ")}
-    >
-      <input ref={inputRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleInput} />
-
-      <motion.div
-        animate={dragging ? { y: -8 } : { y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center"
-      >
-        <Upload className="w-7 h-7 text-cyan-400" />
-      </motion.div>
-
-      <div className="text-center">
-        <p className="text-base font-semibold text-foreground">
-          {dragging ? "Drop to upload" : "Drop your receipt here"}
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          or <span className="text-cyan-400 font-medium">click to browse</span>
-        </p>
-        <p className="text-xs text-muted-foreground/60 mt-2">
-          JPEG · PNG · WebP · HEIC · max 10 MB
-        </p>
-      </div>
-    </motion.div>
-  );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+function stageBadgeClass(status: string | undefined): string {
+  switch (status) {
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "running":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "failed":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "partial_failed":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "skipped":
+      return "border-gray-200 bg-gray-50 text-gray-600";
+    default:
+      return "border-gray-200 bg-white text-gray-500";
+  }
+}
+
+function scanStatusBadge(status: string): string {
+  switch (status) {
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "partial_failed":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "processing":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "queued":
+      return "border-slate-200 bg-slate-50 text-slate-700";
+    case "failed":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-gray-200 bg-white text-gray-600";
+  }
+}
+
+function scanStatusIcon(status: string) {
+  switch (status) {
+    case "completed":
+      return CheckCircle2;
+    case "partial_failed":
+      return AlertTriangle;
+    case "processing":
+      return Loader2;
+    case "failed":
+      return XCircle;
+    default:
+      return Clock3;
+  }
+}
+
+function nextActionHref(scan: Scan | null, alerts: Alert[], predictions: Prediction[]): string {
+  if (!scan) return "/dashboard/scans/new";
+  if (scan.status === "failed" || scan.status === "partial_failed") return `/dashboard/scans/${scan.id}`;
+  if (alerts.some((alert) => alert.alert_type === "predicted_stockout")) return "/dashboard/alerts";
+  if (predictions.length > 0) return "/dashboard/predictions";
+  return "/dashboard/shopping";
+}
+
+function nextActionLabel(scan: Scan | null, alerts: Alert[], predictions: Prediction[]): string {
+  if (!scan) return "Upload your first receipt";
+  if (scan.status === "failed") return "Review the failed scan";
+  if (scan.status === "partial_failed") return "Confirm extracted items and warnings";
+  if (scan.status === "queued" || scan.status === "processing") return "Watch the scan pipeline";
+  if (alerts.some((alert) => alert.alert_type === "predicted_stockout")) return "Resolve stockout alerts";
+  if (predictions.length > 0) return "Review the latest forecast";
+  return "Generate a shopping list";
+}
 
 export default function ScansPage() {
-  // Read propertyId once via getState() — not a hook — so it doesn't cause
-  // re-renders and is always current at the moment the upload fires.
-  const propertyId = useAuthStore((s) => s.propertyId);
-
-  const [uploadState, setUploadState]   = useState<UploadState>("idle");
-  const [file, setFile]                 = useState<File | null>(null);
-  const [preview, setPreview]           = useState<string | null>(null);
-  const [progress, setProgress]         = useState(0);
-  const [scanId, setScanId]             = useState<string | null>(null);
-  const [scanStatus, setScanStatus]     = useState<ScanStatus | null>(null);
-  const [extracted, setExtracted]       = useState<ExtractedItem[]>([]);
-  const [errorMsg, setErrorMsg]         = useState<string>("");
-  const [dragging, setDragging]         = useState(false);
-  const [savingToInventory, setSavingToInventory] = useState(false);
-  const [savedToInventory, setSavedToInventory] = useState(false);
-
+  const [scans, setScans] = useState<Scan[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── File selected ─────────────────────────────────────────────────────────
-
-  async function handleFile(f: File) {
-    // Gate upload — propertyId must be resolved from the auth store / JWT
-    const pid = propertyId ?? useAuthStore.getState().propertyId;
-    if (!pid) {
-      toast.error("Property ID not found. Please log out and log in again.");
-      return;
-    }
-
-    setFile(f);
-    setUploadState("uploading");
-    setProgress(0);
-    setExtracted([]);
-    setErrorMsg("");
-    setSavedToInventory(false);
-
-    // Generate preview URL
-    if (f.type.startsWith("image/")) {
-      setPreview(URL.createObjectURL(f));
-    } else {
-      setPreview(null);
-    }
-
-    // Simulate upload progress (real progress via XHR not available in Axios)
-    const ticker = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 85) { clearInterval(ticker); return 85; }
-        return p + 12;
-      });
-    }, 200);
-
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
-      const res = await uploadScan(f, "receipt");
-      clearInterval(ticker);
-      setProgress(100);
-      setScanId(res.scan_id ?? res.id ?? null);
-      setUploadState("processing");
-      toast.success("Receipt uploaded — AI is extracting items…");
+      setError(null);
+      const [scansRes, alertsRes, predictionsRes] = await Promise.all([
+        listScans({ limit: 25 }),
+        listAlerts({ state: "open", page_size: 12 }).catch(() => ({ alerts: [], open_count: 0, page: 1, page_size: 12 })),
+        listPredictions({ limit: 8 }).catch(() => []),
+      ]);
+      setScans(scansRes);
+      setAlerts(alertsRes.alerts);
+      setPredictions(predictionsRes);
     } catch (err) {
-      clearInterval(ticker);
-      setUploadState("error");
-      const msg = err instanceof Error ? err.message : "Upload failed. Please try again.";
-      setErrorMsg(msg);
-      captureUIError("scan_upload", err);
-      track("scan_upload_failed", { method: "receipt", error: msg });
+      setError("We couldn't load your scan pipeline right now.");
+      captureUIError("load_scans_workspace", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  }
-
-  // ── Poll for scan status ──────────────────────────────────────────────────
+  }, []);
 
   useEffect(() => {
-    if (!scanId || uploadState !== "processing") return;
+    void load();
+  }, [load]);
 
-    // Timeout after 90 seconds — Celery worker may be down
-    const timeoutId = setTimeout(() => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      setUploadState("error");
-      setErrorMsg(
-        "Processing timed out. The AI worker may be busy or unavailable — your receipt was saved and will be retried automatically."
-      );
-    }, 90_000);
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const status = await getScanStatus(scanId);
-        setScanStatus(status.status ?? null);
-
-        if (status.status === "completed" || status.status === "partial_failed") {
-          clearTimeout(timeoutId);
-          clearInterval(pollRef.current!);
-          setUploadState("done");
-          // Map backend items to local shape
-          const items: ExtractedItem[] = (status.extracted_items ?? []).map((it: Record<string, unknown>) => ({
-            // Backend normalises to "name" but guard against "item_name" from older scans
-            name:       ((it.name || it.item_name) as string) || "Unknown item",
-            quantity:   (it.quantity as number)   ?? 1,
-            unit:       (it.unit as string)       ?? "unit",
-            confidence: (it.confidence as number) ?? 0.75,
-          }));
-          setExtracted(items);
-          if (items.length === 0) {
-            toast.warning("Scan complete — no items detected. Try a clearer image.");
-          } else {
-            if (status.status === "partial_failed") {
-              toast.warning(`Scan completed with warnings — ${items.length} items extracted.`);
-            } else {
-              toast.success(`Scan complete — ${items.length} items extracted!`);
-            }
-            track("item_scanned", {
-              method:     "receipt",
-              item_count: items.length,
-              scan_id:    scanId ?? undefined,
-            });
-          }
-        } else if (status.status === "failed") {
-          clearTimeout(timeoutId);
-          clearInterval(pollRef.current!);
-          setUploadState("error");
-          const stageBits = (status.stage_errors ?? [])
-            .map((s) => `${String(s.stage ?? "stage")}: ${String(s.error ?? "unknown error")}`)
-            .slice(0, 2)
-            .join(" | ");
-          setErrorMsg(
-            stageBits
-              ? `${status.error_message ?? "Scan failed."} (${stageBits})`
-              : (status.error_message ?? "AI processing failed. Please try with a clearer image.")
-          );
-        }
-      } catch {
-        // network blip — keep polling
-      }
-    }, 2000);
-
+  useEffect(() => {
+    const hasInFlight = scans.some((scan) => scan.status === "queued" || scan.status === "processing");
+    if (hasInFlight && !pollRef.current) {
+      pollRef.current = setInterval(() => void load(), POLL_INTERVAL_MS);
+    }
+    if (!hasInFlight && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     return () => {
-      clearTimeout(timeoutId);
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
-  }, [scanId, uploadState]);
+  }, [load, scans]);
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  const latestScan = scans[0] ?? null;
+  const inFlightCount = useMemo(
+    () => scans.filter((scan) => scan.status === "queued" || scan.status === "processing").length,
+    [scans]
+  );
 
-  function reset() {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setUploadState("idle");
-    setFile(null);
-    setPreview(null);
-    setProgress(0);
-    setScanId(null);
-    setScanStatus(null);
-    setExtracted([]);
-    setErrorMsg("");
-    setSavingToInventory(false);
-    setSavedToInventory(false);
+  if (loading) {
+    return (
+      <PageLoadingState
+        title="Loading scans"
+        message="Checking upload queue, OCR progress, and downstream analysis."
+      />
+    );
   }
 
-  async function addAllToInventory() {
-    const pid = propertyId ?? useAuthStore.getState().propertyId;
-    if (!pid) {
-      toast.error("Property ID not found. Please log out and log in again.");
-      return;
-    }
-    if (extracted.length === 0) {
-      toast.error("No extracted items to add.");
-      return;
-    }
-
-    setSavingToInventory(true);
-    try {
-      await batchInventoryUpdate(
-        extracted.map((item) => ({
-          property_id: pid,
-          item_name: item.name,
-          new_qty: item.quantity,
-          unit: item.unit || "unit",
-          trigger_prediction: true,
-        }))
-      );
-      toast.success(`Added ${extracted.length} items to inventory.`);
-      setSavedToInventory(true);
-      track("inventory_updated", {
-        action: "add",
-        item_count: extracted.length,
-      });
-    } catch (err) {
-      captureUIError("scan_inventory_save", err);
-      toast.error("Failed to add extracted items to inventory.");
-    } finally {
-      setSavingToInventory(false);
-    }
+  if (error) {
+    return (
+      <PageErrorState
+        title="Scans unavailable"
+        message={error}
+        onRetry={() => void load()}
+      />
+    );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  if (!scans.length) {
+    return (
+      <div className="space-y-6">
+        <EmptyState
+          icon={ScanLine}
+          badge="First run"
+          headline="Start with one receipt"
+          body="Upload a receipt and Neumas will queue the scan, extract line items, update inventory, recompute the baseline, and refresh predictions."
+          cta={{ label: "Upload receipt", href: "/dashboard/scans/new" }}
+          secondaryCta={{ label: "Open dashboard", href: "/dashboard" }}
+        />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            "Receipt uploaded and queued",
+            "OCR extracts normalized line items",
+            "Inventory, baseline, and predictions refresh",
+          ].map((step, index) => (
+            <div key={step} className="rounded-2xl border border-gray-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Step {index + 1}</p>
+              <p className="mt-2 text-sm font-semibold text-gray-900">{step}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
-  const showProcessor = uploadState === "uploading" || uploadState === "processing" || uploadState === "done" || uploadState === "error";
+  const LatestStatusIcon = scanStatusIcon(latestScan?.status ?? "queued");
+  const latestStageDetails = (latestScan?.stage_details as Record<string, unknown> | null | undefined) ?? null;
+  const pipelineStages = [
+    { key: "storage", label: "Storage" },
+    { key: "ocr", label: "OCR" },
+    { key: "inventory", label: "Inventory" },
+    { key: "baseline", label: "Baseline" },
+    { key: "predictions", label: "Predictions" },
+  ];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight gradient-text">Scan Receipt</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Upload an invoice or receipt — AI extracts items into your inventory.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Scans workspace</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-gray-900">Receipt pipeline</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            One upload path, live scan status, and a direct bridge into inventory, baseline insights, and shopping actions.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/scans/new" className="inline-flex items-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">
+            <Camera className="h-4 w-4" />
+            Upload receipt
+          </Link>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Drop zone (idle) */}
-      <AnimatePresence mode="wait">
-        {uploadState === "idle" && (
-          <motion.div
-            key="drop"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-          >
-            <DropZone onFile={handleFile} dragging={dragging} setDragging={setDragging} />
-          </motion.div>
-        )}
-
-        {/* Processing panel */}
-        {showProcessor && (
-          <motion.div
-            key="processor"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-            className="glass-card rounded-3xl p-6 space-y-5"
-          >
-            {/* File info row */}
-            {file && (
-              <div className="flex items-center gap-3">
-                {preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={preview}
-                    alt="Receipt preview"
-                    className="w-12 h-12 rounded-lg object-cover border border-border/40"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-lg bg-surface-2 flex items-center justify-center border border-border/40">
-                    <FileImage className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(file.size / 1024).toFixed(0)} KB
-                  </p>
-                </div>
-                <button
-                  onClick={reset}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-all"
-                  title="Upload different file"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Latest scan</p>
+              <div className="mt-2 flex items-center gap-2">
+                <LatestStatusIcon className={`h-5 w-5 ${latestScan?.status === "processing" ? "animate-spin text-sky-700" : "text-slate-700"}`} />
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {latestScan?.status.replace(/_/g, " ")}
+                </h2>
               </div>
-            )}
-
-            {/* 3D animation */}
-            <div className="w-full h-48 relative">
-              <ScanProcessor
-                state={
-                  uploadState === "uploading" ? "uploading"
-                  : uploadState === "processing" ? "processing"
-                  : uploadState === "done" ? "done"
-                  : "error"
-                }
-              />
-              {/* Status label overlay */}
-              <div className="absolute inset-x-0 bottom-0 flex justify-center">
-                <AnimatePresence mode="wait">
-                  <motion.p
-                    key={uploadState}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className="text-xs font-medium text-muted-foreground"
-                  >
-                    {uploadState === "uploading" && "Uploading receipt…"}
-                    {uploadState === "processing" && "AI extracting items…"}
-                    {uploadState === "done" && "Extraction complete"}
-                    {uploadState === "error" && "Something went wrong"}
-                  </motion.p>
-                </AnimatePresence>
-              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                {latestScan?.created_at ? new Date(latestScan.created_at).toLocaleString() : "Recently queued"}
+              </p>
             </div>
+            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${scanStatusBadge(latestScan?.status ?? "queued")}`}>
+              {latestScan?.status.replace(/_/g, " ")}
+            </span>
+          </div>
 
-            {/* Progress bar (uploading only) */}
-            {uploadState === "uploading" && <ProgressBar progress={progress} />}
-
-            {/* Done icon */}
-            {uploadState === "done" && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                className="flex items-center justify-center gap-2 text-mint-500"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                <span className="text-sm font-semibold">
-                  {extracted.length} items extracted
-                </span>
-              </motion.div>
-            )}
-
-            {/* Error state */}
-            {uploadState === "error" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-3"
-              >
-                <div className="flex items-center gap-2 text-red-400">
-                  <XCircle className="w-4 h-4 shrink-0" />
-                  <p className="text-sm">{errorMsg || "An error occurred."}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {pipelineStages.map((stage) => {
+              const details = getStageBlock(latestStageDetails, stage.key);
+              const status = typeof details?.status === "string" ? details.status : "pending";
+              return (
+                <div key={stage.key} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">{stage.label}</p>
+                  <span className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${stageBadgeClass(status)}`}>
+                    {stageStatusLabel(status)}
+                  </span>
+                  {typeof details?.elapsed_ms === "number" && (
+                    <p className="mt-2 text-xs text-gray-500">{(Number(details.elapsed_ms) / 1000).toFixed(1)}s</p>
+                  )}
+                  {typeof details?.items_upserted === "number" && (
+                    <p className="mt-2 text-xs text-gray-500">{details.items_upserted} items updated</p>
+                  )}
                 </div>
-                <button
-                  onClick={reset}
-                  className="w-full h-10 rounded-xl border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-all flex items-center justify-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Try again
-                </button>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              );
+            })}
+          </div>
 
-      {/* Extracted items */}
-      <AnimatePresence>
-        {extracted.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-            className="space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">Extracted items</h2>
-              <Link
-                href="/dashboard/inventory"
-                className="flex items-center gap-1 text-xs text-cyan-500 hover:text-cyan-400 transition-colors font-medium"
-              >
-                View inventory
-                <ChevronRight className="w-3 h-3" />
-              </Link>
-            </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href={`/dashboard/scans/${latestScan?.id}`} className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">
+              Open scan detail
+            </Link>
+            <Link href={nextActionHref(latestScan, alerts, predictions)} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              {nextActionLabel(latestScan, alerts, predictions)}
+            </Link>
+          </div>
+        </div>
 
-            <div className="space-y-2">
-              {extracted.map((item, i) => (
-                <ItemRow key={`${item.name}-${i}`} item={item} index={i} />
-              ))}
-            </div>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">In-flight scans</p>
+            <p className="mt-3 text-3xl font-bold text-gray-900">{inFlightCount}</p>
+            <p className="mt-1 text-xs text-gray-500">Queued or processing right now.</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Open alerts</p>
+            <p className="mt-3 text-3xl font-bold text-gray-900">{alerts.length}</p>
+            <p className="mt-1 text-xs text-gray-500">Low stock, out-of-stock, and prediction-based issues.</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Forecast signals</p>
+            <p className="mt-3 text-3xl font-bold text-gray-900">{predictions.length}</p>
+            <p className="mt-1 text-xs text-gray-500">Prediction rows available for shopping and reorder planning.</p>
+          </div>
+        </div>
+      </div>
 
-            <button
-              className="w-full h-11 rounded-xl gradient-primary text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-              onClick={addAllToInventory}
-              disabled={savingToInventory || savedToInventory}
-            >
-              <Plus className="w-4 h-4" />
-              {savingToInventory
-                ? "Adding to inventory…"
-                : savedToInventory
-                ? "Added to inventory"
-                : "Add all to inventory"}
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Recent scans hint (idle) */}
-      {uploadState === "idle" && (
-        <p className="text-center text-xs text-muted-foreground">
-          Supported formats: JPEG, PNG, WebP, HEIC ·{" "}
-          <Link href="/dashboard/scans/history" className="text-cyan-500 hover:text-cyan-400">
-            View scan history
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Recent scans</h2>
+            <p className="text-sm text-gray-500">Track queue progress, warnings, and the downstream analysis trail.</p>
+          </div>
+          <Link href="/dashboard/scans/history" className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700 hover:text-sky-800">
+            Full history
+            <ArrowRight className="h-4 w-4" />
           </Link>
-        </p>
-      )}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {scans.slice(0, 8).map((scan) => {
+            const Icon = scanStatusIcon(scan.status);
+            const scanStageDetails = (scan.stage_details as Record<string, unknown> | null | undefined) ?? null;
+            const ocrStage = getStageBlock(scanStageDetails, "ocr");
+            const inventoryStage = getStageBlock(scanStageDetails, "inventory");
+            const baselineStage = getStageBlock(scanStageDetails, "baseline");
+            return (
+              <Link key={scan.id} href={`/dashboard/scans/${scan.id}`} className="block rounded-2xl border border-gray-200 bg-gray-50 p-4 transition hover:border-sky-200 hover:bg-sky-50/40">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Icon className={`h-4 w-4 ${scan.status === "processing" ? "animate-spin text-sky-700" : "text-gray-700"}`} />
+                      <p className="font-semibold text-gray-900">{scan.scan_type} scan</p>
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${scanStatusBadge(scan.status)}`}>
+                        {scan.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {new Date(scan.created_at).toLocaleString()}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                      <span>OCR: {stageStatusLabel(typeof ocrStage?.status === "string" ? ocrStage.status : undefined)}</span>
+                      <span>Inventory: {stageStatusLabel(typeof inventoryStage?.status === "string" ? inventoryStage.status : undefined)}</span>
+                      <span>Baseline: {stageStatusLabel(typeof baselineStage?.status === "string" ? baselineStage.status : undefined)}</span>
+                    </div>
+                    {scan.error_message && (
+                      <p className="mt-2 text-sm text-red-600">{scan.error_message}</p>
+                    )}
+                  </div>
+                  <div className="text-right text-sm text-gray-600">
+                    <p>{scan.items_detected ?? 0} items</p>
+                    {scan.processing_time_ms != null && (
+                      <p>{(scan.processing_time_ms / 1000).toFixed(1)}s</p>
+                    )}
+                    {scan.completed_at && <p>Done</p>}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Link href="/dashboard/inventory" className="rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-sky-200">
+          <h3 className="text-sm font-semibold text-gray-900">Inventory updated</h3>
+          <p className="mt-2 text-sm text-gray-500">Review the on-hand items created or incremented from the latest receipt.</p>
+        </Link>
+        <Link href="/dashboard/analytics" className="rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-sky-200">
+          <h3 className="text-sm font-semibold text-gray-900">Baseline insights</h3>
+          <p className="mt-2 text-sm text-gray-500">See how recent scans changed the historical baseline and confidence trend.</p>
+        </Link>
+        <Link href="/dashboard/shopping" className="rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-sky-200">
+          <h3 className="text-sm font-semibold text-gray-900">Shopping recommendations</h3>
+          <p className="mt-2 text-sm text-gray-500">Turn forecast and low-stock signals into a reorder list after the scan settles.</p>
+        </Link>
+      </div>
     </div>
   );
 }

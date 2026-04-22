@@ -19,6 +19,7 @@ Configurable via env / .env:
 
 import asyncio
 import uuid
+from typing import Any
 from decimal import Decimal
 from uuid import UUID
 
@@ -60,8 +61,10 @@ class ScanService:
     async def upload_scan(
         self,
         file: UploadFile,
+        file_bytes: bytes | None,
         scan_type: str,
         tenant: TenantContext,
+        request_id: str | None = None,
     ) -> ScanQueuedResponse:
         """
         Upload scan image and queue for processing.
@@ -87,14 +90,16 @@ class ScanService:
         logger.info(
             "Processing scan upload",
             scan_id=str(scan_id),
+            request_id=request_id,
             property_id=str(tenant.property_id),
             org_id=str(tenant.org_id),
             scan_type=scan_type,
             filename=file.filename,
         )
 
-        # Read file bytes once — reuse for dedup hash AND storage upload.
-        file_bytes = await file.read()
+        # Read file bytes once — reuse for size check, dedup hash, and storage upload.
+        if file_bytes is None:
+            file_bytes = await file.read()
         if not file_bytes:
             raise ValueError("Uploaded file is empty")
 
@@ -139,6 +144,23 @@ class ScanService:
                 "status": "queued",
                 "image_urls": [],
                 "user_id": str(tenant.user_id),
+                "processed_results": {
+                    "stage_details": {
+                        "request_id": request_id,
+                        "upload": {
+                            "status": "completed",
+                            "filename": file.filename,
+                            "content_type": file.content_type,
+                            "size_bytes": len(file_bytes),
+                        },
+                        "storage": {"status": "pending"},
+                        "ocr": {"status": "pending"},
+                        "inventory": {"status": "pending"},
+                        "baseline": {"status": "pending"},
+                        "predictions": {"status": "pending"},
+                    },
+                    "stage_errors": [],
+                },
             },
         )
 
@@ -159,6 +181,7 @@ class ScanService:
             logger.exception(
                 "Storage upload failed",
                 scan_id=str(scan_id),
+                request_id=request_id,
                 error=str(storage_exc),
             )
             if settings.DEV_MODE:
@@ -173,7 +196,17 @@ class ScanService:
                         "error_message": f"storage upload failed: {storage_exc}",
                         "processed_results": {
                             "stage_details": {
-                                "storage": "failed",
+                                "request_id": request_id,
+                                "upload": {
+                                    "status": "completed",
+                                    "filename": file.filename,
+                                    "content_type": file.content_type,
+                                    "size_bytes": len(file_bytes),
+                                },
+                                "storage": {
+                                    "status": "failed",
+                                    "message": str(storage_exc),
+                                },
                             },
                             "stage_errors": [
                                 {
@@ -190,7 +223,30 @@ class ScanService:
         await scans_repo.update(
             tenant,
             scan_id,
-            {"image_urls": [storage_path]},
+            {
+                "image_urls": [storage_path],
+                "processed_results": {
+                    "stage_details": {
+                        "request_id": request_id,
+                        "upload": {
+                            "status": "completed",
+                            "filename": file.filename,
+                            "content_type": file.content_type,
+                            "size_bytes": len(file_bytes),
+                        },
+                        "storage": {
+                            "status": "completed",
+                            "path": storage_path,
+                            "bucket": settings.STORAGE_BUCKET_RECEIPTS,
+                        },
+                        "ocr": {"status": "pending"},
+                        "inventory": {"status": "pending"},
+                        "baseline": {"status": "pending"},
+                        "predictions": {"status": "pending"},
+                    },
+                    "stage_errors": [],
+                },
+            },
         )
 
         logger.info(
@@ -224,6 +280,7 @@ class ScanService:
                 user_id=str(tenant.user_id),
                 image_url=image_url,
                 scan_type=scan_type,
+                request_id=request_id,
             )
         )
         bg_task.add_done_callback(_on_task_done)
@@ -289,8 +346,11 @@ class ScanService:
             processed=processed,
             status=scan.get("status", "unknown"),
             created_at=scan.get("created_at"),
+            started_at=scan.get("started_at"),
+            completed_at=scan.get("completed_at"),
             error_message=scan.get("error_message"),
             items_detected=scan.get("items_detected"),
+            confidence_score=Decimal(str(scan["confidence_score"])) if scan.get("confidence_score") else None,
             stage_details=stage_details,
             stage_errors=stage_errors,
             extracted_items=extracted_items,
@@ -368,14 +428,15 @@ class ScanService:
 
         # -- Resolve image URL -------------------------------------------------
         image_url = await self._get_image_url(bucket, storage_path)
-        # Fall back to placeholder so the pipeline can still run even if the
-        # signed-URL endpoint is temporarily unavailable.
         if not image_url:
-            logger.warning(
-                "Could not obtain signed URL — using placeholder for pipeline",
+            logger.error(
+                "Could not obtain image URL for uploaded scan",
                 storage_path=storage_path,
             )
-            image_url = _dev_placeholder_url(str(scan_id))
+            raise RuntimeError(
+                "Storage upload succeeded but Neumas could not create an OCR-readable image URL. "
+                "Verify Supabase bucket permissions and signed URL configuration."
+            )
         return storage_path, image_url
 
     async def _get_image_url(self, bucket: str, path: str) -> str | None:
@@ -450,6 +511,8 @@ class ScanService:
             started_at=scan.get("started_at"),
             completed_at=scan.get("completed_at"),
             created_at=scan.get("created_at"),
+            stage_details=(scan.get("processed_results") or {}).get("stage_details"),
+            stage_errors=(scan.get("processed_results") or {}).get("stage_errors"),
         )
 
     async def rerun_with_hint(
@@ -512,6 +575,8 @@ class ScanService:
                 started_at=scan.get("started_at"),
                 completed_at=scan.get("completed_at"),
                 created_at=scan.get("created_at"),
+                stage_details=(scan.get("processed_results") or {}).get("stage_details"),
+                stage_errors=(scan.get("processed_results") or {}).get("stage_errors"),
             )
             for scan in scans
         ]

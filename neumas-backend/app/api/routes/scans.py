@@ -11,6 +11,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     Query,
     UploadFile,
     status,
@@ -45,6 +46,7 @@ class ScanRerunRequest(BaseModel):
     description="Upload a receipt or barcode image for processing.",
 )
 async def upload_scan(
+    request: Request,
     file: Annotated[UploadFile, File(description="Image file (JPEG, PNG, WebP)")],
     scan_type: Annotated[
         Literal["receipt", "barcode"],
@@ -71,20 +73,21 @@ async def upload_scan(
 
     # Validate file size (max 10MB)
     MAX_SIZE = 10 * 1024 * 1024
-    content = await file.read()
-    if len(content) > MAX_SIZE:
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File too large. Maximum size is 10MB.",
         )
-    # Reset file position for service
-    await file.seek(0)
+    request_id = getattr(request.state, "request_id", None)
 
     try:
         return await scan_service.upload_scan(
             file=file,
+            file_bytes=file_bytes,
             scan_type=scan_type,
             tenant=tenant,
+            request_id=request_id,
         )
     except ValueError as e:
         raise HTTPException(
@@ -92,7 +95,13 @@ async def upload_scan(
             detail=str(e),
         )
     except Exception as e:
-        logger.exception("Scan upload failed", error=str(e))
+        logger.exception(
+            "Scan upload failed",
+            error=str(e),
+            request_id=request_id,
+            property_id=str(tenant.property_id),
+            scan_type=scan_type,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process scan upload: {e}",
