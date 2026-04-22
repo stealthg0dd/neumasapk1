@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { itemToCube, type PantryItemCube } from "@/components/three/PantryScene";
-import { batchInventoryUpdate, getScanStatus, postScanUpload } from "@/lib/api/endpoints";
+import { batchInventoryUpdate, getScanStatus, uploadScan } from "@/lib/api/endpoints";
 import { useAuthStore } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
@@ -183,7 +183,7 @@ export default function NewScanPage() {
     try {
       const prepared = await prepareMobileScanFile(file, rotation, zoom);
       setPreparedSize(prepared.size);
-      const res = await postScanUpload(prepared, "receipt", setUploadProgress);
+      const res = await uploadScan(prepared, "receipt", setUploadProgress);
       const sid = res.scan_id ?? res.id ?? null;
       setScanId(sid);
       setUploadProgress(100);
@@ -207,7 +207,7 @@ export default function NewScanPage() {
     pollRef.current = setInterval(async () => {
       try {
         const s = await getScanStatus(scanId);
-        if (s.status === "completed") {
+        if (s.status === "completed" || s.status === "partial_failed") {
           clearTimeout(t);
           if (pollRef.current) clearInterval(pollRef.current);
           const raw = s.extracted_items ?? [];
@@ -215,7 +215,11 @@ export default function NewScanPage() {
           setExtracted(rows);
           setCubes(rows.map((r, i) => itemToCube(r.id, i, r.name)));
           setBusy(false);
-          toast.success(`Found ${rows.length} item${rows.length === 1 ? "" : "s"}.`);
+          if (s.status === "partial_failed") {
+            toast.warning(`Scan finished with warnings. ${rows.length} item${rows.length === 1 ? "" : "s"} extracted.`);
+          } else {
+            toast.success(`Found ${rows.length} item${rows.length === 1 ? "" : "s"}.`);
+          }
         } else if (s.status === "failed") {
           clearTimeout(t);
           if (pollRef.current) clearInterval(pollRef.current);

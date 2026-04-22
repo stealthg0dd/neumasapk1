@@ -217,16 +217,19 @@ async def _process_scan_async(
         "items_upserted": 0,
         "errors": [],
     }
+    stage_details: dict[str, Any] = {}
 
     try:
         # =================================================================
         # Step 1 -- Mark scan as processing
         # =================================================================
+        stage_started = time.perf_counter()
         await supabase.table("scans").update({
             "status": "processing",
             "started_at": datetime.now(UTC).isoformat(),
             "error_message": None,
         }).eq("id", scan_id).execute()
+        stage_details["queue_to_processing_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         logger.info("Scan marked as processing", scan_id=scan_id)
         log_business_event(
@@ -240,16 +243,25 @@ async def _process_scan_async(
         # =================================================================
         # Step 2 -- Run VisionAgent
         # =================================================================
+        stage_started = time.perf_counter()
         vision_agent = await get_vision_agent()
         vision_result = await vision_agent.analyze_receipt(
             image_url=image_url,
             scan_type=scan_type,
         )
+        stage_details["ocr_ms"] = int((time.perf_counter() - stage_started) * 1000)
 
         if vision_result.get("error"):
             error_msg: str = vision_result["error"]
             logger.error("VisionAgent failed", scan_id=scan_id, error=error_msg)
-            await _mark_failed(supabase, scan_id, error_msg)
+            stage_errors = [{"stage": "ocr", "error": error_msg}]
+            await _mark_failed(
+                supabase,
+                scan_id,
+                error_msg,
+                stage_details=stage_details,
+                stage_errors=stage_errors,
+            )
             result["status"] = "failed"
             result["errors"].append({"stage": "vision", "error": error_msg})
             return result
@@ -307,6 +319,11 @@ async def _process_scan_async(
                         "duplicate":        True,
                         "duplicate_of_scan_id": dup_id,
                         "confidence":       vision_confidence,
+                        "stage_details": {
+                            **stage_details,
+                            "duplicate_check": "matched",
+                        },
+                        "stage_errors": [],
                     },
                 }).eq("id", scan_id).execute()
                 result["status"] = "completed"
@@ -352,6 +369,7 @@ async def _process_scan_async(
             confidence=vision_confidence,
         )
 
+        stage_started = time.perf_counter()
         upserted: list[dict[str, Any]] = []
         for item in extracted_items:
             try:
@@ -378,6 +396,7 @@ async def _process_scan_async(
                 })
 
         result["items_upserted"] = len(upserted)
+        stage_details["inventory_upsert_ms"] = int((time.perf_counter() - stage_started) * 1000)
         logger.info(
             "Inventory upsert complete",
             scan_id=scan_id,
@@ -389,9 +408,11 @@ async def _process_scan_async(
         # Step 5 -- Recompute consumption patterns
         # =================================================================
         try:
+            stage_started = time.perf_counter()
             pattern_result = await recompute_patterns_for_property(
                 UUID(property_id)
             )
+            stage_details["baseline_recompute_ms"] = int((time.perf_counter() - stage_started) * 1000)
             logger.info(
                 "Pattern recomputation complete",
                 scan_id=scan_id,
@@ -411,9 +432,11 @@ async def _process_scan_async(
         # Step 6 -- Recompute stockout predictions
         # =================================================================
         try:
+            stage_started = time.perf_counter()
             pred_result = await recompute_predictions_for_property(
                 UUID(property_id)
             )
+            stage_details["predictions_recompute_ms"] = int((time.perf_counter() - stage_started) * 1000)
             logger.info(
                 "Prediction recomputation complete",
                 scan_id=scan_id,
@@ -434,13 +457,20 @@ async def _process_scan_async(
         # =================================================================
         total_ms = int((time.perf_counter() - wall_start) * 1000)
 
+        final_status = "partial_failed" if result["errors"] else "completed"
+        stage_details["total_pipeline_ms"] = total_ms
         await supabase.table("scans").update({
-            "status":             "completed",
+            "status":             final_status,
             "processing_time_ms": total_ms,
             "completed_at":       datetime.now(UTC).isoformat(),
+            "processed_results": {
+                **processed_results,
+                "stage_details": stage_details,
+                "stage_errors": result["errors"],
+            },
         }).eq("id", scan_id).execute()
 
-        result["status"] = "completed"
+        result["status"] = final_status
         result["processing_time_ms"] = total_ms
         result["receipt_metadata"] = receipt_meta
 
@@ -498,7 +528,13 @@ async def _process_scan_async(
             error=error_msg,
         )
         try:
-            await _mark_failed(supabase, scan_id, error_msg)
+            await _mark_failed(
+                supabase,
+                scan_id,
+                error_msg,
+                stage_details=stage_details,
+                stage_errors=result.get("errors", []) + [{"stage": "pipeline", "error": error_msg}],
+            )
         except Exception as db_exc:
             logger.error(
                 "Failed to persist error state",
@@ -698,12 +734,22 @@ async def _check_receipt_duplicate(
     return None
 
 
-async def _mark_failed(supabase: Any, scan_id: str, error_msg: str) -> None:
+async def _mark_failed(
+    supabase: Any,
+    scan_id: str,
+    error_msg: str,
+    stage_details: dict[str, Any] | None = None,
+    stage_errors: list[dict[str, Any]] | None = None,
+) -> None:
     """Set scan status to failed and persist the error message."""
     await supabase.table("scans").update({
         "status":        "failed",
         "error_message": error_msg[:2000],   # guard against very long traces
         "completed_at":  datetime.now(UTC).isoformat(),
+        "processed_results": {
+            "stage_details": stage_details or {},
+            "stage_errors": stage_errors or [],
+        },
     }).eq("id", scan_id).execute()
 
 

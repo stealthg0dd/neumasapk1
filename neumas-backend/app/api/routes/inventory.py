@@ -9,21 +9,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import TenantContext, get_tenant_context, require_property
 from app.core.logging import get_logger
+from app.db.repositories.inventory import get_inventory_repository
 from app.schemas.inventory import (
+    BurnRateRecomputeRequest,
+    BurnRateRecomputeResponse,
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemSummary,
     InventoryItemUpdate,
     InventoryUpdateRequest,
     InventoryUpdateResponse,
+    RestockPreviewResponse,
+    VendorOrderExportResponse,
 )
 from app.services.inventory_service import InventoryService
+from app.services.restock_service import RestockService
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 # Service instance
 inventory_service = InventoryService()
+restock_service = RestockService()
 
 
 @router.get(
@@ -290,3 +297,89 @@ async def reorder_recommendations(
     return await svc.get_recommendations(
         tenant, horizon_days=horizon_days, min_urgency=min_urgency
     )
+
+
+@router.post(
+    "/burn-rate/recompute",
+    response_model=BurnRateRecomputeResponse,
+    summary="Recompute burn rates",
+    description="Compute average daily usage for items from manual adjustments and scan restocks.",
+)
+async def recompute_burn_rate(
+    body: BurnRateRecomputeRequest,
+    tenant: TenantContext = require_property(),
+) -> BurnRateRecomputeResponse:
+    result = await restock_service.recompute_burn_rates(
+        tenant=tenant,
+        lookback_days=body.lookback_days,
+        auto_calculate_reorder_point=body.auto_calculate_reorder_point,
+        safety_buffer=float(body.safety_buffer),
+    )
+    return BurnRateRecomputeResponse(**result)
+
+
+@router.get(
+    "/restock/preview",
+    response_model=RestockPreviewResponse,
+    summary="Predictive restock preview",
+    description="Group at-risk inventory by vendor for procurement planning.",
+)
+async def get_restock_preview(
+    tenant: TenantContext = require_property(),
+    runout_threshold_days: Annotated[int, Query(ge=1, le=30)] = 7,
+) -> RestockPreviewResponse:
+    payload = await restock_service.get_vendor_restock_preview(
+        tenant=tenant,
+        runout_threshold_days=runout_threshold_days,
+    )
+    return RestockPreviewResponse(**payload)
+
+
+@router.get(
+    "/restock/vendors/{vendor_id}/export",
+    response_model=VendorOrderExportResponse,
+    summary="Generate vendor order export",
+    description="Build PDF/email-ready order summary for a vendor.",
+)
+async def export_vendor_order(
+    vendor_id: UUID,
+    tenant: TenantContext = require_property(),
+    runout_threshold_days: Annotated[int, Query(ge=1, le=30)] = 7,
+) -> VendorOrderExportResponse:
+    payload = await restock_service.generate_vendor_order_export(
+        tenant=tenant,
+        vendor_id=str(vendor_id),
+        runout_threshold_days=runout_threshold_days,
+    )
+    return VendorOrderExportResponse(**payload)
+
+
+@router.patch(
+    "/{item_id}/auto-reorder",
+    response_model=InventoryItemResponse,
+    summary="Toggle auto-calculate reorder point",
+)
+async def toggle_auto_reorder(
+    item_id: UUID,
+    enabled: Annotated[bool, Query()],
+    tenant: Annotated[TenantContext, Depends(get_tenant_context)],
+    safety_buffer: Annotated[float, Query(ge=0)] = 0,
+) -> InventoryItemResponse:
+    item = await inventory_service.get_item(item_id, tenant)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+
+    avg_daily = float(item.average_daily_usage or 0)
+    update_payload: dict[str, object] = {
+        "auto_reorder_enabled": enabled,
+        "safety_buffer": str(safety_buffer),
+    }
+    if enabled:
+        update_payload["reorder_point"] = str(max(0.0, avg_daily * 7.0 + safety_buffer))
+
+    repo = await get_inventory_repository(tenant)
+    await repo.update(item_id=item_id, data=update_payload, tenant=tenant)
+    refreshed = await inventory_service.get_item(item_id, tenant)
+    if not refreshed:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refresh item")
+    return refreshed

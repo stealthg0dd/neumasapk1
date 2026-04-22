@@ -95,6 +95,8 @@ class ScanService:
 
         # Read file bytes once — reuse for dedup hash AND storage upload.
         file_bytes = await file.read()
+        if not file_bytes:
+            raise ValueError("Uploaded file is empty")
 
         # Dedup check: reject if same file was uploaded within the window
         if not settings.DEV_MODE:
@@ -154,16 +156,35 @@ class ScanService:
                 property_id=tenant.property_id,
             )
         except Exception as storage_exc:
-            # Storage is best-effort: if it fails we still process the scan
-            # in the background (VisionAgent will receive an empty/placeholder
-            # URL and return an error, which is stored in scans.error_message).
             logger.exception(
-                "Storage upload failed — continuing with placeholder URL",
+                "Storage upload failed",
                 scan_id=str(scan_id),
                 error=str(storage_exc),
             )
-            storage_path = f"{tenant.org_id}/{tenant.property_id}/{scan_id}.jpg"
-            image_url = _dev_placeholder_url(str(scan_id))
+            if settings.DEV_MODE:
+                storage_path = f"{tenant.org_id}/{tenant.property_id}/{scan_id}.jpg"
+                image_url = _dev_placeholder_url(str(scan_id))
+            else:
+                await scans_repo.update(
+                    tenant,
+                    scan_id,
+                    {
+                        "status": "failed",
+                        "error_message": f"storage upload failed: {storage_exc}",
+                        "processed_results": {
+                            "stage_details": {
+                                "storage": "failed",
+                            },
+                            "stage_errors": [
+                                {
+                                    "stage": "storage",
+                                    "error": str(storage_exc),
+                                }
+                            ],
+                        },
+                    },
+                )
+                raise RuntimeError("Storage upload failed. Please retry after verifying storage bucket configuration.")
 
         # Update the scan record with the resolved image URL
         await scans_repo.update(
@@ -240,14 +261,17 @@ class ScanService:
             raise ValueError(f"Scan {scan_id} not found")
 
         # Determine processed flag based on status
-        processed = scan.get("status") == "completed"
+        processed = scan.get("status") in {"completed", "partial_failed"}
+
+        processed_results = scan.get("processed_results") or {}
+        stage_details: dict[str, Any] | None = processed_results.get("stage_details")
+        stage_errors: list[dict[str, Any]] | None = processed_results.get("stage_errors")
 
         # Extract items from processed_results when scan is complete.
         # VisionAgent stores items with key "item_name" — normalise to "name"
         # so the frontend doesn't need to know about the internal field name.
         extracted_items: list[dict] | None = None
         if processed:
-            processed_results = scan.get("processed_results") or {}
             raw_items = processed_results.get("items") or []
             extracted_items = [
                 {
@@ -267,6 +291,8 @@ class ScanService:
             created_at=scan.get("created_at"),
             error_message=scan.get("error_message"),
             items_detected=scan.get("items_detected"),
+            stage_details=stage_details,
+            stage_errors=stage_errors,
             extracted_items=extracted_items,
         )
 
@@ -301,6 +327,8 @@ class ScanService:
             image_url is passed to the background task for VisionAgent.
         """
         bucket = settings.STORAGE_BUCKET_RECEIPTS
+        if not bucket:
+            raise RuntimeError("STORAGE_BUCKET_RECEIPTS is not configured")
         ext = (
             file_name.rsplit(".", 1)[-1].lower()
             if file_name and "." in file_name
@@ -420,7 +448,7 @@ class ScanService:
             processing_time_ms=scan.get("processing_time_ms"),
             error_message=scan.get("error_message"),
             started_at=scan.get("started_at"),
-            completed_at=scan.get("processed_at"),
+            completed_at=scan.get("completed_at"),
             created_at=scan.get("created_at"),
         )
 

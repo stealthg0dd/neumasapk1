@@ -89,6 +89,10 @@ export interface InventoryItem {
   created_at: string;
   updated_at: string;
   category: CategorySummary | null;
+  vendor_id?: string | null;
+  average_daily_usage?: number | null;
+  auto_reorder_enabled?: boolean;
+  safety_buffer?: number;
   /** Computed: "normal" | "low_stock" | "out_of_stock" | "overstocked" */
   stock_status?: string;
   category_id?: string | null;
@@ -120,6 +124,9 @@ export interface InventoryItemUpdate {
   reorder_point?: number;
   cost_per_unit?: number;
   is_active?: boolean;
+  average_daily_usage?: number;
+  auto_reorder_enabled?: boolean;
+  safety_buffer?: number;
 }
 
 export interface InventoryListResponse {
@@ -148,11 +155,70 @@ export interface InventoryUpdateResponse {
   prediction_task_id?: string | null;
 }
 
+export interface BurnRateRecomputeRequest {
+  lookback_days?: number;
+  auto_calculate_reorder_point?: boolean;
+  safety_buffer?: number;
+}
+
+export interface BurnRateRecomputeResponse {
+  items_updated: number;
+  lookback_days: number;
+  auto_calculate_reorder_point: boolean;
+  safety_buffer: number;
+}
+
+export interface RestockPreviewItem {
+  item_id: string;
+  name: string;
+  unit: string;
+  current_quantity: number;
+  average_daily_usage: number;
+  runout_days: number;
+  needed_quantity: number;
+  unit_cost: number;
+  estimated_cost: number;
+  reorder_point: number;
+  auto_reorder_enabled: boolean;
+}
+
+export interface RestockVendorContact {
+  id: string;
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  website: string | null;
+}
+
+export interface RestockVendorGroup {
+  vendor: RestockVendorContact;
+  items: RestockPreviewItem[];
+  total_estimated_cost: number;
+  item_count: number;
+}
+
+export interface RestockPreviewResponse {
+  runout_threshold_days: number;
+  vendors: RestockVendorGroup[];
+  generated_at: string;
+}
+
+export interface VendorOrderExportResponse {
+  vendor_id: string;
+  vendor: RestockVendorContact | null;
+  html: string;
+  email_subject: string;
+  email_body: string;
+  total_estimated_cost: number | null;
+  item_count: number | null;
+}
+
 // ============================================================================
 // Scans
 // ============================================================================
 
-export type ScanStatus = "pending" | "queued" | "processing" | "completed" | "failed";
+export type ScanStatus = "pending" | "queued" | "processing" | "completed" | "partial_failed" | "failed";
 export type ScanType = "receipt" | "barcode" | "full";
 
 export interface Scan {
@@ -186,6 +252,8 @@ export interface ScanStatusResponse {
   confidence_score?: number | null;
   error_message?: string | null;
   created_at: string | null;
+  stage_details?: Record<string, unknown> | null;
+  stage_errors?: Array<Record<string, unknown>>;
   /** Items extracted by AI (present when status === "completed") */
   extracted_items?: Record<string, unknown>[];
 }

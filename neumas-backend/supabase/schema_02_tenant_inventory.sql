@@ -143,9 +143,12 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   barcode         text,
   unit            text          NOT NULL DEFAULT 'unit',
   quantity        numeric(12,3) NOT NULL DEFAULT 0,
+  average_daily_usage numeric(12,4) NOT NULL DEFAULT 0,
   min_quantity    numeric(12,3) NOT NULL DEFAULT 0,
   max_quantity    numeric(12,3),
   reorder_point   numeric(12,3),
+  auto_reorder_enabled boolean   NOT NULL DEFAULT false,
+  safety_buffer   numeric(12,3) NOT NULL DEFAULT 0,
   cost_per_unit   numeric(10,4),
   vendor_id       uuid          REFERENCES vendors(id) ON DELETE SET NULL,
   supplier_name   text,
@@ -166,6 +169,9 @@ ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS currency        text   NOT 
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tags            text[] NOT NULL DEFAULT '{}';
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS vendor_id       uuid   REFERENCES vendors(id) ON DELETE SET NULL;
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS supplier_name   text;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS average_daily_usage numeric(12,4) NOT NULL DEFAULT 0;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS auto_reorder_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS safety_buffer   numeric(12,3) NOT NULL DEFAULT 0;
 -- Back-fill organization_id from parent property (idempotent)
 UPDATE inventory_items ii
    SET organization_id = p.organization_id
@@ -182,6 +188,7 @@ CREATE INDEX IF NOT EXISTS idx_inventory_name     ON inventory_items(property_id
 CREATE INDEX IF NOT EXISTS idx_inventory_barcode  ON inventory_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_inventory_sku      ON inventory_items(sku)     WHERE sku     IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_inventory_vendor   ON inventory_items(vendor_id) WHERE vendor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_inventory_avg_daily_usage ON inventory_items(property_id, average_daily_usage) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_inventory_name_fts ON inventory_items USING gin(to_tsvector('english', name));
 ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
 

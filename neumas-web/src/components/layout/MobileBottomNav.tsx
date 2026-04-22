@@ -33,6 +33,7 @@ const NAV_ITEMS = [
       pathname.startsWith("/dashboard/settings") ||
       pathname.startsWith("/dashboard/inventory") ||
       pathname.startsWith("/dashboard/shopping") ||
+      pathname.startsWith("/dashboard/restock") ||
       pathname.startsWith("/dashboard/predictions") ||
       pathname.startsWith("/dashboard/analytics"),
   },

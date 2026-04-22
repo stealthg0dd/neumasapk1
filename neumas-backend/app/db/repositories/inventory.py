@@ -36,7 +36,8 @@ logger = get_logger(__name__)
 
 _ITEM_SELECT_COLUMNS = (
     "id,property_id,organization_id,category_id,vendor_id,name,description,sku,barcode,"
-    "unit,quantity,min_quantity,max_quantity,reorder_point,cost_per_unit,currency,"
+    "unit,quantity,min_quantity,max_quantity,reorder_point,cost_per_unit,average_daily_usage,"
+    "auto_reorder_enabled,safety_buffer,currency,"
     "supplier_info,metadata,tags,is_active,last_scanned_at,created_at,updated_at"
 )
 _ITEM_SELECT_WITH_CATEGORY = (

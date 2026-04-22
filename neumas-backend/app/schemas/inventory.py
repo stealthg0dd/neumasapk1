@@ -23,6 +23,9 @@ class InventoryItemBase(BaseModel):
         None,
         description="FK to vendors.id. Resolved during scan ingestion.",
     )
+    average_daily_usage: Decimal | None = Field(None, ge=0)
+    auto_reorder_enabled: bool = False
+    safety_buffer: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -48,6 +51,9 @@ class InventoryItemUpdate(BaseModel):
     unit: str | None = None
     category_id: UUID | None = None
     vendor_id: UUID | None = None
+    average_daily_usage: Decimal | None = Field(None, ge=0)
+    auto_reorder_enabled: bool | None = None
+    safety_buffer: Decimal | None = Field(None, ge=0)
     min_quantity: Decimal | None = Field(None, ge=0)
     max_quantity: Decimal | None = Field(None, ge=0)
     reorder_point: Decimal | None = Field(None, ge=0)
@@ -106,6 +112,7 @@ class InventoryItemSummary(BaseModel):
     updated_at: datetime | None = None
     category_name: str | None = None
     vendor_id: UUID | None = None
+    average_daily_usage: Decimal | None = None
 
     model_config = {"from_attributes": True}
 
@@ -235,6 +242,67 @@ class InventoryUpdateResponse(BaseModel):
     new_qty: Decimal
     created: bool = False
     prediction_task_id: str | None = None
+
+
+class BurnRateRecomputeRequest(BaseModel):
+    """Request to recompute average daily usage for inventory."""
+
+    lookback_days: int = Field(default=30, ge=7, le=120)
+    auto_calculate_reorder_point: bool = False
+    safety_buffer: Decimal = Field(default=Decimal("0"), ge=0)
+
+
+class BurnRateRecomputeResponse(BaseModel):
+    items_updated: int
+    lookback_days: int
+    auto_calculate_reorder_point: bool
+    safety_buffer: float
+
+
+class RestockPreviewItem(BaseModel):
+    item_id: UUID
+    name: str
+    unit: str
+    current_quantity: Decimal
+    average_daily_usage: Decimal
+    runout_days: float
+    needed_quantity: Decimal
+    unit_cost: Decimal
+    estimated_cost: Decimal
+    reorder_point: Decimal
+    auto_reorder_enabled: bool
+
+
+class RestockVendorContact(BaseModel):
+    id: UUID
+    name: str
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
+    website: str | None = None
+
+
+class RestockVendorGroup(BaseModel):
+    vendor: RestockVendorContact
+    items: list[RestockPreviewItem]
+    total_estimated_cost: Decimal
+    item_count: int
+
+
+class RestockPreviewResponse(BaseModel):
+    runout_threshold_days: int
+    vendors: list[RestockVendorGroup]
+    generated_at: datetime
+
+
+class VendorOrderExportResponse(BaseModel):
+    vendor_id: UUID
+    vendor: RestockVendorContact | None = None
+    html: str
+    email_subject: str
+    email_body: str
+    total_estimated_cost: Decimal | None = None
+    item_count: int | None = None
 
 
 class InventorySearchRequest(BaseModel):

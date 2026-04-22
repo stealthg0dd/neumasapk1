@@ -6,6 +6,7 @@ Specializes in B2B procurement receipt parsing with quantity normalization.
 """
 
 import base64
+import asyncio
 import json
 import re
 from typing import Any
@@ -204,30 +205,37 @@ class VisionAgent:
             client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
             # Build the message with image
-            message = await client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=VISION_SYSTEM_PROMPT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
+            try:
+                message = await asyncio.wait_for(
+                    client.messages.create(
+                        model=self.model,
+                        max_tokens=self.max_tokens,
+                        system=VISION_SYSTEM_PROMPT,
+                        messages=[
                             {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": image_data["media_type"],
-                                    "data": image_data["data"],
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": "Extract all items from this receipt image. Follow the normalization rules carefully.",
-                            },
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": image_data["media_type"],
+                                            "data": image_data["data"],
+                                        },
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "Extract all items from this receipt image. Follow the normalization rules carefully.",
+                                    },
+                                ],
+                            }
                         ],
-                    }
-                ],
-            )
+                    ),
+                    timeout=45,
+                )
+            except asyncio.TimeoutError:
+                logger.error("OCR provider timed out", provider="anthropic", model=self.model, timeout_seconds=45)
+                return self._error_response("OCR provider timeout after 45 seconds")
 
             # Extract text response
             response_text = message.content[0].text

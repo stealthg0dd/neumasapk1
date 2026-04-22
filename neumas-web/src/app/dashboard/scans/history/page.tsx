@@ -50,6 +50,13 @@ function statusConfig(s: string) {
         badge: "bg-red-100 text-red-800 border-red-200",
         label: "Failed",
       };
+    case "partial_failed":
+      return {
+        Icon: AlertCircle,
+        iconClass: "text-amber-500",
+        badge: "bg-amber-100 text-amber-800 border-amber-200",
+        label: "Completed with warnings",
+      };
     default:
       return {
         Icon: Clock,
@@ -118,7 +125,7 @@ function ScanRow({ scan }: { scan: Scan }) {
               </p>
             )}
 
-            {scan.status === "failed" && scan.error_message && (
+            {(scan.status === "failed" || scan.status === "partial_failed") && scan.error_message && (
               <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
                 <p className="text-xs font-medium text-red-700">Error</p>
                 <p className="mt-0.5 text-xs text-red-600 break-words">

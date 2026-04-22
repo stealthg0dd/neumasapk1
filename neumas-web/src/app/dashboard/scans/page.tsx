@@ -255,7 +255,7 @@ export default function ScansPage() {
         const status = await getScanStatus(scanId);
         setScanStatus(status.status ?? null);
 
-        if (status.status === "completed") {
+        if (status.status === "completed" || status.status === "partial_failed") {
           clearTimeout(timeoutId);
           clearInterval(pollRef.current!);
           setUploadState("done");
@@ -271,7 +271,11 @@ export default function ScansPage() {
           if (items.length === 0) {
             toast.warning("Scan complete — no items detected. Try a clearer image.");
           } else {
-            toast.success(`Scan complete — ${items.length} items extracted!`);
+            if (status.status === "partial_failed") {
+              toast.warning(`Scan completed with warnings — ${items.length} items extracted.`);
+            } else {
+              toast.success(`Scan complete — ${items.length} items extracted!`);
+            }
             track("item_scanned", {
               method:     "receipt",
               item_count: items.length,
@@ -282,7 +286,15 @@ export default function ScansPage() {
           clearTimeout(timeoutId);
           clearInterval(pollRef.current!);
           setUploadState("error");
-          setErrorMsg(status.error_message ?? "AI processing failed. Please try with a clearer image.");
+          const stageBits = (status.stage_errors ?? [])
+            .map((s) => `${String(s.stage ?? "stage")}: ${String(s.error ?? "unknown error")}`)
+            .slice(0, 2)
+            .join(" | ");
+          setErrorMsg(
+            stageBits
+              ? `${status.error_message ?? "Scan failed."} (${stageBits})`
+              : (status.error_message ?? "AI processing failed. Please try with a clearer image.")
+          );
         }
       } catch {
         // network blip — keep polling

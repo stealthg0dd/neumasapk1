@@ -39,6 +39,11 @@ function normalizeInventoryListPayload(
           ? { id: "", name: item.category_name as string }
           : null,
       stock_status: (item.stock_status as string) ?? "normal",
+      vendor_id: (item.vendor_id as string | null) ?? null,
+      average_daily_usage:
+        item.average_daily_usage != null ? Number(item.average_daily_usage) : null,
+      auto_reorder_enabled: Boolean(item.auto_reorder_enabled ?? false),
+      safety_buffer: Number(item.safety_buffer ?? 0),
     }));
     return {
       items,
@@ -53,6 +58,8 @@ function normalizeInventoryListPayload(
   return data as InventoryListResponse;
 }
 import type {
+  BurnRateRecomputeRequest,
+  BurnRateRecomputeResponse,
   DigestPreferencesResponse,
   DigestPreferencesUpdateRequest,
   LoginRequest,
@@ -66,6 +73,7 @@ import type {
   InventoryListResponse,
   InventoryUpdateRequest,
   InventoryUpdateResponse,
+  RestockPreviewResponse,
   Scan,
   ScanQueuedResponse,
   ScanStatusResponse,
@@ -76,6 +84,7 @@ import type {
   GenerateListRequest,
   GenerateListResponse,
   AnalyticsSummary,
+  VendorOrderExportResponse,
 } from "./types";
 import { normalizeShoppingItem } from "./types";
 /**
@@ -160,7 +169,7 @@ export async function uploadScan(
   form.append("file", file);
   form.append("scan_type", scanType === "full" ? "receipt" : scanType);
 
-  const res = await apiClient.post<ScanQueuedResponse>("/api/scan/upload", form, {
+  const res = await apiClient.post<ScanQueuedResponse>("/api/scan", form, {
     headers: { "Content-Type": "multipart/form-data" },
     onUploadProgress: (event) => {
       if (!onProgress) return;
@@ -253,19 +262,42 @@ export async function postScanUpload(
   scanType: "receipt" | "barcode" | "full",
   onProgress?: (progress: number) => void,
 ): Promise<ScanQueuedResponse> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("scan_type", scanType === "full" ? "receipt" : scanType);
+  return uploadScan(file, scanType, onProgress);
+}
 
-  const res = await apiClient.post<ScanQueuedResponse>("/api/scan", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress: (event) => {
-      if (!onProgress) return;
-      const total = event.total ?? file.size;
-      const next = total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
-      onProgress(next);
-    },
-  });
+/** POST /api/inventory/burn-rate/recompute */
+export async function recomputeBurnRate(
+  body: BurnRateRecomputeRequest = {}
+): Promise<BurnRateRecomputeResponse> {
+  return post<BurnRateRecomputeResponse>("/api/inventory/burn-rate/recompute", body);
+}
+
+/** GET /api/inventory/restock/preview */
+export async function getRestockPreview(
+  params?: { runout_threshold_days?: number }
+): Promise<RestockPreviewResponse> {
+  return get<RestockPreviewResponse>("/api/inventory/restock/preview", params);
+}
+
+/** GET /api/inventory/restock/vendors/{vendorId}/export */
+export async function exportVendorOrder(
+  vendorId: string,
+  params?: { runout_threshold_days?: number }
+): Promise<VendorOrderExportResponse> {
+  return get<VendorOrderExportResponse>(`/api/inventory/restock/vendors/${vendorId}/export`, params);
+}
+
+/** PATCH /api/inventory/{itemId}/auto-reorder */
+export async function setAutoReorder(
+  itemId: string,
+  enabled: boolean,
+  safetyBuffer = 0,
+): Promise<InventoryItem> {
+  const res = await apiClient.patch<InventoryItem>(
+    `/api/inventory/${itemId}/auto-reorder`,
+    {},
+    { params: { enabled, safety_buffer: safetyBuffer } }
+  );
   return res.data;
 }
 

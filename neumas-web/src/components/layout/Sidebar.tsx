@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   FileText,
+  Forklift,
   Store,
   Shield,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/inventory", label: "Inventory", icon: Package },
   { href: "/dashboard/scans", label: "Scans", icon: Camera },
   { href: "/dashboard/predictions", label: "Predictions", icon: TrendingUp },
+  { href: "/dashboard/restock", label: "Restock", icon: Forklift },
   { href: "/dashboard/shopping", label: "Shopping", icon: ShoppingCart },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/alerts", label: "Alerts", icon: Bell },

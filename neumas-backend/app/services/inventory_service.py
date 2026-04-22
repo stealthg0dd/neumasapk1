@@ -45,6 +45,9 @@ def _item_response(item: dict[str, Any]) -> InventoryItemResponse:
         unit=item.get("unit", "unit"),
         category_id=UUID(item["category_id"]) if item.get("category_id") else None,
         vendor_id=UUID(item["vendor_id"]) if item.get("vendor_id") else None,
+        average_daily_usage=Decimal(str(item.get("average_daily_usage", 0))) if item.get("average_daily_usage") is not None else None,
+        auto_reorder_enabled=bool(item.get("auto_reorder_enabled") or False),
+        safety_buffer=Decimal(str(item.get("safety_buffer", 0))),
         sku=item.get("sku"),
         barcode=item.get("barcode"),
         description=item.get("description"),
@@ -244,6 +247,7 @@ class InventoryService:
                 updated_at=item.get("updated_at"),
                 category_name=item.get("category", {}).get("name") if item.get("category") else None,
                 vendor_id=UUID(item["vendor_id"]) if item.get("vendor_id") else None,
+                average_daily_usage=Decimal(str(item.get("average_daily_usage", 0))) if item.get("average_daily_usage") is not None else None,
             )
             for item in items
         ]
@@ -280,6 +284,9 @@ class InventoryService:
                 "unit": item.unit,
                 "category_id": str(item.category_id) if item.category_id else None,
                 "vendor_id": str(item.vendor_id) if item.vendor_id else None,
+                "average_daily_usage": str(item.average_daily_usage) if item.average_daily_usage is not None else None,
+                "auto_reorder_enabled": item.auto_reorder_enabled,
+                "safety_buffer": str(item.safety_buffer),
                 "quantity": str(item.quantity),
                 "min_quantity": str(item.min_quantity),
                 "max_quantity": str(item.max_quantity) if item.max_quantity else None,
