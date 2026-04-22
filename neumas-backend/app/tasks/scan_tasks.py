@@ -20,6 +20,8 @@ from app.core.logging import get_logger, log_business_event
 
 logger = get_logger(__name__)
 
+_VENDOR_CREATE_CONFIDENCE_THRESHOLD = 0.80
+
 # ── Unit-of-measure normalisation table ───────────────────────────────────────
 _UNIT_MAP: dict[str, str] = {
     # Count / each
@@ -340,8 +342,16 @@ async def _process_scan_async(
         }).eq("id", scan_id).execute()
 
         # =================================================================
-        # Step 4 -- Upsert items into inventory_items
+        # Step 4 -- Resolve vendor + upsert items into inventory_items
         # =================================================================
+        vendor_name = (receipt_meta.get("vendor_name") or "").strip()
+        vendor_id: str | None = await _resolve_or_create_vendor_id(
+            supabase=supabase,
+            org_id=org_id,
+            vendor_name=vendor_name,
+            confidence=vision_confidence,
+        )
+
         upserted: list[dict[str, Any]] = []
         for item in extracted_items:
             try:
@@ -350,6 +360,8 @@ async def _process_scan_async(
                     org_id=org_id,
                     property_id=property_id,
                     item=item,
+                    vendor_id=vendor_id,
+                    vendor_name=vendor_name,
                 )
                 if inv_item:
                     upserted.append(inv_item)
@@ -504,6 +516,148 @@ async def _process_scan_async(
 # Helpers
 # =============================================================================
 
+async def _resolve_vendor_id(
+    supabase: Any,
+    org_id: str,
+    vendor_name: str | None,
+) -> str | None:
+    """
+    Resolve a raw vendor name string to a vendors.id UUID.
+
+    Lookup order:
+      1. vendor_aliases.alias_name  (catches OCR variants and abbreviations)
+      2. vendors.name               (canonical match)
+
+    Returns the vendor UUID string, or None if no match found.
+    Non-fatal: any DB error returns None.
+    """
+    if not vendor_name or not org_id:
+        return None
+
+    raw = vendor_name.strip()
+    if not raw:
+        return None
+
+    try:
+        # 1. Check aliases first (broader coverage)
+        alias_resp = await (
+            supabase.table("vendor_aliases")
+            .select("vendor_id")
+            .eq("organization_id", org_id)
+            .ilike("alias_name", raw)
+            .limit(1)
+            .execute()
+        )
+        if alias_resp.data:
+            return str(alias_resp.data[0]["vendor_id"])
+
+        # 2. Fall back to canonical vendors.name
+        vendor_resp = await (
+            supabase.table("vendors")
+            .select("id")
+            .eq("organization_id", org_id)
+            .ilike("name", raw)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if vendor_resp.data:
+            return str(vendor_resp.data[0]["id"])
+
+    except Exception as exc:
+        logger.warning(
+            "Vendor ID resolution failed (non-fatal)",
+            vendor_name=raw,
+            org_id=org_id,
+            error=str(exc),
+        )
+
+    return None
+
+
+async def _resolve_or_create_vendor_id(
+    supabase: Any,
+    org_id: str,
+    vendor_name: str | None,
+    confidence: float,
+    create_threshold: float = _VENDOR_CREATE_CONFIDENCE_THRESHOLD,
+) -> str | None:
+    """
+    Resolve vendor by name; create and alias it only when confidence is high.
+
+    This keeps ingestion conservative while still learning new suppliers from
+    high-confidence receipts.
+    """
+    if not vendor_name or not org_id:
+        return None
+
+    clean_name = vendor_name.strip()
+    if not clean_name:
+        return None
+
+    existing_id = await _resolve_vendor_id(supabase, org_id, clean_name)
+    if existing_id:
+        return existing_id
+
+    if confidence < create_threshold:
+        logger.info(
+            "Vendor not found; skipping auto-create due to low confidence",
+            vendor_name=clean_name,
+            confidence=confidence,
+            threshold=create_threshold,
+        )
+        return None
+
+    normalized = clean_name.lower()
+    try:
+        create_resp = await (
+            supabase.table("vendors")
+            .upsert(
+                {
+                    "organization_id": org_id,
+                    "name": clean_name,
+                    "normalized_name": normalized,
+                    "is_active": True,
+                },
+                on_conflict="organization_id,normalized_name",
+            )
+            .execute()
+        )
+        if not create_resp.data:
+            return None
+
+        created_vendor_id = str(create_resp.data[0]["id"])
+
+        await (
+            supabase.table("vendor_aliases")
+            .upsert(
+                {
+                    "vendor_id": created_vendor_id,
+                    "organization_id": org_id,
+                    "alias_name": clean_name,
+                    "source": "llm",
+                },
+                on_conflict="organization_id,alias_name",
+            )
+            .execute()
+        )
+
+        logger.info(
+            "Auto-created vendor from high-confidence scan",
+            vendor_name=clean_name,
+            vendor_id=created_vendor_id,
+            confidence=confidence,
+        )
+        return created_vendor_id
+    except Exception as exc:
+        logger.warning(
+            "Vendor create-or-link failed (non-fatal)",
+            vendor_name=clean_name,
+            error=str(exc),
+        )
+        return None
+
+
 async def _check_receipt_duplicate(
     supabase: Any,
     property_id: str,
@@ -558,6 +712,8 @@ async def _upsert_inventory_item(
     org_id: str,
     property_id: str,
     item: dict[str, Any],
+    vendor_id: str | None = None,
+    vendor_name: str | None = None,
 ) -> dict[str, Any] | None:
     """
     Add a scanned item to the inventory.
@@ -578,7 +734,7 @@ async def _upsert_inventory_item(
     # Look for existing item by name (case-insensitive)
     existing_resp = await (
         supabase.table("inventory_items")
-        .select("id, quantity")
+        .select("id, quantity, vendor_id, supplier_info")
         .eq("property_id", property_id)
         .ilike("name", item_name)
         .limit(1)
@@ -589,9 +745,18 @@ async def _upsert_inventory_item(
         existing = existing_resp.data[0]
         new_qty = float(existing.get("quantity") or 0) + qty_to_add
 
+        update_payload: dict[str, Any] = {"quantity": str(new_qty)}
+        if vendor_id and not existing.get("vendor_id"):
+            update_payload["vendor_id"] = vendor_id
+        if vendor_name:
+            supplier_info = existing.get("supplier_info") or {}
+            if supplier_info.get("name") != vendor_name:
+                supplier_info = {**supplier_info, "name": vendor_name}
+                update_payload["supplier_info"] = supplier_info
+
         resp = await (
             supabase.table("inventory_items")
-            .update({"quantity": str(new_qty)})
+            .update(update_payload)
             .eq("id", existing["id"])
             .execute()
         )
@@ -616,12 +781,16 @@ async def _upsert_inventory_item(
     # Create new item
     insert_payload: dict[str, Any] = {
         "organization_id":      org_id,
-        "property_id": property_id,
-        "name":        item_name,
-        "quantity":    str(qty_to_add),
-        "unit":        unit,
-        "is_active":   True,
+        "property_id":          property_id,
+        "name":                 item_name,
+        "quantity":             str(qty_to_add),
+        "unit":                 unit,
+        "is_active":            True,
     }
+    if vendor_id:
+        insert_payload["vendor_id"] = vendor_id
+    if vendor_name:
+        insert_payload["supplier_info"] = {"name": vendor_name}
 
     resp = await supabase.table("inventory_items").insert(insert_payload).execute()
 
@@ -640,6 +809,112 @@ async def _upsert_inventory_item(
         property_id=property_id,
     )
     return resp.data[0]
+
+
+@neumas_task(
+    name="scans.backfill_inventory_vendor_links",
+    bind=True,
+    queue="scans",
+    max_retries=1,
+)
+def backfill_inventory_vendor_links(
+    self,
+    org_id: str | None = None,
+    min_confidence: float = _VENDOR_CREATE_CONFIDENCE_THRESHOLD,
+) -> dict[str, Any]:
+    """
+    One-time reconciliation task.
+
+    Iterates completed scans and links inventory_items to vendor_id based on
+    receipt_metadata.vendor_name + extracted item names.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(
+        _backfill_inventory_vendor_links_async(
+            org_id=org_id,
+            min_confidence=min_confidence,
+        )
+    )
+
+
+async def _backfill_inventory_vendor_links_async(
+    org_id: str | None = None,
+    min_confidence: float = _VENDOR_CREATE_CONFIDENCE_THRESHOLD,
+) -> dict[str, Any]:
+    """Backfill vendor links for existing inventory from completed scans."""
+    from app.db.supabase_client import get_async_supabase_admin
+
+    supabase = await get_async_supabase_admin()
+    if not supabase:
+        return {"status": "failed", "error": "Database not configured"}
+
+    query = (
+        supabase.table("scans")
+        .select("id, organization_id, property_id, confidence_score, processed_results")
+        .eq("status", "completed")
+        .order("created_at", desc=False)
+    )
+    if org_id:
+        query = query.eq("organization_id", org_id)
+
+    scans_resp = await query.limit(5000).execute()
+    scans = scans_resp.data or []
+
+    linked_items = 0
+    scans_processed = 0
+    scans_with_vendor = 0
+
+    for scan in scans:
+        scans_processed += 1
+        processed_results = scan.get("processed_results") or {}
+        receipt_meta = processed_results.get("receipt_metadata") or {}
+        items = processed_results.get("items") or []
+        vendor_name = (receipt_meta.get("vendor_name") or "").strip()
+        if not vendor_name:
+            continue
+
+        scan_confidence = float(scan.get("confidence_score") or 0)
+        vendor_id = await _resolve_or_create_vendor_id(
+            supabase=supabase,
+            org_id=str(scan.get("organization_id") or ""),
+            vendor_name=vendor_name,
+            confidence=scan_confidence,
+            create_threshold=min_confidence,
+        )
+        if not vendor_id:
+            continue
+
+        scans_with_vendor += 1
+        for item in items:
+            item_name = (item.get("item_name") or "").strip()
+            if not item_name:
+                continue
+
+            upd_resp = await (
+                supabase.table("inventory_items")
+                .update({"vendor_id": vendor_id})
+                .eq("property_id", str(scan.get("property_id")))
+                .ilike("name", item_name)
+                .is_("vendor_id", "null")
+                .execute()
+            )
+            linked_items += len(upd_resp.data or [])
+
+    summary = {
+        "status": "completed",
+        "scans_processed": scans_processed,
+        "scans_with_vendor": scans_with_vendor,
+        "items_linked": linked_items,
+    }
+    logger.info("Vendor link backfill complete", **summary)
+    return summary
 
 
 # =============================================================================

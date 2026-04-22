@@ -19,6 +19,10 @@ class InventoryItemBase(BaseModel):
     barcode: str | None = Field(None, max_length=100)
     unit: str = "unit"
     category_id: UUID | None = None
+    vendor_id: UUID | None = Field(
+        None,
+        description="FK to vendors.id. Resolved during scan ingestion.",
+    )
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -43,6 +47,7 @@ class InventoryItemUpdate(BaseModel):
     barcode: str | None = None
     unit: str | None = None
     category_id: UUID | None = None
+    vendor_id: UUID | None = None
     min_quantity: Decimal | None = Field(None, ge=0)
     max_quantity: Decimal | None = Field(None, ge=0)
     reorder_point: Decimal | None = Field(None, ge=0)
@@ -100,6 +105,7 @@ class InventoryItemSummary(BaseModel):
     reorder_point: Decimal | None = None
     updated_at: datetime | None = None
     category_name: str | None = None
+    vendor_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

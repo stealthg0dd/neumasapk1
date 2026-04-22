@@ -110,7 +110,7 @@ class VendorsRepository:
             "alias_name": alias_name,
             "source": source,
         }
-        resp = await client.table("vendor_aliases").upsert(payload, on_conflict="org_id,alias_name").execute()
+        resp = await client.table("vendor_aliases").upsert(payload, on_conflict="organization_id,alias_name").execute()
         return resp.data[0] if resp.data else None
 
     async def update(

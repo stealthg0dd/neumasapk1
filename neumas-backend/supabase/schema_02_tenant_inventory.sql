@@ -147,6 +147,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   max_quantity    numeric(12,3),
   reorder_point   numeric(12,3),
   cost_per_unit   numeric(10,4),
+  vendor_id       uuid          REFERENCES vendors(id) ON DELETE SET NULL,
+  supplier_name   text,
   currency        text          NOT NULL DEFAULT 'USD',
   supplier_info   jsonb         NOT NULL DEFAULT '{}',
   metadata        jsonb         NOT NULL DEFAULT '{}',
@@ -162,6 +164,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS organization_id uuid   REFERENCES organizations(id) ON DELETE CASCADE;
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS currency        text   NOT NULL DEFAULT 'USD';
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tags            text[] NOT NULL DEFAULT '{}';
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS vendor_id       uuid   REFERENCES vendors(id) ON DELETE SET NULL;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS supplier_name   text;
 -- Back-fill organization_id from parent property (idempotent)
 UPDATE inventory_items ii
    SET organization_id = p.organization_id
@@ -177,6 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_inventory_org      ON inventory_items(organizatio
 CREATE INDEX IF NOT EXISTS idx_inventory_name     ON inventory_items(property_id, name);
 CREATE INDEX IF NOT EXISTS idx_inventory_barcode  ON inventory_items(barcode) WHERE barcode IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_inventory_sku      ON inventory_items(sku)     WHERE sku     IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_inventory_vendor   ON inventory_items(vendor_id) WHERE vendor_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_inventory_name_fts ON inventory_items USING gin(to_tsvector('english', name));
 ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
 

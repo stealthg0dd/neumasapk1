@@ -35,6 +35,32 @@ def _compute_stock_status(item: dict[str, Any]) -> str:
     return "normal"
 
 
+def _item_response(item: dict[str, Any]) -> InventoryItemResponse:
+    """Build an InventoryItemResponse from a raw DB row dict."""
+    return InventoryItemResponse(
+        id=UUID(item["id"]),
+        property_id=UUID(item["property_id"]),
+        name=item["name"],
+        quantity=Decimal(str(item.get("quantity", 0))),
+        unit=item.get("unit", "unit"),
+        category_id=UUID(item["category_id"]) if item.get("category_id") else None,
+        vendor_id=UUID(item["vendor_id"]) if item.get("vendor_id") else None,
+        sku=item.get("sku"),
+        barcode=item.get("barcode"),
+        description=item.get("description"),
+        min_quantity=Decimal(str(item.get("min_quantity", 0))),
+        max_quantity=Decimal(str(item["max_quantity"])) if item.get("max_quantity") else None,
+        reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
+        cost_per_unit=Decimal(str(item["cost_per_unit"])) if item.get("cost_per_unit") else None,
+        supplier_info=item.get("supplier_info") or {},
+        metadata=item.get("metadata") or {},
+        is_active=item.get("is_active", True),
+        last_scanned_at=item.get("last_scanned_at"),
+        created_at=item.get("created_at"),
+        updated_at=item.get("updated_at"),
+    )
+
+
 class InventoryService:
     """Service for inventory management operations."""
 
@@ -68,30 +94,7 @@ class InventoryService:
             item_count=len(items),
         )
 
-        return [
-            InventoryItemResponse(
-                id=UUID(item["id"]),
-                property_id=UUID(item["property_id"]),
-                name=item["name"],
-                quantity=Decimal(str(item.get("quantity", 0))),
-                unit=item.get("unit", "unit"),
-                category_id=UUID(item["category_id"]) if item.get("category_id") else None,
-                sku=item.get("sku"),
-                barcode=item.get("barcode"),
-                description=item.get("description"),
-                min_quantity=Decimal(str(item.get("min_quantity", 0))),
-                max_quantity=Decimal(str(item["max_quantity"])) if item.get("max_quantity") else None,
-                reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
-                cost_per_unit=Decimal(str(item["cost_per_unit"])) if item.get("cost_per_unit") else None,
-                supplier_info=item.get("supplier_info") or {},
-                metadata=item.get("metadata") or {},
-                is_active=item.get("is_active", True),
-                last_scanned_at=item.get("last_scanned_at"),
-                created_at=item.get("created_at"),
-                updated_at=item.get("updated_at"),
-            )
-            for item in items
-        ]
+        return [_item_response(item) for item in items]
 
     async def update_item(
         self,
@@ -240,6 +243,7 @@ class InventoryService:
                 reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
                 updated_at=item.get("updated_at"),
                 category_name=item.get("category", {}).get("name") if item.get("category") else None,
+                vendor_id=UUID(item["vendor_id"]) if item.get("vendor_id") else None,
             )
             for item in items
         ]
@@ -256,27 +260,7 @@ class InventoryService:
         if not item:
             return None
 
-        return InventoryItemResponse(
-            id=UUID(item["id"]),
-            property_id=UUID(item["property_id"]),
-            name=item["name"],
-            quantity=Decimal(str(item.get("quantity", 0))),
-            unit=item.get("unit", "unit"),
-            category_id=UUID(item["category_id"]) if item.get("category_id") else None,
-            sku=item.get("sku"),
-            barcode=item.get("barcode"),
-            description=item.get("description"),
-            min_quantity=Decimal(str(item.get("min_quantity", 0))),
-            max_quantity=Decimal(str(item["max_quantity"])) if item.get("max_quantity") else None,
-            reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
-            cost_per_unit=Decimal(str(item["cost_per_unit"])) if item.get("cost_per_unit") else None,
-            supplier_info=item.get("supplier_info") or {},
-            metadata=item.get("metadata") or {},
-            is_active=item.get("is_active", True),
-            last_scanned_at=item.get("last_scanned_at"),
-            created_at=item.get("created_at"),
-            updated_at=item.get("updated_at"),
-        )
+        return _item_response(item)
 
     async def create_item(
         self,
@@ -295,6 +279,7 @@ class InventoryService:
                 "barcode": item.barcode,
                 "unit": item.unit,
                 "category_id": str(item.category_id) if item.category_id else None,
+                "vendor_id": str(item.vendor_id) if item.vendor_id else None,
                 "quantity": str(item.quantity),
                 "min_quantity": str(item.min_quantity),
                 "max_quantity": str(item.max_quantity) if item.max_quantity else None,

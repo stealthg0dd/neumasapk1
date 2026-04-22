@@ -34,6 +34,15 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_ITEM_SELECT_COLUMNS = (
+    "id,property_id,organization_id,category_id,vendor_id,name,description,sku,barcode,"
+    "unit,quantity,min_quantity,max_quantity,reorder_point,cost_per_unit,currency,"
+    "supplier_info,metadata,tags,is_active,last_scanned_at,created_at,updated_at"
+)
+_ITEM_SELECT_WITH_CATEGORY = (
+    f"{_ITEM_SELECT_COLUMNS},category:inventory_categories(id,name)"
+)
+
 
 class InventoryRepository:
     """
@@ -50,6 +59,14 @@ class InventoryRepository:
         self.client = client
         self.table = "inventory_items"
         self.categories_table = "inventory_categories"
+
+    @staticmethod
+    def _normalize_item_payload(data: dict[str, Any]) -> dict[str, Any]:
+        """Normalize payload values sent to PostgREST for inventory_items."""
+        payload = dict(data)
+        if payload.get("vendor_id") is not None:
+            payload["vendor_id"] = str(payload["vendor_id"])
+        return payload
 
     # =========================================================================
     # Inventory Items
@@ -69,7 +86,7 @@ class InventoryRepository:
         try:
             query = (
                 self.client.table(self.table)
-                .select("*, category:inventory_categories(*)")
+                .select(_ITEM_SELECT_WITH_CATEGORY)
                 .eq("id", str(item_id))
             )
 
@@ -109,7 +126,7 @@ class InventoryRepository:
 
         query = (
             self.client.table(self.table)
-            .select("*, category:inventory_categories(id, name)")
+            .select(_ITEM_SELECT_WITH_CATEGORY)
             .eq("property_id", str(tenant.property_id))
         )
 
@@ -146,7 +163,7 @@ class InventoryRepository:
 
         response = await (
             self.client.table(self.table)
-            .select("*")
+            .select(_ITEM_SELECT_COLUMNS)
             .eq("property_id", str(tenant.property_id))
             .eq("is_active", True)
             .order("quantity")
@@ -175,7 +192,7 @@ class InventoryRepository:
         admin_client = await get_async_supabase_admin()
         response = await (
             admin_client.table(self.table)
-            .select("*")
+            .select(_ITEM_SELECT_COLUMNS)
             .eq("property_id", str(property_id))
             .eq("is_active", True)
             .order("quantity")
@@ -205,6 +222,7 @@ class InventoryRepository:
         # Ensure tenant fields are set
         data["property_id"] = str(tenant.property_id)
         data["organization_id"] = str(tenant.org_id)
+        data = self._normalize_item_payload(data)
         # Strip None values -- PostgREST rejects columns absent from schema cache
         data = {k: v for k, v in data.items() if v is not None}
 
@@ -231,7 +249,7 @@ class InventoryRepository:
         """
         query = (
             self.client.table(self.table)
-            .update(data)
+            .update(self._normalize_item_payload(data))
             .eq("id", str(item_id))
         )
 
@@ -374,7 +392,7 @@ class InventoryRepository:
         try:
             response = await (
                 self.client.table(self.table)
-                .select("*")
+                .select(_ITEM_SELECT_COLUMNS)
                 .eq("property_id", str(tenant.property_id))
                 .eq("barcode", barcode)
                 .eq("is_active", True)
@@ -498,7 +516,7 @@ class InventoryRepository:
         try:
             response = await (
                 self.client.table(self.table)
-                .select("*")
+                .select(_ITEM_SELECT_COLUMNS)
                 .eq("property_id", str(effective_property_id))
                 .ilike("name", name)
                 .eq("is_active", True)
