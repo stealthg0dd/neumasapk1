@@ -152,7 +152,7 @@ export interface InventoryUpdateResponse {
 // Scans
 // ============================================================================
 
-export type ScanStatus = "pending" | "processing" | "completed" | "failed";
+export type ScanStatus = "pending" | "queued" | "processing" | "completed" | "failed";
 export type ScanType = "receipt" | "barcode" | "full";
 
 export interface Scan {

@@ -97,6 +97,8 @@ class InventoryItemSummary(BaseModel):
     quantity: Decimal
     unit: str
     stock_status: str
+    reorder_point: Decimal | None = None
+    updated_at: datetime | None = None
     category_name: str | None = None
 
     model_config = {"from_attributes": True}

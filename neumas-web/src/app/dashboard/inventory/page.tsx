@@ -136,7 +136,11 @@ function InventoryMobileCard({
         className="relative"
         style={{ touchAction: "pan-y" }}
       >
-        <GlassCard className="p-4">
+        <GlassCard className={cn(
+          "p-4",
+          item.stock_status === "out_of_stock" && "border-l-2 border-l-red-400",
+          item.stock_status === "low_stock" && "border-l-2 border-l-amber-400",
+        )}>
           <div className="flex justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -492,11 +496,19 @@ export default function InventoryPage() {
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: Math.min(i * 0.03, 0.45) }}
-                            className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-elevated)]/50"
+                            className={cn(
+                              "border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-elevated)]/50",
+                              item.stock_status === "out_of_stock" && "bg-red-50/70",
+                              item.stock_status === "low_stock" && "bg-amber-50/60",
+                            )}
                           >
                             <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{item.name}</td>
                             <td className="px-4 py-3 text-[var(--text-secondary)]">{item.category?.name ?? "—"}</td>
-                            <td className="px-4 py-3 font-mono tabular-nums">{item.quantity}</td>
+                            <td className={cn(
+                              "px-4 py-3 font-mono tabular-nums",
+                              item.stock_status === "out_of_stock" && "font-semibold text-red-600",
+                              item.stock_status === "low_stock" && "font-semibold text-amber-600",
+                            )}>{item.quantity}</td>
                             <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
                               {exp
                                 ? new Date(exp).toLocaleDateString("en-SG", { timeZone: "Asia/Singapore" })

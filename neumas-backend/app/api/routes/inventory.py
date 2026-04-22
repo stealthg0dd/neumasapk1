@@ -244,6 +244,20 @@ async def adjust_quantity(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Inventory item not found",
             )
+
+        # Structured audit log — non-fatal
+        try:
+            from app.db.repositories.audit_logs import AuditLogsRepository
+            await AuditLogsRepository().log(
+                tenant=tenant,
+                action="inventory.quantity_adjusted",
+                resource_type="inventory_item",
+                resource_id=str(item_id),
+                metadata={"adjustment": adjustment, "reason": reason},
+            )
+        except Exception as audit_exc:
+            logger.warning("Audit log write failed (non-fatal)", item_id=str(item_id), error=str(audit_exc))
+
         return item
     except HTTPException:
         raise

@@ -5,6 +5,7 @@ Inventory service for managing inventory items and triggering predictions.
 """
 
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from app.api.deps import TenantContext
@@ -20,6 +21,18 @@ from app.schemas.inventory import (
 )
 
 logger = get_logger(__name__)
+
+
+def _compute_stock_status(item: dict[str, Any]) -> str:
+    """Derive stock_status from quantity vs reorder_point / min_quantity."""
+    qty = Decimal(str(item.get("quantity") or 0))
+    rp_raw = item.get("reorder_point") or item.get("min_quantity") or 0
+    rp = Decimal(str(rp_raw))
+    if qty <= 0:
+        return "out_of_stock"
+    if rp > 0 and qty <= rp:
+        return "low_stock"
+    return "normal"
 
 
 class InventoryService:
@@ -223,7 +236,9 @@ class InventoryService:
                 sku=item.get("sku"),
                 quantity=Decimal(str(item.get("quantity", 0))),
                 unit=item.get("unit", "unit"),
-                stock_status=item.get("status", "normal"),
+                stock_status=_compute_stock_status(item),
+                reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
+                updated_at=item.get("updated_at"),
                 category_name=item.get("category", {}).get("name") if item.get("category") else None,
             )
             for item in items

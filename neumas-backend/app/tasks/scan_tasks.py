@@ -378,6 +378,32 @@ async def _process_scan_async(
             errors=len(result["errors"]),
         )
 
+        # =================================================================
+        # Step 8 -- Write structured audit log entry
+        # =================================================================
+        if org_id and user_id:
+            try:
+                from app.db.repositories.audit_logs import AuditLogsRepository
+                await AuditLogsRepository().log_admin(
+                    org_id=org_id,
+                    user_id=user_id,
+                    action="scan.completed",
+                    resource_type="scan",
+                    resource_id=scan_id,
+                    property_id=property_id,
+                    actor_role="system",
+                    metadata={
+                        "items_upserted": len(upserted),
+                        "items_detected": len(extracted_items),
+                        "scan_type": scan_type,
+                        "confidence": vision_confidence,
+                        "processing_time_ms": total_ms,
+                        "partial_errors": len(result["errors"]),
+                    },
+                )
+            except Exception as exc:
+                logger.warning("Audit log write failed (non-fatal)", scan_id=scan_id, error=str(exc))
+
         return result
 
     except Exception as exc:
@@ -458,6 +484,14 @@ async def _upsert_inventory_item(
             .execute()
         )
 
+        if not resp.data:
+            logger.warning(
+                "Inventory quantity update returned no data — possible RLS block",
+                item_id=existing["id"],
+                item_name=item_name,
+                new_qty=new_qty,
+            )
+
         logger.info(
             "Incremented inventory quantity",
             item_id=existing["id"],
@@ -479,13 +513,21 @@ async def _upsert_inventory_item(
 
     resp = await supabase.table("inventory_items").insert(insert_payload).execute()
 
+    if not resp.data:
+        logger.warning(
+            "Inventory insert returned no data — possible RLS block on inventory_items",
+            item_name=item_name,
+            property_id=property_id,
+        )
+        return None
+
     logger.info(
         "Created new inventory item from scan",
         item_name=item_name,
         quantity=qty_to_add,
         property_id=property_id,
     )
-    return resp.data[0] if resp.data else None
+    return resp.data[0]
 
 
 # =============================================================================
