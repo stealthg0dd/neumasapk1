@@ -416,6 +416,7 @@ export interface GenerateListRequest {
   include_critical_only?: boolean;
   /** Minimum days of stock remaining before item is included */
   min_days_threshold?: number;
+  budget_limit?: number;
 }
 
 export interface GenerateListResponse {

@@ -90,6 +90,7 @@ import type {
   ScanRerunResponse,
 } from "./types";
 import { normalizeShoppingItem } from "./types";
+import { normalizeShoppingListStatus } from "@/lib/operations";
 /**
  * POST /api/auth/google/complete — deprecated for callback probing.
  * The Next.js /auth/callback route now exchanges the Supabase code on the
@@ -381,7 +382,11 @@ export async function listShoppingLists(params?: {
   status?: string;
   limit?: number;
 }): Promise<ShoppingList[]> {
-  return get<ShoppingList[]>("/api/shopping-list/", params);
+  const rows = await get<ShoppingList[]>("/api/shopping-list/", params);
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    status: normalizeShoppingListStatus(String(row.status ?? "draft")),
+  }));
 }
 
 /** GET /api/shopping-list/{listId} */
@@ -389,6 +394,7 @@ export async function getShoppingList(listId: string): Promise<ShoppingListDetai
   const data = await get<ShoppingListDetail>(`/api/shopping-list/${listId}`);
   return {
     ...data,
+    status: normalizeShoppingListStatus(String(data.status ?? "draft")),
     items: Array.isArray(data.items) ? data.items.map(normalizeShoppingItem) : [],
   };
 }
@@ -402,7 +408,11 @@ export async function generateShoppingList(
 
 /** PATCH /api/shopping-list/{listId}/approve */
 export async function approveShoppingList(listId: string): Promise<ShoppingList> {
-  return patch<ShoppingList>(`/api/shopping-list/${listId}/approve`, {});
+  const row = await patch<ShoppingList>(`/api/shopping-list/${listId}/approve`, {});
+  return {
+    ...row,
+    status: normalizeShoppingListStatus(String(row.status ?? "draft")),
+  };
 }
 
 /** PATCH /api/shopping-list/{listId}/items/{itemId}/purchase */

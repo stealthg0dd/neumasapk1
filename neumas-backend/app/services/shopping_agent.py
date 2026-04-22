@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from app.core.logging import get_logger
 from app.db.repositories.inventory import get_inventory_repository
 from app.db.repositories.predictions import get_predictions_repository
-from app.db.repositories.shopping_lists import get_shopping_lists_repository
+from app.db.supabase_client import get_async_supabase_admin
 from app.services.orchestration_service import call_agent
 
 logger = get_logger(__name__)
@@ -72,10 +72,22 @@ class ShoppingAgent:
 
         inventory_repo = await get_inventory_repository()
         predictions_repo = await get_predictions_repository()
-        shopping_repo = await get_shopping_lists_repository()
-
         items_to_add: list[dict[str, Any]] = []
         seen_item_ids: set[str] = set()
+        supabase = await get_async_supabase_admin()
+        if not supabase:
+            raise RuntimeError("Supabase admin client unavailable")
+
+        org_resp = await (
+            supabase.table("properties")
+            .select("organization_id")
+            .eq("id", str(property_id))
+            .single()
+            .execute()
+        )
+        organization_id = (org_resp.data or {}).get("organization_id")
+        if not organization_id:
+            raise RuntimeError(f"Could not resolve organization for property {property_id}")
 
         # 1. Get low stock items
         low_stock_count = 0
@@ -96,6 +108,7 @@ class ShoppingAgent:
                     item,
                     "Low stock level",
                     urgency_bucket="warning",
+                    source="low_stock",
                 )
                 items_to_add.append(item_data)
                 seen_item_ids.add(item["id"])
@@ -105,9 +118,8 @@ class ShoppingAgent:
         prediction_count = 0
         if include_predictions:
             # Get runout predictions which include urgency_bucket
-            predictions = await predictions_repo.get_predictions_by_property(
+            predictions = await predictions_repo.get_stockout_predictions_admin(
                 property_id,
-                prediction_type="runout",
                 days_ahead=days_ahead,
             )
 
@@ -122,14 +134,30 @@ class ShoppingAgent:
                 ]:
                     continue
 
-                urgency = prediction.get("data", {}).get("urgency_bucket", "normal")
-                reason = f"Predicted runout: {prediction.get('data', {}).get('predicted_runout_date', 'soon')}"
+                raw_urgency = prediction.get("stockout_risk_level") or (
+                    prediction.get("features_used", {}) or {}
+                ).get("urgency_bucket", "normal")
+                urgency = {
+                    "critical": "critical",
+                    "urgent": "warning",
+                    "soon": "warning",
+                    "later": "normal",
+                    "warning": "warning",
+                }.get(str(raw_urgency), "normal")
+                predicted_date = prediction.get("prediction_date")
+                reason = (
+                    f"Predicted stockout around {predicted_date}"
+                    if predicted_date
+                    else "Predicted stockout soon"
+                )
 
                 item_data = self._create_shopping_item(
                     item_info,
                     reason,
-                    predicted_quantity=prediction.get("data", {}).get("predicted_value"),
+                    predicted_quantity=prediction.get("predicted_value"),
                     urgency_bucket=urgency,
+                    prediction_id=prediction.get("id"),
+                    source="prediction",
                 )
                 items_to_add.append(item_data)
                 seen_item_ids.add(item_info["id"])
@@ -159,39 +187,59 @@ class ShoppingAgent:
                 items_to_add,
                 budget_limit,
             )
+            items_by_urgency = self._group_by_urgency(items_to_add)
 
         # 6. Create shopping list with items JSONB
         list_name = name or f"Shopping List - {datetime.now(UTC).strftime('%Y-%m-%d')}"
-
-        # Build items JSONB structure
-        items_jsonb = {
-            "items": items_to_add,
-            "by_urgency": items_by_urgency,
-            "by_store": self._group_by_store(items_to_add) if group_by_store else None,
-            "summary": {
-                "total_items": len(items_to_add),
+        list_id = str(uuid4())
+        generation_params = {
+            "include_low_stock": include_low_stock,
+            "include_predictions": include_predictions,
+            "include_critical_only": include_critical_only,
+            "days_ahead": days_ahead,
+            "exclude_categories": [str(c) for c in exclude_categories] if exclude_categories else None,
+            "group_by_store": group_by_store,
+            "by_urgency_summary": {
                 "critical_count": len(items_by_urgency.get("critical", [])),
                 "warning_count": len(items_by_urgency.get("warning", [])),
                 "normal_count": len(items_by_urgency.get("normal", [])),
             },
         }
 
-        shopping_list = await shopping_repo.create({
-            "id": str(uuid4()),
+        shopping_list_payload = {
+            "id": list_id,
             "property_id": str(property_id),
+            "organization_id": str(organization_id),
             "created_by_id": str(user_id),
             "name": list_name,
             "status": "draft",
             "budget_limit": str(budget_limit) if budget_limit else None,
-            "items": items_jsonb,  # JSONB storage
-            "generation_params": {
-                "include_low_stock": include_low_stock,
-                "include_predictions": include_predictions,
-                "days_ahead": days_ahead,
-                "exclude_categories": [str(c) for c in exclude_categories] if exclude_categories else None,
-                "group_by_store": group_by_store,
-            },
-        })
+            "currency": "USD",
+            "generation_params": generation_params,
+        }
+        shopping_resp = await supabase.table("shopping_lists").insert(shopping_list_payload).execute()
+        shopping_list = shopping_resp.data[0] if shopping_resp.data else shopping_list_payload
+
+        if items_to_add:
+            item_rows = [
+                {
+                    "id": str(uuid4()),
+                    "shopping_list_id": list_id,
+                    "inventory_item_id": item.get("inventory_item_id"),
+                    "prediction_id": item.get("prediction_id"),
+                    "name": item["name"],
+                    "quantity": item["quantity"],
+                    "unit": item.get("unit", "unit"),
+                    "estimated_price": item.get("estimated_price"),
+                    "currency": "USD",
+                    "priority": item.get("priority", "normal"),
+                    "reason": item.get("reason"),
+                    "source": item.get("source", "manual"),
+                    "is_purchased": False,
+                }
+                for item in items_to_add
+            ]
+            await supabase.table("shopping_list_items").insert(item_rows).execute()
 
         # Calculate estimated total
         estimated_total = sum(
@@ -199,6 +247,30 @@ class ShoppingAgent:
             Decimal(str(item.get("quantity", 1)))
             for item in items_to_add
         )
+
+        await (
+            supabase.table("shopping_lists")
+            .update(
+                {
+                    "total_estimated_cost": str(estimated_total),
+                    "notes": (
+                        "Built from low stock, prediction output, and the latest baseline signals."
+                    ),
+                }
+            )
+            .eq("id", list_id)
+            .execute()
+        )
+
+        detail_resp = await (
+            supabase.table("shopping_lists")
+            .select("*, items:shopping_list_items(*)")
+            .eq("id", list_id)
+            .single()
+            .execute()
+        )
+        if detail_resp.data:
+            shopping_list = detail_resp.data
 
         logger.info(
             "Shopping list generated",
@@ -356,6 +428,8 @@ Return organized list with section/aisle assignments."""
         reason: str,
         predicted_quantity: Any = None,
         urgency_bucket: str = "normal",
+        prediction_id: str | None = None,
+        source: str = "manual",
     ) -> dict[str, Any]:
         """Create a shopping list item from inventory item."""
         current_qty = Decimal(str(inventory_item.get("quantity", 0)))
@@ -384,8 +458,8 @@ Return organized list with section/aisle assignments."""
         priority = priority_map.get(urgency_bucket, "normal")
 
         return {
-            "id": str(uuid4()),
             "inventory_item_id": inventory_item["id"],
+            "prediction_id": prediction_id,
             "name": inventory_item["name"],
             "category": inventory_item.get("category"),
             "quantity": str(order_qty),
@@ -394,6 +468,7 @@ Return organized list with section/aisle assignments."""
             "priority": priority,
             "urgency_bucket": urgency_bucket,
             "reason": reason,
+            "source": source,
             "is_purchased": False,
         }
 

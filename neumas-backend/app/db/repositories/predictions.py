@@ -261,6 +261,32 @@ class PredictionsRepository:
         )
         return response.data
 
+    async def get_stockout_predictions_admin(
+        self,
+        property_id: UUID,
+        days_ahead: int = 7,
+    ) -> list[dict[str, Any]]:
+        """
+        Admin version of stockout prediction lookup for background workers.
+        """
+        from datetime import UTC, timedelta
+
+        admin_client = await get_async_supabase_admin()
+        now = datetime.now(UTC)
+        end_date = now + timedelta(days=days_ahead)
+
+        response = await (
+            admin_client.table(self.table)
+            .select("*, inventory_item:inventory_items(id, name, quantity, min_quantity, max_quantity, reorder_point, unit, cost_per_unit, category_id)")
+            .eq("property_id", str(property_id))
+            .eq("prediction_type", "stockout")
+            .gte("prediction_date", now.isoformat())
+            .lte("prediction_date", end_date.isoformat())
+            .order("prediction_date")
+            .execute()
+        )
+        return response.data or []
+
     async def get_reorder_suggestions(
         self,
         tenant: "TenantContext",

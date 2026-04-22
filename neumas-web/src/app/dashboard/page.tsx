@@ -43,6 +43,7 @@ import type {
 import { useAuthStore } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
 import { formatCurrency } from "@/lib/currency";
+import { predictionReason, topOperationalRecommendation } from "@/lib/operations";
 import { ExecutiveBriefing } from "@/components/dashboard/insights/ExecutiveBriefing";
 
 const EMPTY_SUMMARY: AnalyticsSummary = {
@@ -161,6 +162,7 @@ export default function DashboardPage() {
       : reviewQueue.length > 0
         ? "Review scanned documents"
         : "Run a fresh forecast";
+  const recommendation = topOperationalRecommendation(predictions, alerts);
 
   return (
     <div className="space-y-6">
@@ -299,14 +301,18 @@ export default function DashboardPage() {
               </div>
               <Sparkles className="h-4 w-4 text-sky-700" />
             </div>
-            {predictions[0] ? (
+            {recommendation ? (
               <div className="mt-4 space-y-2">
                 <p className="text-lg font-semibold text-gray-900">
-                  {predictions[0].item_name ?? predictions[0].inventory_item?.name ?? "Inventory item"}
+                  {recommendation.itemName}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {predictions[0].recommended_action ?? "Review this item"} in{" "}
-                  {predictions[0].time_horizon_days ?? "?"} day(s), confidence {Math.round((predictions[0].confidence ?? 0) * 100)}%.
+                  {recommendation.reason}
+                </p>
+                <p className="text-sm font-medium text-gray-800">
+                  Action: {recommendation.action}
+                  {recommendation.timeHorizonDays != null ? ` over the next ${recommendation.timeHorizonDays} day(s)` : ""}
+                  {recommendation.confidence != null ? ` · confidence ${Math.round(recommendation.confidence * 100)}%` : ""}
                 </p>
                 <Link href="/dashboard/shopping" className="inline-flex items-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">
                   Build shopping list
@@ -369,7 +375,7 @@ export default function DashboardPage() {
               <ul className="mt-1 space-y-1 text-xs text-gray-600">
                 {predictions.slice(0, 3).map((prediction) => (
                   <li key={prediction.id}>
-                    {prediction.inventory_item?.name ?? "Item"}: risk {prediction.stockout_risk_level ?? "later"}, confidence {Math.round((prediction.confidence ?? 0) * 100)}%
+                    {prediction.inventory_item?.name ?? "Item"}: {predictionReason(prediction)}
                   </li>
                 ))}
                 {predictions.length === 0 && <li>Run a new forecast to generate recommendation candidates.</li>}

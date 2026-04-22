@@ -16,6 +16,7 @@ import { useAuthStore } from "@/lib/store/auth";
 import type { Prediction, ShoppingList, ShoppingListStatus } from "@/lib/api/types";
 import { track, captureUIError } from "@/lib/analytics";
 import { formatCurrency } from "@/lib/currency";
+import { predictionReason, topOperationalRecommendation } from "@/lib/operations";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -331,6 +332,7 @@ export default function ShoppingPage() {
   }
 
   const displayed = filter === "all" ? lists : lists.filter((l) => l.status === filter);
+  const recommendation = topOperationalRecommendation(predictions);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -349,16 +351,36 @@ export default function ShoppingPage() {
         </button>
       </div>
 
-      {predictions[0] && (
+      {recommendation && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Recommended reorder</p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
-            {predictions[0].item_name ?? predictions[0].inventory_item?.name ?? "Inventory item"}
+            {recommendation.itemName}
           </p>
           <p className="mt-1 text-sm text-slate-700">
-            {predictions[0].recommended_action ?? "Add this item to the next shopping list"} within{" "}
-            {predictions[0].time_horizon_days ?? "?"} day(s), confidence {Math.round((predictions[0].confidence ?? 0) * 100)}%.
+            {recommendation.reason}
           </p>
+          <p className="mt-2 text-sm font-medium text-slate-800">
+            Action: {recommendation.action}
+            {recommendation.timeHorizonDays != null ? ` over the next ${recommendation.timeHorizonDays} day(s)` : ""}
+            {recommendation.confidence != null ? ` · confidence ${Math.round(recommendation.confidence * 100)}%` : ""}
+          </p>
+        </div>
+      )}
+
+      {!loading && predictions.length > 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">What the list will use</p>
+          <div className="mt-3 space-y-2">
+            {predictions.slice(0, 3).map((prediction) => (
+              <div key={prediction.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="text-sm font-semibold text-gray-900">
+                  {prediction.item_name ?? prediction.inventory_item?.name ?? "Inventory item"}
+                </p>
+                <p className="mt-1 text-xs text-gray-600">{predictionReason(prediction)}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
