@@ -23,6 +23,7 @@ from app.db.repositories.predictions import get_predictions_repository
 from app.db.repositories.shopping_lists import get_shopping_lists_repository
 from app.schemas.predictions import DemandForecastRequest
 from app.schemas.shopping import GenerateShoppingListRequest
+from app.services.llm_failover import get_completion_with_failover
 
 logger = get_logger(__name__)
 
@@ -430,22 +431,24 @@ async def execute_llm(
             ]
 
     logger.info(
-        "Executing LLM call",
+        "Executing LLM call with failover",
         agent=agent_name,
-        model=model,
-        provider=provider,
+        requested_model=model,
+        requested_provider=provider,
         is_vision=is_vision,
     )
 
-    # Call appropriate provider
-    if provider == "openai":
-        response_text = await _call_openai(model, system_prompt, user_content, is_vision)
-    elif provider == "anthropic":
-        response_text = await _call_anthropic(model, system_prompt, user_content, is_vision)
-    elif provider == "google":
-        response_text = await _call_google(model, system_prompt, user_content, is_vision)
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
+    completion = await get_completion_with_failover(
+        system_prompt=system_prompt,
+        user_content=user_content,
+        is_vision=is_vision,
+        metadata={
+            "agent": agent_name,
+            "requested_model": model,
+            "requested_provider": provider,
+        },
+    )
+    response_text = completion["text"]
 
     # Parse and validate JSON response
     result = _extract_json(response_text)
@@ -453,7 +456,9 @@ async def execute_llm(
     logger.info(
         "LLM call successful",
         agent=agent_name,
-        model=model,
+        requested_model=model,
+        provider_used=completion.get("provider"),
+        model_used=completion.get("model"),
         response_keys=list(result.keys()),
     )
 

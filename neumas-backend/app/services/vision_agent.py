@@ -1,7 +1,7 @@
 """
 Vision Agent for processing receipt/scan images.
 
-Uses Claude 3.5 Sonnet (Anthropic SDK) to extract inventory items from images.
+Uses OpenAI GPT-4o Vision to extract inventory items from images.
 Specializes in B2B procurement receipt parsing with quantity normalization.
 """
 
@@ -15,6 +15,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.llm_failover import get_completion_with_failover
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ Do not include any explanation or markdown - return ONLY the JSON object."""
 
 class VisionAgent:
     """
-    AI agent for processing inventory scan images using Claude 3.5 Sonnet.
+    AI agent for processing inventory scan images using OpenAI GPT-4o Vision.
 
     Specializes in B2B procurement receipts with:
     - Quantity normalization (cases, packs, multipacks)
@@ -76,12 +77,12 @@ class VisionAgent:
     """
 
     def __init__(self) -> None:
-        """Initialize the VisionAgent with Anthropic client."""
-        self.model = "claude-sonnet-4-6"
+        """Initialize the VisionAgent with failover-capable LLM settings."""
+        self.model = "gpt-4o"
         self.max_tokens = 4096
 
-        if not settings.ANTHROPIC_API_KEY:
-            logger.warning("ANTHROPIC_API_KEY not set - VisionAgent will fail")
+        if not any([settings.ANTHROPIC_API_KEY, settings.OPENAI_API_KEY, settings.GOOGLE_API_KEY]):
+            logger.warning("No LLM API key found for scan failover chain")
 
     async def analyze_receipt(
         self,
@@ -121,8 +122,13 @@ class VisionAgent:
                 if not image_data:
                     return self._error_response("Failed to fetch image from URL")
 
-            # Call Claude Vision API
-            result = await self._call_claude_vision(image_data, user_hint=user_hint)
+            # Call LLM with provider failover
+            result = await self._call_with_failover(
+                image_data,
+                user_hint=user_hint,
+                request_id=request_id,
+                scan_id=scan_id,
+            )
 
             if "error" in result:
                 return result
@@ -187,22 +193,14 @@ class VisionAgent:
             logger.error("Failed to fetch image", error=str(e), url=image_url[:80])
             return None
 
-    async def _call_claude_vision(
+    async def _call_with_failover(
         self,
         image_data: dict[str, str],
         user_hint: str | None = None,
+        request_id: str | None = None,
+        scan_id: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Call Claude 3.5 Sonnet Vision API.
-
-        When DEV_MODE=True returns a deterministic stub without any network call.
-
-        Args:
-            image_data: Dict with 'data' (base64) and 'media_type'
-
-        Returns:
-            Parsed JSON response or error dict
-        """
+        """Call shared LLM failover wrapper for receipt extraction."""
         if settings.DEV_MODE:
             from app.services.dev_stubs import stub_vision
             result = stub_vision(image_data)
@@ -210,71 +208,29 @@ class VisionAgent:
                 result["hint_used"] = user_hint
             return result
 
-        # Lazy import Anthropic to avoid import issues if not installed
         try:
-            import anthropic
-        except ImportError:
-            logger.error("anthropic package not installed")
-            return self._error_response("anthropic package not installed")
-
-        if not settings.ANTHROPIC_API_KEY:
-            return self._error_response("ANTHROPIC_API_KEY not configured")
-
-        try:
-            # Use AsyncAnthropic so the event loop is not blocked during the
-            # API call — the synchronous Anthropic() client would freeze all
-            # concurrent requests for the duration of the LLM round-trip.
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
             hint_text = (
                 f"\n\nOperator hint: {user_hint.strip()}. Use this to correct likely OCR mistakes."
                 if user_hint and user_hint.strip()
                 else ""
             )
 
-            # Build the message with image
-            try:
-                message = await asyncio.wait_for(
-                    client.messages.create(
-                        model=self.model,
-                        max_tokens=self.max_tokens,
-                        system=VISION_SYSTEM_PROMPT,
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": [
-                                    {
-                                        "type": "image",
-                                        "source": {
-                                            "type": "base64",
-                                            "media_type": image_data["media_type"],
-                                            "data": image_data["data"],
-                                        },
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": (
-                                            "Extract all items from this receipt image. "
-                                            "Follow the normalization rules carefully."
-                                            f"{hint_text}"
-                                        ),
-                                    },
-                                ],
-                            }
-                        ],
+            completion = await asyncio.wait_for(
+                get_completion_with_failover(
+                    system_prompt=VISION_SYSTEM_PROMPT,
+                    user_content=(
+                        "Extract all items from this receipt image. "
+                        "Follow the normalization rules carefully."
+                        f"{hint_text}"
                     ),
-                    timeout=45,
-                )
-            except asyncio.TimeoutError:
-                logger.error(
-                    "OCR provider timed out",
-                    provider="anthropic",
-                    model=self.model,
-                    timeout_seconds=45,
-                )
-                return self._error_response("OCR provider timeout after 45 seconds")
+                    is_vision=True,
+                    image_data=image_data,
+                    metadata={"request_id": request_id, "scan_id": scan_id},
+                ),
+                timeout=60,
+            )
 
-            # Extract text response
-            response_text = message.content[0].text
+            response_text = completion.get("text", "")
 
             # Parse JSON from response
             parsed = self._parse_json_response(response_text)
@@ -283,27 +239,27 @@ class VisionAgent:
                 return self._error_response("Failed to parse LLM response as JSON")
 
             # Add LLM metadata
-            parsed["llm_provider"] = "anthropic"
-            parsed["llm_model"] = self.model
+            parsed["llm_provider"] = completion.get("provider")
+            parsed["llm_model"] = completion.get("model")
             parsed["usage"] = {
-                "input_tokens": message.usage.input_tokens,
-                "output_tokens": message.usage.output_tokens,
+                "input_tokens": (completion.get("usage") or {}).get("input_tokens", 0),
+                "output_tokens": (completion.get("usage") or {}).get("output_tokens", 0),
             }
 
             return parsed
 
+        except asyncio.TimeoutError:
+            logger.error(
+                "OCR provider timed out",
+                timeout_seconds=60,
+                request_id=request_id,
+                scan_id=scan_id,
+            )
+            return self._error_response("OCR provider timeout after 60 seconds")
         except Exception as e:
-            # Check for specific Anthropic errors
-            error_name = type(e).__name__
-            if "RateLimitError" in error_name:
-                logger.error("Anthropic rate limit exceeded", error=str(e), model=self.model)
-                return self._error_response(f"Rate limit exceeded: {e}")
-            elif "APIError" in error_name:
-                logger.error("Anthropic API error", error=str(e), model=self.model)
-                return self._error_response(f"API error: {e}")
-            else:
-                logger.exception("Claude Vision call failed", error=str(e), model=self.model)
-                return self._error_response(str(e))
+            error_message = str(e)
+            logger.exception("Vision failover call failed", error=error_message, request_id=request_id, scan_id=scan_id)
+            return self._error_response(error_message)
 
     def _parse_json_response(self, response_text: str) -> dict[str, Any] | None:
         """
