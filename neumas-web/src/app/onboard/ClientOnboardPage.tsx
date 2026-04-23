@@ -115,11 +115,109 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [activeScanId, setActiveScanId] = useState<string | null>(null);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const resetFile = useCallback(() => { setFile(null); if (preview) URL.revokeObjectURL(preview); setPreview(null); setDone(false); }, [preview]);
+  const pollStartedAtRef = useRef<number | null>(null);
+  const resetFile = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    pollStartedAtRef.current = null;
+    setFile(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    setDone(false);
+    setActiveScanId(null);
+    setPollTimedOut(false);
+    setBusy(false);
+  }, [preview]);
   const onFileSelected = useCallback((f: File) => { const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"]; if (!allowed.includes(f.type)) { toast.error("Upload a JPEG, PNG, WebP, or PDF."); return; } if (f.size > 15 * 1024 * 1024) { toast.error("File must be under 15 MB."); return; } resetFile(); setFile(f); if (f.type.startsWith("image/")) setPreview(URL.createObjectURL(f)); }, [resetFile]);
-  async function runScan() { if (!file) return; setBusy(true); try { const res = await postScanUpload(file, "receipt"); const sid = res.scan_id ?? res.id ?? null; if (!sid) { toast.error("Could not start scan."); setBusy(false); return; } toast.success("Document queued — extracting line items…"); pollRef.current = setInterval(async () => { try { const s = await getScanStatus(sid); if (s.status === "completed" || s.status === "failed") { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setBusy(false); if (s.status === "completed") { setDone(true); toast.success(`Extracted ${s.items_detected ?? 0} items — inventory updated.`); } else { toast.error(s.error_message ?? "Extraction failed."); } } } catch { /* keep polling */ } }, 2000); } catch (err) { captureUIError("onboard_upload", err); setBusy(false); } }
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    pollStartedAtRef.current = null;
+  }, []);
+
+  const checkScanStatus = useCallback(async (sid: string) => {
+    const s = await getScanStatus(sid);
+    if (s.status === "completed" || s.status === "failed") {
+      stopPolling();
+      setBusy(false);
+      if (s.status === "completed") {
+        setDone(true);
+        setPollTimedOut(false);
+        toast.success(`Extracted ${s.items_detected ?? 0} items — inventory updated.`);
+      } else {
+        toast.error(s.error_message ?? "Extraction failed.");
+      }
+      return true;
+    }
+    return false;
+  }, [stopPolling]);
+
+  const startPolling = useCallback((sid: string) => {
+    stopPolling();
+    pollStartedAtRef.current = Date.now();
+    pollRef.current = setInterval(async () => {
+      try {
+        const completed = await checkScanStatus(sid);
+        if (completed) return;
+        const startedAt = pollStartedAtRef.current;
+        if (startedAt && Date.now() - startedAt > 30_000) {
+          stopPolling();
+          setBusy(false);
+          setPollTimedOut(true);
+          toast.message("Still processing. Tap Refresh Status to check again.");
+        }
+      } catch {
+        // Keep polling for transient network failures.
+      }
+    }, 2000);
+  }, [checkScanStatus, stopPolling]);
+
+  async function runScan() {
+    if (!file) return;
+    setBusy(true);
+    setPollTimedOut(false);
+    try {
+      const res = await postScanUpload(file, "receipt");
+      const sid = res.scan_id ?? res.id ?? null;
+      if (!sid) {
+        toast.error("Could not start scan.");
+        setBusy(false);
+        return;
+      }
+      setActiveScanId(sid);
+      toast.success("Document queued — extracting line items…");
+      startPolling(sid);
+    } catch (err) {
+      captureUIError("onboard_upload", err);
+      setBusy(false);
+    }
+  }
+
+  async function refreshScanStatus() {
+    if (!activeScanId) return;
+    setBusy(true);
+    setPollTimedOut(false);
+    try {
+      const completed = await checkScanStatus(activeScanId);
+      if (!completed) {
+        setBusy(false);
+        setPollTimedOut(true);
+        toast.message("Scan is still processing. Try Refresh Status again shortly.");
+      }
+    } catch {
+      setBusy(false);
+      setPollTimedOut(true);
+      toast.error("Could not refresh scan status. Please try again.");
+    }
+  }
+  useEffect(() => () => { stopPolling(); }, [stopPolling]);
   return (
     <div className="space-y-6">
       <div>
@@ -149,12 +247,22 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
           )}
         </>
       )}
+      {pollTimedOut && !done && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-[13px] font-medium text-amber-900">Scan is still processing on the server.</p>
+          <p className="mt-1 text-[12px] text-amber-700">Use Refresh Status to fetch the latest result without re-uploading.</p>
+        </div>
+      )}
       <div className="flex gap-3">
         <button type="button" onClick={onBack} className="flex-1 rounded-xl border border-gray-200 py-3 text-[14px] font-medium text-gray-600 hover:bg-gray-50">Back</button>
         {done ? (
           <button type="button" onClick={onNext} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0071a3] py-3 text-[14px] font-semibold text-white hover:bg-[#005f8a]">
             Go to dashboard
             <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : pollTimedOut && activeScanId ? (
+          <button type="button" onClick={refreshScanStatus} disabled={busy} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0071a3] py-3 text-[14px] font-semibold text-white hover:bg-[#005f8a] disabled:opacity-60">
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Refreshing…</> : <>Refresh Status</>}
           </button>
         ) : file ? (
           <button type="button" onClick={runScan} disabled={busy} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0071a3] py-3 text-[14px] font-semibold text-white hover:bg-[#005f8a] disabled:opacity-60">

@@ -109,11 +109,13 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     broker_connection_retry=True,
     broker_connection_max_retries=10,
+    broker_pool_limit=1,
 
     # Redis socket timeouts — fail fast when Redis is unavailable
     # Without these, the result backend retries 20× blocking for ~20s per request
     redis_socket_connect_timeout=3,
     redis_socket_timeout=3,
+    redis_backend_health_check_interval=30,
 
     # Result backend settings
     result_expires=3600,  # Results expire after 1 hour

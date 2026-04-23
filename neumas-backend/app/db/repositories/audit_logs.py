@@ -23,6 +23,7 @@ class AuditLogsRepository:
         user_id: str,
         action: str,
         resource_type: str,
+        event_type: str = "audit_event",
         resource_id: str | None = None,
         property_id: str | None = None,
         actor_role: str = "system",
@@ -41,6 +42,7 @@ class AuditLogsRepository:
             "actor_id": user_id,
             "actor_role": actor_role,
             "action": action,
+            "event_type": event_type,
             "resource_type": resource_type,
         }
         if resource_id:
@@ -66,6 +68,7 @@ class AuditLogsRepository:
         tenant: TenantContext,
         action: str,
         resource_type: str,
+        event_type: str = "audit_event",
         resource_id: str | None = None,
         before: dict | None = None,
         after: dict | None = None,
@@ -78,6 +81,7 @@ class AuditLogsRepository:
             "actor_id": str(tenant.user_id),
             "actor_role": tenant.role,
             "action": action,
+            "event_type": event_type,
             "resource_type": resource_type,
         }
         if resource_id:

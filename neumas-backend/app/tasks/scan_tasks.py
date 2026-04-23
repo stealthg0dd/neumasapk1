@@ -528,6 +528,7 @@ async def _process_scan_async(
         # Step 7 -- Mark scan as completed
         # =================================================================
         total_ms = int((time.perf_counter() - wall_start) * 1000)
+        logger.info(f"DEBUG: Attempting final inventory commit for Scan ID: {scan_id}")
 
         final_status = "partial_failed" if result["errors"] else "completed"
         stage_details["total_pipeline_ms"] = total_ms
@@ -856,36 +857,88 @@ async def _upsert_inventory_item(
 
     qty_to_add = float(item.get("quantity") or 1)
     unit       = _normalize_unit(item.get("unit"))
+    par_level = item.get("par_level")
+
+    def _is_missing_column_error(exc: Exception, column_name: str) -> bool:
+        msg = str(exc).lower()
+        return (
+            f"column '{column_name.lower()}'" in msg
+            or f'column "{column_name.lower()}"' in msg
+            or f"{column_name.lower()} does not exist" in msg
+        )
+
+    def _is_retryable_schema_error(exc: Exception) -> bool:
+        return any(
+            _is_missing_column_error(exc, col)
+            for col in ("vendor_id", "supplier_info", "par_level")
+        )
 
     # Look for existing item by name (case-insensitive)
-    existing_resp = await (
-        supabase.table("inventory_items")
-        .select("id, quantity, vendor_id, supplier_info")
-        .eq("property_id", property_id)
-        .ilike("name", item_name)
-        .limit(1)
-        .execute()
-    )
+    try:
+        existing_resp = await (
+            supabase.table("inventory_items")
+            .select("id, quantity, vendor_id, supplier_info")
+            .eq("property_id", property_id)
+            .ilike("name", item_name)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if not _is_retryable_schema_error(exc):
+            raise
+        logger.warning(
+            "Inventory schema drift detected while selecting item; retrying with minimal columns",
+            item_name=item_name,
+            error=str(exc),
+        )
+        existing_resp = await (
+            supabase.table("inventory_items")
+            .select("id, quantity")
+            .eq("property_id", property_id)
+            .ilike("name", item_name)
+            .limit(1)
+            .execute()
+        )
 
     if existing_resp.data:
         existing = existing_resp.data[0]
         new_qty = float(existing.get("quantity") or 0) + qty_to_add
 
         update_payload: dict[str, Any] = {"quantity": str(new_qty)}
-        if vendor_id and not existing.get("vendor_id"):
+        if vendor_id and "vendor_id" in existing and not existing.get("vendor_id"):
             update_payload["vendor_id"] = vendor_id
-        if vendor_name:
+        if vendor_name and "supplier_info" in existing:
             supplier_info = existing.get("supplier_info") or {}
             if supplier_info.get("name") != vendor_name:
                 supplier_info = {**supplier_info, "name": vendor_name}
                 update_payload["supplier_info"] = supplier_info
+        if par_level is not None:
+            update_payload["par_level"] = str(par_level)
 
-        resp = await (
-            supabase.table("inventory_items")
-            .update(update_payload)
-            .eq("id", existing["id"])
-            .execute()
-        )
+        try:
+            resp = await (
+                supabase.table("inventory_items")
+                .update(update_payload)
+                .eq("id", existing["id"])
+                .execute()
+            )
+        except Exception as exc:
+            if not _is_retryable_schema_error(exc):
+                raise
+            logger.warning(
+                "Inventory schema drift detected while updating item; retrying without optional fields",
+                item_name=item_name,
+                error=str(exc),
+            )
+            update_payload.pop("vendor_id", None)
+            update_payload.pop("supplier_info", None)
+            update_payload.pop("par_level", None)
+            resp = await (
+                supabase.table("inventory_items")
+                .update(update_payload)
+                .eq("id", existing["id"])
+                .execute()
+            )
 
         if not resp.data:
             logger.warning(
@@ -917,8 +970,23 @@ async def _upsert_inventory_item(
         insert_payload["vendor_id"] = vendor_id
     if vendor_name:
         insert_payload["supplier_info"] = {"name": vendor_name}
+    if par_level is not None:
+        insert_payload["par_level"] = str(par_level)
 
-    resp = await supabase.table("inventory_items").insert(insert_payload).execute()
+    try:
+        resp = await supabase.table("inventory_items").insert(insert_payload).execute()
+    except Exception as exc:
+        if not _is_retryable_schema_error(exc):
+            raise
+        logger.warning(
+            "Inventory schema drift detected while inserting item; retrying without optional fields",
+            item_name=item_name,
+            error=str(exc),
+        )
+        insert_payload.pop("vendor_id", None)
+        insert_payload.pop("supplier_info", None)
+        insert_payload.pop("par_level", None)
+        resp = await supabase.table("inventory_items").insert(insert_payload).execute()
 
     if not resp.data:
         logger.warning(
