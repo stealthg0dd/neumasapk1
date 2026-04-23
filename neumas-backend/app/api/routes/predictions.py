@@ -84,6 +84,11 @@ async def forecast(
 
 
 @router.get(
+    "",
+    summary="List predictions",
+    description="Get stockout predictions for the current property, sorted by urgency.",
+)
+@router.get(
     "/",
     summary="List predictions",
     description="Get stockout predictions for the current property, sorted by urgency.",

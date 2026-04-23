@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { Mesh } from "three";
+import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Edges } from "@react-three/drei";
 const COLORS = [
@@ -114,6 +115,10 @@ export function PantryScene({ items, className }: PantrySceneProps) {
         camera={{ position: [2.2, 1.6, 2.8], fov: 42 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
+        onCreated={({ gl }) => {
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFShadowMap;
+        }}
       >
         <Scene items={items} />
       </Canvas>

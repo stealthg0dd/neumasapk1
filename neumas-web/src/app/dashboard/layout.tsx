@@ -28,7 +28,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    get<unknown>("/api/predictions/", { limit: 1 })
+    get<unknown>("/api/predictions", { limit: 1 })
       .then(() => setWorkerOk(true))
       .catch((err: { response?: { status: number } }) => {
         const status = err?.response?.status;

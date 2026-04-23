@@ -203,27 +203,27 @@ export async function rerunScanWithHint(
   return post<ScanRerunResponse>(`/api/scan/${scanId}/rerun`, { hint });
 }
 
-/** GET /api/scan/ */
+/** GET /api/scan */
 export async function listScans(params?: {
   status?: string;
   limit?: number;
   offset?: number;
 }): Promise<Scan[]> {
-  return get<Scan[]>("/api/scan/", params);
+  return get<Scan[]>("/api/scan", params);
 }
 
 // ============================================================================
 // Inventory
 // ============================================================================
 
-/** GET /api/inventory/ */
+/** GET /api/inventory */
 export async function listInventory(params?: {
   limit?: number;
   offset?: number;
   search?: string;
   stock_status?: string;
 }): Promise<InventoryListResponse> {
-  const data = await get<InventoryListResponse | Record<string, unknown>[]>("/api/inventory/", params);
+  const data = await get<InventoryListResponse | Record<string, unknown>[]>("/api/inventory", params);
   return normalizeInventoryListPayload(data);
 }
 
@@ -318,11 +318,11 @@ export async function getInventoryItem(itemId: string): Promise<InventoryItem> {
   return get<InventoryItem>(`/api/inventory/${itemId}`);
 }
 
-/** POST /api/inventory/ */
+/** POST /api/inventory */
 export async function createInventoryItem(
   data: InventoryItemCreate
 ): Promise<InventoryItem> {
-  return post<InventoryItem>("/api/inventory/", data);
+  return post<InventoryItem>("/api/inventory", data);
 }
 
 /** PATCH /api/inventory/{itemId} */
@@ -356,12 +356,12 @@ export async function adjustQuantity(
 // Predictions
 // ============================================================================
 
-/** GET /api/predictions/ */
+/** GET /api/predictions */
 export async function listPredictions(params?: {
   urgency?: string;
   limit?: number;
 }): Promise<Prediction[]> {
-  return get<Prediction[]>("/api/predictions/", params);
+  return get<Prediction[]>("/api/predictions", params);
 }
 
 /** POST /api/predictions/forecast */
@@ -377,12 +377,12 @@ export async function triggerForecast(
 // Shopping Lists
 // ============================================================================
 
-/** GET /api/shopping-list/ */
+/** GET /api/shopping-list */
 export async function listShoppingLists(params?: {
   status?: string;
   limit?: number;
 }): Promise<ShoppingList[]> {
-  const rows = await get<ShoppingList[]>("/api/shopping-list/", params);
+  const rows = await get<ShoppingList[]>("/api/shopping-list", params);
   return (Array.isArray(rows) ? rows : []).map((row) => ({
     ...row,
     status: normalizeShoppingListStatus(String(row.status ?? "draft")),
@@ -472,7 +472,7 @@ export interface AlertsResponse {
   page_size: number;
 }
 
-/** GET /api/alerts/ */
+/** GET /api/alerts */
 export async function listAlerts(params?: {
   state?: string;
   alert_type?: string;
@@ -481,7 +481,7 @@ export async function listAlerts(params?: {
   page?: number;
   page_size?: number;
 }): Promise<AlertsResponse> {
-  return get<AlertsResponse>("/api/alerts/", params);
+  return get<AlertsResponse>("/api/alerts", params);
 }
 
 /** GET /api/insights/executive-briefing */
@@ -523,22 +523,22 @@ export interface Report {
   deduplicated?: boolean;
 }
 
-/** POST /api/reports/ */
+/** POST /api/reports */
 export async function requestReport(
   reportType: string,
   params: Record<string, unknown> = {}
 ): Promise<Report> {
-  return post<Report>("/api/reports/", { report_type: reportType, params });
+  return post<Report>("/api/reports", { report_type: reportType, params });
 }
 
-/** GET /api/reports/ */
+/** GET /api/reports */
 export async function listReports(params?: {
   report_type?: string;
   status?: string;
   page?: number;
   page_size?: number;
 }): Promise<{ reports: Report[]; page: number; page_size: number }> {
-  return get("/api/reports/", params);
+  return get("/api/reports", params);
 }
 
 /** GET /api/reports/{reportId} */
@@ -586,14 +586,14 @@ export interface Document {
   line_items?: DocumentLineItem[];
 }
 
-/** GET /api/documents/ */
+/** GET /api/documents */
 export async function listDocuments(params?: {
   status?: string;
   review_needed?: boolean;
   page?: number;
   page_size?: number;
 }): Promise<{ documents: Document[]; total: number; page: number; page_size: number }> {
-  return get("/api/documents/", params);
+  return get("/api/documents", params);
 }
 
 /** GET /api/documents/review-queue */
@@ -637,12 +637,12 @@ export interface Vendor {
   created_at: string;
 }
 
-/** GET /api/vendors/ */
+/** GET /api/vendors */
 export async function listVendors(params?: {
   page?: number;
   page_size?: number;
 }): Promise<{ vendors: Vendor[]; page: number; page_size: number }> {
-  return get("/api/vendors/", params);
+  return get("/api/vendors", params);
 }
 
 /** GET /api/vendors/{vendorId} */

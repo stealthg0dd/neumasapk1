@@ -22,6 +22,7 @@ class SnoozeRequest(BaseModel):
     snooze_until: str  # ISO 8601 datetime string
 
 
+@router.get("", summary="List alerts")
 @router.get("/", summary="List alerts")
 async def list_alerts(
     tenant: Annotated[TenantContext, Depends(get_tenant_context)],

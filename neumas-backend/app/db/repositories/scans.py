@@ -120,13 +120,30 @@ class ScansRepository:
         if not tenant.property_id:
             raise ValueError("property_id required to create scan")
 
+        if not getattr(tenant, "org_id", None):
+            raise ValueError("User not associated with an organization.")
+
         # Ensure tenant fields are set
         data["property_id"] = str(tenant.property_id)
-        data["organization_id"] = str(tenant.org_id)
+        org_id = str(tenant.org_id)
+        # Support both legacy and canonical schema variants.
+        data["organization_id"] = org_id
+        data["org_id"] = org_id
         # Strip None values -- PostgREST rejects columns absent from schema cache
         data = {k: v for k, v in data.items() if v is not None}
 
-        response = await self.client.table(self.table).insert(data).execute()
+        try:
+            response = await self.client.table(self.table).insert(data).execute()
+        except Exception as e:
+            err_text = str(e)
+            if "org_id" in err_text and "schema cache" in err_text:
+                retry_data = {k: v for k, v in data.items() if k != "org_id"}
+                response = await self.client.table(self.table).insert(retry_data).execute()
+            elif "organization_id" in err_text and "schema cache" in err_text:
+                retry_data = {k: v for k, v in data.items() if k != "organization_id"}
+                response = await self.client.table(self.table).insert(retry_data).execute()
+            else:
+                raise
         if not response.data:
             raise RuntimeError(
                 f"Scan insert returned no data for scan_id={data.get('id')}. "

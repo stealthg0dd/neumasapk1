@@ -240,7 +240,7 @@ async def get_current_user(
             logger.error("User record missing org_id", auth_id=auth_id)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account not properly configured",
+                detail="User not associated with an organization.",
             )
 
         raw_default_prop = (

@@ -22,6 +22,21 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _empty_analytics_summary() -> dict[str, Any]:
+    return {
+        "spend_total": 0.0,
+        "avg_confidence_pct": 0.0,
+        "items_tracked": 0,
+        "predictions_count": 0,
+        "scans_total": 0,
+        "spend_history": [],
+        "inventory_value_history": [],
+        "confidence_history": [],
+        "category_breakdown": [],
+        "urgency_breakdown": {"critical": 0, "urgent": 0, "soon": 0, "later": 0},
+    }
+
+
 def _fmt_date(iso: str) -> str:
     """Format ISO date string to 'Mon D' label (cross-platform)."""
     try:
@@ -47,18 +62,22 @@ async def _record_inventory_value_snapshot(
     for item in inventory_items:
         total_value += float(item.get("quantity") or 0) * float(item.get("cost_per_unit") or 0)
 
-    client = await get_async_supabase_admin()
-    since = (datetime.now(UTC) - timedelta(days=13)).isoformat()
-    history_resp = await (
-        client.table("inventory_snapshots")
-        .select("created_at,total_value")
-        .eq("organization_id", str(tenant.org_id))
-        .eq("property_id", str(tenant.property_id))
-        .gte("created_at", since)
-        .order("created_at")
-        .execute()
-    )
-    rows = history_resp.data or []
+    try:
+        client = await get_async_supabase_admin()
+        since = (datetime.now(UTC) - timedelta(days=13)).isoformat()
+        history_resp = await (
+            client.table("inventory_snapshots")
+            .select("created_at,total_value")
+            .eq("organization_id", str(tenant.org_id))
+            .eq("property_id", str(tenant.property_id))
+            .gte("created_at", since)
+            .order("created_at")
+            .execute()
+        )
+        rows = history_resp.data or []
+    except Exception as e:
+        logger.warning("Failed to load inventory snapshot history", error=str(e))
+        rows = []
 
     by_date = {}
     for row in rows:
@@ -101,10 +120,14 @@ async def get_analytics_summary(
     - category_breakdown: inventory items by category
     - urgency_breakdown: prediction counts by urgency level
     """
-    inv_repo   = await get_inventory_repository()
-    pred_repo  = await get_predictions_repository()
-    shop_repo  = await get_shopping_lists_repository()
-    scan_repo  = await get_scans_repository()
+    try:
+        inv_repo   = await get_inventory_repository()
+        pred_repo  = await get_predictions_repository()
+        shop_repo  = await get_shopping_lists_repository()
+        scan_repo  = await get_scans_repository()
+    except Exception as e:
+        logger.exception("Failed to initialize analytics repositories", error=str(e))
+        return _empty_analytics_summary()
 
     since_90 = datetime.now(UTC) - timedelta(days=90)
 

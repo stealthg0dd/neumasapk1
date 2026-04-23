@@ -27,6 +27,13 @@ _audit_repo = AuditLogsRepository()
 _email_logs_repo = EmailLogsRepository()
 
 
+def _safe_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # ---------------------------------------------------------------------------
 # Helper: ensure admin role
 # ---------------------------------------------------------------------------
@@ -343,8 +350,8 @@ async def get_property_stock_health(tenant: AdminTenant) -> dict:
         pid = str(row.get("property_id") or "")
         if not pid:
             continue
-        qty = float(row.get("quantity") or 0)
-        reorder_point = float(row.get("reorder_point") or row.get("par_level") or 0)
+        qty = _safe_float(row.get("quantity"), 0.0)
+        reorder_point = _safe_float(row.get("reorder_point") or row.get("par_level"), 0.0)
         if qty <= 0:
             out_by_property[pid] += 1
         elif reorder_point > 0 and qty <= reorder_point:

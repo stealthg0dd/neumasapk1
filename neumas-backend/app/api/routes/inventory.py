@@ -2,6 +2,7 @@
 Inventory routes for managing inventory items.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -328,10 +329,18 @@ async def get_restock_preview(
     tenant: TenantContext = require_property(),
     runout_threshold_days: Annotated[int, Query(ge=1, le=30)] = 7,
 ) -> RestockPreviewResponse:
-    payload = await restock_service.get_vendor_restock_preview(
-        tenant=tenant,
-        runout_threshold_days=runout_threshold_days,
-    )
+    try:
+        payload = await restock_service.get_vendor_restock_preview(
+            tenant=tenant,
+            runout_threshold_days=runout_threshold_days,
+        )
+    except Exception as e:
+        logger.exception("Failed to build restock preview", error=str(e), org_id=str(tenant.org_id))
+        payload = {
+            "runout_threshold_days": runout_threshold_days,
+            "vendors": [],
+            "generated_at": datetime.now(UTC).isoformat(),
+        }
     return RestockPreviewResponse(**payload)
 
 
@@ -346,11 +355,30 @@ async def export_vendor_order(
     tenant: TenantContext = require_property(),
     runout_threshold_days: Annotated[int, Query(ge=1, le=30)] = 7,
 ) -> VendorOrderExportResponse:
-    payload = await restock_service.generate_vendor_order_export(
-        tenant=tenant,
-        vendor_id=str(vendor_id),
-        runout_threshold_days=runout_threshold_days,
-    )
+    try:
+        payload = await restock_service.generate_vendor_order_export(
+            tenant=tenant,
+            vendor_id=str(vendor_id),
+            runout_threshold_days=runout_threshold_days,
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to generate vendor order export",
+            error=str(e),
+            org_id=str(tenant.org_id),
+            vendor_id=str(vendor_id),
+        )
+        payload = {
+            "vendor_id": str(vendor_id),
+            "vendor": None,
+            "html": "",
+            "email_subject": "",
+            "email_body": "No restock items currently required for this vendor.",
+            "total_estimated_cost": 0,
+            "item_count": 0,
+            "currency_code": "USD",
+            "currency_symbol": "$",
+        }
     return VendorOrderExportResponse(**payload)
 
 

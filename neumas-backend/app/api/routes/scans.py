@@ -39,6 +39,13 @@ class ScanRerunRequest(BaseModel):
 
 
 @router.post(
+    "",
+    response_model=ScanQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload scan",
+    description="Upload a receipt or barcode image for processing.",
+)
+@router.post(
     "/upload",
     response_model=ScanQueuedResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -81,6 +88,19 @@ async def upload_scan(
         )
     request_id = getattr(request.state, "request_id", None)
 
+    if not getattr(tenant, "org_id", None):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with an organization.",
+        )
+
+    logger.info(
+        "Retrieved org_id for scan upload",
+        org_id=str(tenant.org_id),
+        user_id=str(tenant.user_id),
+        request_id=request_id,
+    )
+
     try:
         return await scan_service.upload_scan(
             file=file,
@@ -104,7 +124,7 @@ async def upload_scan(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process scan upload: {e}",
+            detail="Failed to process scan upload",
         )
 
 
@@ -192,6 +212,12 @@ async def rerun_scan(
         )
 
 
+@router.get(
+    "",
+    response_model=list[ScanResponse],
+    summary="List scans",
+    description="List scans for the current property.",
+)
 @router.get(
     "/",
     response_model=list[ScanResponse],
