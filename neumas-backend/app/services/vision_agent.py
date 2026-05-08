@@ -5,8 +5,8 @@ Uses OpenAI GPT-4o Vision to extract inventory items from images.
 Specializes in B2B procurement receipt parsing with quantity normalization.
 """
 
-import base64
 import asyncio
+import base64
 import json
 import re
 from typing import Any
@@ -248,7 +248,7 @@ class VisionAgent:
 
             return parsed
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(
                 "OCR provider timed out",
                 timeout_seconds=60,

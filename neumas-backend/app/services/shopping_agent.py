@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from app.core.logging import get_logger
 from app.db.repositories.inventory import get_inventory_repository
 from app.db.repositories.predictions import get_predictions_repository
+from app.db.repositories.shopping_lists import get_shopping_lists_repository
 from app.db.supabase_client import get_async_supabase_admin
 from app.services.orchestration_service import call_agent
 

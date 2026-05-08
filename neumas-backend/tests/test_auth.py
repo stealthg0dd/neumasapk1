@@ -183,8 +183,9 @@ class TestPermissions:
     @pytest.mark.asyncio
     async def test_admin_stats_shape_with_mocked_admin(self, client: AsyncClient):
         """Test /api/admin/stats returns the expected keys when authed as admin."""
-        from app.api.deps import TenantContext
         from uuid import uuid4
+
+        from app.api.deps import TenantContext
 
         mock_tenant = TenantContext(
             user_id=uuid4(),
@@ -240,7 +241,6 @@ class TestSignup:
     @pytest.mark.asyncio
     async def test_signup_with_mocked_service(self, client: AsyncClient):
         """Successful signup returns access_token and profile."""
-        from app.schemas.auth import TokenResponse
 
         mock_response = {
             "access_token": "test-access-token",
