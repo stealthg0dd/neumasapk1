@@ -305,7 +305,7 @@ async def verify_admin_for_docs(request: Request) -> None:
     token = auth_header.split(" ")[1]
 
     try:
-        from app.core.security import decode_token
+        from app.core.security import decode_jwt as decode_token
 
         payload = decode_token(token)
         if not is_admin(payload):

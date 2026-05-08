@@ -6,5 +6,5 @@ from app.db.repositories.admin import AdminRepository
 router = APIRouter(prefix="/api/admin/overview", tags=["admin"])
 
 @router.get("/")
-def get_admin_overview(repo: AdminRepository = Depends(), user=Depends(get_current_admin)):
-    return repo.get_overview()
+async def get_admin_overview(repo: AdminRepository = Depends(), user=Depends(get_current_admin)):
+    return await repo.get_overview()

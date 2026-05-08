@@ -550,3 +550,72 @@ def is_org_admin(user: dict[str, Any], org_id: str) -> bool:
     user_role = user.get("role", user.get("app_metadata", {}).get("role", "user"))
 
     return user_org_id == org_id and user_role in ("admin", "org_admin")
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    """Extract bearer token from Authorization header."""
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+
+    token = token.strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return token
+
+
+async def get_current_admin(request: Request):
+    """
+    Resolve current user and enforce admin access.
+
+    This dependency intentionally lazy-imports app.api.deps to avoid
+    circular imports (deps imports app.core.security).
+    """
+    from app.api.deps import get_current_user
+    from app.db.supabase_client import get_async_supabase_admin
+
+    token = _extract_bearer_token(request.headers.get("Authorization"))
+    user = await get_current_user(token=token)
+
+    # Fast path: canonical role-based admin access.
+    role = getattr(user, "role", None)
+    if role == "admin":
+        return user
+
+    # Fallback: some rows store admin state as users.is_admin.
+    user_id = getattr(user, "id", None)
+    auth_id = getattr(user, "auth_id", None)
+
+    try:
+        client = await get_async_supabase_admin()
+        if client:
+            query = client.table("users").select("is_admin")
+            if user_id:
+                query = query.eq("id", str(user_id))
+            elif auth_id:
+                query = query.eq("auth_id", str(auth_id))
+            response = await query.limit(1).execute()
+            rows = response.data or []
+            if rows and rows[0].get("is_admin") is True:
+                return user
+    except Exception:
+        # Fall through to 403 on failed admin verification.
+        pass
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access required",
+    )

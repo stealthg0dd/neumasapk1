@@ -302,9 +302,22 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at         timestamptz   NOT NULL DEFAULT now()
 );
 ALTER TABLE documents
-  ADD CONSTRAINT fk_documents_vendor
-  FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL
-  NOT VALID;  -- NOT VALID: safe to add on live DB; validate separately if needed
+  ADD COLUMN IF NOT EXISTS vendor_id uuid;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_documents_vendor'
+      AND conrelid = 'documents'::regclass
+  ) THEN
+    ALTER TABLE documents
+      ADD CONSTRAINT fk_documents_vendor
+      FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL
+      NOT VALID;  -- safe to add on live DB; validate separately if needed
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_documents_org      ON documents(organization_id);
 CREATE INDEX IF NOT EXISTS idx_documents_property ON documents(property_id);
 CREATE INDEX IF NOT EXISTS idx_documents_scan     ON documents(scan_id);
@@ -452,15 +465,32 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE TABLE IF NOT EXISTS feature_flags (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   name        text        NOT NULL,
-  org_id      uuid        REFERENCES organizations(id) ON DELETE CASCADE,
+  organization_id uuid    REFERENCES organizations(id) ON DELETE CASCADE,
   enabled     boolean     NOT NULL DEFAULT false,
   description text,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (name, org_id)
+  UNIQUE (name, organization_id)
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'feature_flags' AND column_name = 'org_id'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'feature_flags' AND column_name = 'organization_id'
+  ) THEN
+    ALTER TABLE feature_flags RENAME COLUMN org_id TO organization_id;
+  END IF;
+END $$;
+
+ALTER TABLE feature_flags
+  ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE;
+
 CREATE INDEX IF NOT EXISTS idx_feature_flags_name ON feature_flags(name);
-CREATE INDEX IF NOT EXISTS idx_feature_flags_org  ON feature_flags(org_id) WHERE org_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_feature_flags_org  ON feature_flags(organization_id) WHERE organization_id IS NOT NULL;
 ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE TRIGGER trg_feature_flags_updated_at
   BEFORE UPDATE ON feature_flags FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -673,7 +703,13 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY ff_select ON feature_flags FOR SELECT
-    USING (public.is_org_admin() AND (org_id = public.org_id() OR org_id IS NULL));
+    USING (
+      public.is_org_admin()
+      AND (
+        organization_id = public.org_id()
+        OR organization_id IS NULL
+      )
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- research_posts

@@ -73,27 +73,49 @@ END $$;
 --          (canonical schema stored vendor name inside the JSONB blob)
 -- ---------------------------------------------------------------------------
 
-UPDATE inventory_items ii
-   SET vendor_id = v.id
-  FROM vendors v
- WHERE ii.organization_id         IS NOT NULL
-   AND ii.organization_id         = v.organization_id
-   AND ii.vendor_id               IS NULL
-   AND (ii.supplier_info ->> 'name') IS NOT NULL
-   AND lower(trim(ii.supplier_info ->> 'name')) = lower(trim(v.name));
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'inventory_items'
+      AND column_name = 'supplier_info'
+  ) THEN
+    UPDATE inventory_items ii
+       SET vendor_id = v.id
+      FROM vendors v
+     WHERE ii.organization_id            IS NOT NULL
+       AND ii.organization_id            = v.organization_id
+       AND ii.vendor_id                  IS NULL
+       AND (ii.supplier_info ->> 'name') IS NOT NULL
+       AND lower(trim(ii.supplier_info ->> 'name')) = lower(trim(v.name));
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Step 5 — Backfill from supplier_info->>'name' via vendor_aliases
 -- ---------------------------------------------------------------------------
 
-UPDATE inventory_items ii
-   SET vendor_id = va.vendor_id
-  FROM vendor_aliases va
- WHERE ii.organization_id         IS NOT NULL
-   AND ii.organization_id         = va.organization_id
-   AND ii.vendor_id               IS NULL
-   AND (ii.supplier_info ->> 'name') IS NOT NULL
-   AND lower(trim(ii.supplier_info ->> 'name')) = lower(trim(va.alias_name));
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'inventory_items'
+      AND column_name = 'supplier_info'
+  ) THEN
+    UPDATE inventory_items ii
+       SET vendor_id = va.vendor_id
+      FROM vendor_aliases va
+     WHERE ii.organization_id            IS NOT NULL
+       AND ii.organization_id            = va.organization_id
+       AND ii.vendor_id                  IS NULL
+       AND (ii.supplier_info ->> 'name') IS NOT NULL
+       AND lower(trim(ii.supplier_info ->> 'name')) = lower(trim(va.alias_name));
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Step 6 — Drop legacy org_id column from inventory_items
