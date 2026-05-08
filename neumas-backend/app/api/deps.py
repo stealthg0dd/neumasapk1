@@ -322,35 +322,34 @@ async def get_tenant_context(
     # Use property_id from user's database record (resolved in get_current_user)
     effective_property_id = user.default_property_id
 
-    if effective_property_id:
+    if effective_property_id and admin_client:
         # Validate the stored property still belongs to the user's org and is
         # active. Security is maintained by filtering on organization_id so a
         # user can only reach their own org's properties regardless of RLS state.
-        if admin_client:
-            try:
-                response = await (
-                    admin_client.table("properties")
-                    .select("id, organization_id")
-                    .eq("id", str(effective_property_id))
-                    .eq("organization_id", str(user.organization_id))
-                    .eq("is_active", True)
-                    .execute()
-                )
+        try:
+            response = await (
+                admin_client.table("properties")
+                .select("id, organization_id")
+                .eq("id", str(effective_property_id))
+                .eq("organization_id", str(user.organization_id))
+                .eq("is_active", True)
+                .execute()
+            )
 
-                if not response.data:
-                    logger.warning(
-                        "Stored property not found or inactive — attempting self-heal",
-                        user_id=str(user.id),
-                        property_id=str(effective_property_id),
-                    )
-                    effective_property_id = None  # fall through to self-heal below
-            except Exception as e:
+            if not response.data:
                 logger.warning(
-                    "Property validation query failed — proceeding without validation",
+                    "Stored property not found or inactive — attempting self-heal",
                     user_id=str(user.id),
-                    error=str(e),
+                    property_id=str(effective_property_id),
                 )
-                # Keep effective_property_id as-is; don't block login on DB error
+                effective_property_id = None  # fall through to self-heal below
+        except Exception as e:
+            logger.warning(
+                "Property validation query failed — proceeding without validation",
+                user_id=str(user.id),
+                error=str(e),
+            )
+            # Keep effective_property_id as-is; don't block login on DB error
 
     # Self-heal: user exists and has an org but no valid default_property_id.
     # Caused by: (a) email/password signup before the default_property_id fix,

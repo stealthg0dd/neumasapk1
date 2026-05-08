@@ -77,6 +77,7 @@ class ExecutiveBriefingService:
 
         try:
             import anthropic
+
             from app.core.config import settings
 
             if not settings.ANTHROPIC_API_KEY:

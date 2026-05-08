@@ -561,10 +561,7 @@ def _extract_bearer_token(authorization: str | None) -> str:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if authorization.startswith("Bearer "):
-        token = authorization[7:]
-    else:
-        token = authorization
+    token = authorization[7:] if authorization.startswith("Bearer ") else authorization
 
     token = token.strip()
     if not token:

@@ -19,8 +19,8 @@ Configurable via env / .env:
 
 import asyncio
 import uuid
-from typing import Any
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import UploadFile  # kept for get_scan / list_scans type hints

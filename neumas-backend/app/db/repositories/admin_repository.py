@@ -314,14 +314,14 @@ class AdminRepository:
                     agg = usage_by_org[org_id]
                     agg["organization_id"] = org_id
 
-                    if isinstance(row.get("scan_count"), (int, float)):
+                    if isinstance(row.get("scan_count"), int | float):
                         agg["scan_count"] += int(row["scan_count"])
-                    if isinstance(row.get("prediction_count"), (int, float)):
+                    if isinstance(row.get("prediction_count"), int | float):
                         agg["prediction_count"] += int(row["prediction_count"])
 
                     feature = (row.get("feature") or row.get("event_type") or "").lower()
                     count_value = row.get("count")
-                    if isinstance(count_value, (int, float)):
+                    if isinstance(count_value, int | float):
                         if "scan" in feature:
                             agg["scan_count"] += int(count_value)
                         elif "prediction" in feature:
@@ -342,7 +342,7 @@ class AdminRepository:
                         "prediction_count": prediction_count,
                     }
 
-            org_ids = [org_id for org_id in usage_by_org.keys() if org_id]
+            org_ids = [org_id for org_id in usage_by_org if org_id]
             org_name_by_id: dict[str, str] = {}
             if org_ids:
                 org_resp = await (
