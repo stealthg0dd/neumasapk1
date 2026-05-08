@@ -82,9 +82,7 @@ jobs:
         run: pnpm run build
 
       - name: Run tests
-        # Only run if a test script exists and there are test files
-        if: hashFiles('neumas-web/**/*.test.*', 'neumas-web/**/*.spec.*') != ''
-        run: pnpm test --if-present
+        run: pnpm test
 
   # ---------------------------------------------------------------------------
   # neumas-backend — lint + pytest

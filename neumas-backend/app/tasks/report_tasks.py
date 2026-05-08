@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.core.celery_app import celery_app
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.repositories.email_logs import EmailLogsRepository
 
@@ -99,6 +100,16 @@ def send_weekly_digest(
     at 08:00, which is the only reliable way to respect per-property timezones from
     a single UTC-based beat schedule.
     """
+    if not settings.SENDGRID_API_KEY:
+        logger.warning("SENDGRID_API_KEY not set — weekly digest emails will not send")
+        return {
+            "properties_processed": 0,
+            "emails_sent": 0,
+            "properties_skipped": 0,
+            "recipients_blocked_for_bounces": 0,
+            "skipped_reason": "sendgrid_api_key_missing",
+        }
+
     from app.db.repositories.properties import get_properties_repository
     from app.services.email_service import EmailService
     from app.services.report_service import (

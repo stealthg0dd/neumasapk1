@@ -21,9 +21,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 
 from app.core.config import settings
+from app.core.logging import get_logger
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = get_logger(__name__)
 
 
 class SecurityError(Exception):
@@ -42,9 +44,11 @@ class RateLimitExceeded(HTTPException):
     """Raised when rate limit is exceeded."""
 
     def __init__(self, retry_after: int = 60):
+        retry_after = max(1, retry_after)
+        retry_minutes = max(1, (retry_after + 59) // 60)
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate limit exceeded. Retry after {retry_after} seconds.",
+            detail=f"Too many requests. Try again in {retry_minutes} minutes.",
             headers={"Retry-After": str(retry_after)},
         )
 
@@ -121,12 +125,15 @@ class RateLimiter:
     @property
     def redis_client(self):
         """Lazy-load Redis client."""
-        if self._redis_client is None and settings.REDIS_URL:
+        redis_url = settings._resolved_redis_url
+        if self._redis_client is None and redis_url:
             try:
                 import redis
 
                 self._redis_client = redis.from_url(
-                    settings.REDIS_URL,
+                    redis_url,
+                    socket_connect_timeout=1,
+                    socket_timeout=1,
                     decode_responses=True,
                 )
             except Exception:
@@ -234,6 +241,8 @@ rate_limiter = RateLimiter()
 def rate_limit(
     requests_per_minute: int = 60,
     requests_per_hour: int | None = None,
+    limit: int | None = None,
+    window_seconds: int = 60,
 ):
     """
     Rate limiting decorator for route handlers.
@@ -247,13 +256,19 @@ def rate_limit(
     Args:
         requests_per_minute: Max requests per minute
         requests_per_hour: Max requests per hour (optional)
+        limit: Explicit max requests for window_seconds
+        window_seconds: Time window in seconds
     """
 
     def decorator(func: Callable):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Extract request from args/kwargs
-            request = kwargs.get("request")
+            request = None
+            for value in kwargs.values():
+                if isinstance(value, Request):
+                    request = value
+                    break
             if request is None:
                 for arg in args:
                     if isinstance(arg, Request):
@@ -265,13 +280,24 @@ def rate_limit(
                 return await func(*args, **kwargs)
 
             # Check rate limit
+            effective_limit = limit or requests_per_minute
             is_allowed, rate_info = await rate_limiter.check_rate_limit(
                 request,
-                limit=requests_per_minute,
-                window_seconds=60,
+                limit=effective_limit,
+                window_seconds=window_seconds,
             )
 
             if not is_allowed:
+                retry_after = rate_info["reset"] - int(time.time())
+                logger.warning(
+                    "Rate limit exceeded",
+                    path=request.url.path,
+                    method=request.method,
+                    client_host=request.client.host if request.client else "unknown",
+                    limit=effective_limit,
+                    window_seconds=window_seconds,
+                    retry_after=retry_after,
+                )
                 raise RateLimitExceeded(retry_after=rate_info["reset"] - int(time.time()))
 
             # Add rate limit headers to response

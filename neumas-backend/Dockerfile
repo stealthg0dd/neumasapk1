@@ -127,10 +127,7 @@ CMD gunicorn app.main:app \
 # -----------------------------------------------------------------------------
 FROM production AS worker
 
-CMD celery -A app.core.celery_app worker \
-    --loglevel=info \
-    --queues=neumas_default,scans,agents,neumas.predictions,neumas.shopping \
-    --concurrency=${CELERY_CONCURRENCY:-2}
+CMD ["./start_worker.sh"]
 
 # -----------------------------------------------------------------------------
 # Stage 6: API (default build target — must remain the LAST stage)

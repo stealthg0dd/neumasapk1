@@ -4,11 +4,14 @@ Authentication routes.
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 
 from app.api.deps import UserInfo, get_current_user, get_token
 from app.core.logging import get_logger
-from app.core.security import decode_jwt  # noqa: F401 - kept for test compatibility
+from app.core.security import (  # noqa: F401 - decode_jwt kept for test compatibility
+    decode_jwt,
+    rate_limit,
+)
 from app.db.supabase_client import get_async_supabase_admin
 from app.schemas.auth import (
     DigestPreferencesResponse,
@@ -37,7 +40,8 @@ auth_service = AuthService()
     summary="Register new user",
     description="Create a new user account with organization and property.",
 )
-async def signup(request: SignupRequest) -> SignupResponse:
+@rate_limit(limit=5, window_seconds=60 * 60)
+async def signup(request: SignupRequest, raw_request: Request) -> SignupResponse:
     """
     Register a new user with organization and property.
 
@@ -68,7 +72,8 @@ async def signup(request: SignupRequest) -> SignupResponse:
     summary="User login",
     description="Authenticate user and return JWT tokens.",
 )
-async def login(request: LoginRequest) -> LoginResponse:
+@rate_limit(limit=10, window_seconds=15 * 60)
+async def login(request: LoginRequest, raw_request: Request) -> LoginResponse:
     """
     Authenticate user with email and password.
 
