@@ -3,7 +3,6 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  Building2,
   MapPin,
   Upload,
   CheckCircle2,
@@ -14,10 +13,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { postScanUpload, getScanStatus, googleComplete } from "@/lib/api/endpoints";
+import type { LoginResponse } from "@/lib/api/types";
 import { setOnboardingComplete } from "@/lib/onboarding";
 import { saveSession, setAccessToken } from "@/lib/auth-session";
 import { useAuthStore, selectHasSession } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
+import { getScanPipelineProgress } from "@/lib/scan-progress";
 import { cn } from "@/lib/utils";
 
 const TOTAL_STEPS = 4;
@@ -27,10 +28,10 @@ function StepWelcome({ orgName, setOrgName, onNext }: { orgName: string; setOrgN
     <div className="space-y-6">
       <div>
         <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Welcome to Neumas Control</h1>
-        <p className="mt-2 text-[15px] text-gray-500">Let's get your workspace configured. This takes about 3 minutes.</p>
+        <p className="mt-2 text-[15px] text-gray-500">Let&apos;s get your workspace configured. This takes about 3 minutes.</p>
       </div>
       <div className="rounded-2xl bg-[#f0f7fb] p-5">
-        <p className="mb-4 text-[11px] font-semibold tracking-widest text-[#0071a3] uppercase">What you'll get today</p>
+        <p className="mb-4 text-[11px] font-semibold tracking-widest text-[#0071a3] uppercase">What you&apos;ll get today</p>
         <ul className="space-y-2.5">
           {[
             "Live inventory populated from your first invoice",
@@ -104,7 +105,7 @@ function StepOutlets({ outlets, setOutlets, onNext, onBack }: { outlets: Outlet[
         <button type="button" onClick={onBack} className="flex-1 rounded-xl border border-gray-200 py-3 text-[14px] font-medium text-gray-600 transition-colors hover:bg-gray-50">Back</button>
         <button type="button" onClick={onNext} disabled={!valid} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0071a3] py-3 text-[14px] font-semibold text-white transition-all hover:bg-[#005f8a] disabled:opacity-50">Continue<ArrowRight className="h-4 w-4" /></button>
       </div>
-      <button type="button" onClick={onNext} className="w-full text-center text-[12px] text-gray-400 hover:text-gray-600 underline underline-offset-2">Skip for now — I'll add outlets later</button>
+      <button type="button" onClick={onNext} className="w-full text-center text-[12px] text-gray-400 hover:text-gray-600 underline underline-offset-2">Skip for now — I&apos;ll add outlets later</button>
     </div>
   );
 }
@@ -117,6 +118,8 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
   const [done, setDone] = useState(false);
   const [activeScanId, setActiveScanId] = useState<string | null>(null);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("Uploading invoice");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedAtRef = useRef<number | null>(null);
   const resetFile = useCallback(() => {
@@ -132,6 +135,8 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
     setActiveScanId(null);
     setPollTimedOut(false);
     setBusy(false);
+    setUploadProgress(0);
+    setProgressLabel("Uploading invoice");
   }, [preview]);
   const onFileSelected = useCallback((f: File) => { const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"]; if (!allowed.includes(f.type)) { toast.error("Upload a JPEG, PNG, WebP, or PDF."); return; } if (f.size > 15 * 1024 * 1024) { toast.error("File must be under 15 MB."); return; } resetFile(); setFile(f); if (f.type.startsWith("image/")) setPreview(URL.createObjectURL(f)); }, [resetFile]);
   const stopPolling = useCallback(() => {
@@ -144,13 +149,21 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
 
   const checkScanStatus = useCallback(async (sid: string) => {
     const s = await getScanStatus(sid);
-    if (s.status === "completed" || s.status === "failed") {
+    const nextProgress = getScanPipelineProgress(s);
+    setUploadProgress(nextProgress.value);
+    setProgressLabel(nextProgress.label);
+    if (s.status === "completed" || s.status === "partial_failed" || s.status === "failed") {
       stopPolling();
       setBusy(false);
-      if (s.status === "completed") {
+      if (s.status === "completed" || s.status === "partial_failed") {
         setDone(true);
         setPollTimedOut(false);
-        toast.success(`Extracted ${s.items_detected ?? 0} items — inventory updated.`);
+        setUploadProgress(100);
+        if (s.status === "partial_failed") {
+          toast.warning(`AI analysis finished with warnings. ${s.items_detected ?? 0} items were extracted.`);
+        } else {
+          toast.success(`Extracted ${s.items_detected ?? 0} items — inventory updated.`);
+        }
       } else {
         toast.error(s.error_message ?? "Extraction failed.");
       }
@@ -183,8 +196,13 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
     if (!file) return;
     setBusy(true);
     setPollTimedOut(false);
+    setUploadProgress(5);
+    setProgressLabel("Uploading invoice");
     try {
-      const res = await postScanUpload(file, "receipt");
+      const res = await postScanUpload(file, "receipt", (progress) => {
+        setUploadProgress(Math.max(5, Math.min(30, Math.round(progress * 0.3))));
+        setProgressLabel("Uploading invoice");
+      });
       const sid = res.scan_id ?? res.id ?? null;
       if (!sid) {
         toast.error("Could not start scan.");
@@ -192,11 +210,15 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
         return;
       }
       setActiveScanId(sid);
+      setUploadProgress(35);
+      setProgressLabel("Receipt queued");
       toast.success("Document queued — extracting line items…");
       startPolling(sid);
     } catch (err) {
       captureUIError("onboard_upload", err);
+      toast.error("Failed to upload invoice.");
       setBusy(false);
+      setUploadProgress(0);
     }
   }
 
@@ -232,7 +254,23 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
         </div>
       ) : (
         <>
-          <div role="button" tabIndex={0} aria-label="Upload file" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) onFileSelected(f); }} onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/jpeg,image/png,image/webp,application/pdf"; inp.onchange = () => { if (inp.files?.[0]) onFileSelected(inp.files[0]); }; inp.click(); }} className={cn("flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed transition-colors", dragging ? "border-[#0071a3] bg-[#f0f7fb]" : file ? "border-emerald-300 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-gray-300")}>{preview ? (<img src={preview} alt="Preview" className="max-h-40 rounded-xl object-contain" />) : (<><Camera className="h-8 w-8 text-gray-300" /><div className="text-center"><p className="text-[14px] font-medium text-gray-600">{file ? file.name : "Drop invoice or click to upload"}</p><p className="mt-0.5 text-[12px] text-gray-400">JPEG, PNG, PDF · up to 15 MB</p></div></>)}
+          <div role="button" tabIndex={0} aria-label="Upload file" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") (e.target as HTMLElement).click(); }} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) onFileSelected(f); }} onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/jpeg,image/png,image/webp,application/pdf"; inp.onchange = () => { if (inp.files?.[0]) onFileSelected(inp.files[0]); }; inp.click(); }} className={cn("flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed transition-colors", dragging ? "border-[#0071a3] bg-[#f0f7fb]" : file ? "border-emerald-300 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-gray-300")}>
+            {preview ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="Preview" className="max-h-40 rounded-xl object-contain" />
+              </>
+            ) : (
+              <>
+                <Camera className="h-8 w-8 text-gray-300" />
+                <div className="text-center">
+                  <p className="text-[14px] font-medium text-gray-600">
+                    {file ? file.name : "Drop invoice or click to upload"}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-gray-400">JPEG, PNG, PDF · up to 15 MB</p>
+                </div>
+              </>
+            )}
           </div>
           {file && !done && (
             <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
@@ -246,6 +284,20 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
             </div>
           )}
         </>
+      )}
+      {(busy || uploadProgress > 0) && !done && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+            <span>{progressLabel}</span>
+            <span className="font-mono">{uploadProgress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-[#0071a3] transition-all"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
       )}
       {pollTimedOut && !done && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -272,7 +324,7 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
           <button type="button" disabled className="flex-1 rounded-xl bg-[#0071a3] py-3 text-[14px] font-semibold text-white opacity-40">Upload a document first</button>
         )}
       </div>
-      <button type="button" onClick={onSkip} className="w-full text-center text-[12px] text-gray-400 hover:text-gray-600 underline underline-offset-2">Skip — I'll upload later from the dashboard</button>
+      <button type="button" onClick={onSkip} className="w-full text-center text-[12px] text-gray-400 hover:text-gray-600 underline underline-offset-2">Skip — I&apos;ll upload later from the dashboard</button>
     </div>
   );
 }
@@ -322,13 +374,53 @@ export default function ClientOnboardPage() {
   const [orgName, setOrgName] = useState("");
   const [outlets, setOutlets] = useState([{ name: "", type: "Restaurant" }]);
   const [busy, setBusy] = useState(false);
+  const [provisionedSession, setProvisionedSession] = useState<LoginResponse | null>(null);
 
   // Make the Supabase JWT available to the Axios interceptor immediately.
-  // Without this, scan uploads at step 3 have no Authorization header because
-  // saveSession() hasn't been called yet (that happens at step 4 - finish).
+  // We still provision the Google user before upload, but this keeps any early
+  // protected calls authenticated while onboarding is in progress.
   useEffect(() => {
     if (supabaseJwt) setAccessToken(supabaseJwt);
   }, [supabaseJwt]);
+
+  const primaryPropertyName = outlets[0]?.name.trim() || "Main Property";
+
+  const ensureProvisioned = useCallback(
+    async (propertyName = primaryPropertyName): Promise<boolean> => {
+      if (!isGoogleOnboarding || !supabaseJwt) {
+        return true;
+      }
+      if (provisionedSession?.profile?.property_id) {
+        return true;
+      }
+
+      setBusy(true);
+      try {
+        const resp = await googleComplete(supabaseJwt, {
+          org_name: orgName.trim(),
+          property_name: propertyName,
+          role: "admin",
+        });
+        saveSession(resp);
+        setProvisionedSession(resp);
+        return true;
+      } catch (err) {
+        captureUIError("google_onboarding_provision", err);
+        toast.error("We couldn't finish workspace setup. Please try again.");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [isGoogleOnboarding, orgName, primaryPropertyName, provisionedSession?.profile?.property_id, supabaseJwt]
+  );
+
+  const moveToUploadStep = useCallback(async () => {
+    const ok = await ensureProvisioned();
+    if (ok) {
+      setStep(3);
+    }
+  }, [ensureProvisioned]);
 
   useEffect(() => {
     if (hasHydrated && !hasSession && !isGoogleOnboarding) {
@@ -337,20 +429,13 @@ export default function ClientOnboardPage() {
   }, [hasHydrated, hasSession, isGoogleOnboarding, router]);
   async function finish() {
     if (isGoogleOnboarding && supabaseJwt) {
-      setBusy(true);
-      try {
-        const resp = await googleComplete(supabaseJwt, {
-          org_name: orgName,
-          property_name: outlets[0]?.name || "Main Property",
-          role: "admin",
-        });
-        saveSession(resp);
-        setOnboardingComplete();
-        router.replace("/dashboard");
-      } catch (err) {
-        toast.error("Failed to complete Google onboarding. Please try again.");
+      const ok = await ensureProvisioned(primaryPropertyName);
+      if (!ok) {
         setBusy(false);
+        return;
       }
+      setOnboardingComplete();
+      router.replace("/dashboard");
     } else {
       setOnboardingComplete();
       router.replace("/dashboard");
@@ -381,7 +466,7 @@ export default function ClientOnboardPage() {
           <p className="mb-6 font-mono text-[11px] font-medium tracking-widest text-gray-400 uppercase">Step {step} of {TOTAL_STEPS} ·{" "}{step === 1 ? "Welcome" : step === 2 ? "Outlets" : step === 3 ? "First document" : "Ready"}</p>
           <div className="rounded-3xl border border-black/[0.06] bg-white p-8 shadow-sm">
             {step === 1 && (<StepWelcome orgName={orgName} setOrgName={setOrgName} onNext={() => setStep(2)} />)}
-            {step === 2 && (<StepOutlets outlets={outlets} setOutlets={setOutlets} onNext={() => setStep(3)} onBack={() => setStep(1)} />)}
+            {step === 2 && (<StepOutlets outlets={outlets} setOutlets={setOutlets} onNext={() => void moveToUploadStep()} onBack={() => setStep(1)} />)}
             {step === 3 && (<StepUpload onNext={() => setStep(4)} onBack={() => setStep(2)} onSkip={() => setStep(4)} />)}
             {step === 4 && <StepReady orgName={orgName} onFinish={finish} />}
             {busy && (<div className="absolute inset-0 flex items-center justify-center bg-white/80 z-50"><Loader2 className="h-8 w-8 animate-spin text-[#0071a3]" /></div>)}

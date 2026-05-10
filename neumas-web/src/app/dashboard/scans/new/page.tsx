@@ -21,6 +21,7 @@ import { itemToCube, type PantryItemCube } from "@/components/three/PantryScene"
 import { batchInventoryUpdate, getScanStatus, uploadScan } from "@/lib/api/endpoints";
 import { useAuthStore } from "@/lib/store/auth";
 import { captureUIError } from "@/lib/analytics";
+import { getScanPipelineProgress } from "@/lib/scan-progress";
 import { cn } from "@/lib/utils";
 
 const PantryScene = dynamic(
@@ -131,6 +132,7 @@ export default function NewScanPage() {
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1.05);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("Uploading receipt");
   const [preparedSize, setPreparedSize] = useState<number | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -147,6 +149,7 @@ export default function NewScanPage() {
     setRotation(0);
     setZoom(1.05);
     setUploadProgress(0);
+    setProgressLabel("Uploading receipt");
     setPreparedSize(null);
   }, [preview]);
 
@@ -177,16 +180,21 @@ export default function NewScanPage() {
 
     setBusy(true);
     setUploadProgress(0);
+    setProgressLabel("Uploading receipt");
     setExtracted([]);
     setCubes([]);
 
     try {
       const prepared = await prepareMobileScanFile(file, rotation, zoom);
       setPreparedSize(prepared.size);
-      const res = await uploadScan(prepared, "receipt", setUploadProgress);
+      const res = await uploadScan(prepared, "receipt", (progress) => {
+        setUploadProgress(Math.max(5, Math.min(30, Math.round(progress * 0.3))));
+        setProgressLabel("Uploading receipt");
+      });
       const sid = res.scan_id ?? res.id ?? null;
       setScanId(sid);
-      setUploadProgress(100);
+      setUploadProgress(35);
+      setProgressLabel("Receipt queued");
       toast.success("Scan queued — analyzing…");
     } catch (err) {
       captureUIError("scan_post", err);
@@ -207,6 +215,9 @@ export default function NewScanPage() {
     pollRef.current = setInterval(async () => {
       try {
         const s = await getScanStatus(scanId);
+        const nextProgress = getScanPipelineProgress(s);
+        setUploadProgress(nextProgress.value);
+        setProgressLabel(nextProgress.label);
         if (s.status === "completed" || s.status === "partial_failed") {
           clearTimeout(t);
           if (pollRef.current) clearInterval(pollRef.current);
@@ -215,6 +226,7 @@ export default function NewScanPage() {
           setExtracted(rows);
           setCubes(rows.map((r, i) => itemToCube(r.id, i, r.name)));
           setBusy(false);
+          setUploadProgress(100);
           if (s.status === "partial_failed") {
             toast.warning(`Scan finished with warnings. ${rows.length} item${rows.length === 1 ? "" : "s"} extracted.`);
           } else {
@@ -378,7 +390,7 @@ export default function NewScanPage() {
             {(busy || uploadProgress > 0) && (
               <div className="rounded-2xl border border-[var(--border)] bg-white p-3">
                 <div className="mb-2 flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                  <span>{scanId ? "Processing receipt" : "Uploading receipt"}</span>
+                  <span>{progressLabel}</span>
                   <span className="font-mono">{uploadProgress}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]">

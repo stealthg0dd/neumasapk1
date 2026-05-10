@@ -78,6 +78,16 @@ async function bootstrapFromSupabaseSession() {
     return null;
   }
 
+  const currentUrl = new URL(window.location.href);
+  const isGoogleOnboarding =
+    currentUrl.pathname === "/onboard" &&
+    Boolean(
+      currentUrl.searchParams.get("supabase_jwt") ?? currentUrl.searchParams.get("token")
+    );
+  if (isGoogleOnboarding) {
+    return null;
+  }
+
   const { createClient } = await import("@/utils/supabase/client");
   const supabase = createClient();
   const {
