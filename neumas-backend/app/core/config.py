@@ -224,8 +224,6 @@ class Settings(BaseSettings):
         3. REDIS_PRIVATE_URL — Railway composite internal URL (may lack password).
         4. REDIS_URL — external composite URL / local-dev fallback.
         """
-        from urllib.parse import quote_plus
-
         from urllib.parse import quote_plus, urlparse, urlunparse
 
         host = self._safe_env("REDISHOST", "")
