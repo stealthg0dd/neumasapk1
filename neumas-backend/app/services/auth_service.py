@@ -75,6 +75,37 @@ def _handle_pgrst_error(err: Exception, context: str = "") -> None:
         )
 
 
+def _extract_org_id(user_row: dict[str, Any]) -> UUID:
+    """Support both legacy `org_id` and canonical `organization_id` columns."""
+    raw_org_id = user_row.get("organization_id") or user_row.get("org_id")
+    if not raw_org_id:
+        raise ValueError("User row missing organization identifier")
+    return UUID(str(raw_org_id))
+
+
+def _build_user_insert_payload_variants(
+    *,
+    auth_id: str,
+    email: str,
+    org_id: UUID,
+    property_id: UUID,
+    role: str,
+) -> list[dict[str, Any]]:
+    base_payload = {
+        "auth_id": auth_id,
+        "email": email.lower(),
+        "default_property_id": str(property_id),
+        "role": role,
+        "is_active": True,
+    }
+    org_id_str = str(org_id)
+    return [
+        {**base_payload, "organization_id": org_id_str},
+        {**base_payload, "organization_id": org_id_str, "org_id": org_id_str},
+        {**base_payload, "org_id": org_id_str},
+    ]
+
+
 class AuthService:
     """Service for authentication and authorization."""
 
@@ -142,13 +173,15 @@ class AuthService:
         if not user.get("is_active"):
             raise TokenValidationError("User is deactivated")
 
+        organization_id = _extract_org_id(user)
+
         return UserInfo(
             id=UUID(user["id"]),
             auth_id=auth_id,
             email=user["email"],
             full_name=user.get("full_name"),
             role=user["role"],
-            organization_id=UUID(user["organization_id"]),
+            organization_id=organization_id,
             permissions=user.get("permissions", {}) or {},
             is_active=user["is_active"],
         )
@@ -383,20 +416,31 @@ class AuthService:
             # org_id links to the organisation created above.
             logger.info("Step 6: Creating user record", auth_id=str(auth_id), org_id=str(org_id))
             try:
-                user_response = await admin_client.table("users").insert({
-                    "auth_id": str(auth_id),
-                    "email": request.email.lower(),
-                    "organization_id": str(org_id),
-                    "default_property_id": str(property_id),
-                    "role": request.role,
-                    "is_active": True,
-                }).execute()
+                insert_errors: list[str] = []
+                user_response = None
+                for payload in _build_user_insert_payload_variants(
+                    auth_id=str(auth_id),
+                    email=request.email,
+                    org_id=org_id,
+                    property_id=property_id,
+                    role=request.role,
+                ):
+                    try:
+                        user_response = await admin_client.table("users").insert(payload).execute()
+                        if user_response.data:
+                            break
+                    except Exception as exc:
+                        insert_errors.append(str(exc))
+                        continue
             except PostgRESTAPIError as exc:
                 _handle_pgrst_error(exc, context="users.insert")
                 raise
 
-            if not user_response.data:
-                raise ValueError(f"Failed to create user record: {user_response}")
+            if not user_response or not user_response.data:
+                raise ValueError(
+                    "Failed to create user record: "
+                    + (" | ".join(insert_errors) if insert_errors else "unknown error")
+                )
 
             user_id = UUID(user_response.data[0]["id"])
             logger.info("User record created", user_id=str(user_id), email=request.email)
@@ -489,10 +533,12 @@ class AuthService:
             raise TokenValidationError("User account not properly configured")
 
         # Get organization
+        org_id = _extract_org_id(user)
+
         org_response = await (
             admin_client.table("organizations")
             .select("*")
-            .eq("id", user["organization_id"])
+            .eq("id", str(org_id))
             .single()
             .execute()
         )
@@ -503,7 +549,7 @@ class AuthService:
         props_response = await (
             admin_client.table("properties")
             .select("*")
-            .eq("organization_id", user["organization_id"])
+            .eq("organization_id", str(org_id))
             .eq("is_active", True)
             .order("created_at")
             .limit(1)
@@ -531,7 +577,7 @@ class AuthService:
         profile = ProfileResponse(
             user_id=UUID(user["id"]),
             email=user["email"],
-            org_id=UUID(user["organization_id"]),
+            org_id=org_id,
             org_name=org_name,
             property_id=UUID(primary_prop["id"]) if primary_prop else None,
             property_name=primary_prop.get("name", "") if primary_prop else None,
@@ -554,7 +600,7 @@ class AuthService:
         admin_client = await get_async_supabase_admin()
         existing = await (
             admin_client.table("users")
-            .select("id, organization_id, email, role")
+            .select("*")
             .eq("auth_id", auth_id)
             .limit(1)
             .execute()
@@ -563,7 +609,7 @@ class AuthService:
             return None
 
         user = existing.data[0]
-        org_id = UUID(user["organization_id"])
+        org_id = _extract_org_id(user)
 
         org_resp = await (
             admin_client.table("organizations")
@@ -632,7 +678,7 @@ class AuthService:
         # -- Idempotency check: user record may already exist -----------------
         existing = await (
             admin_client.table("users")
-            .select("id, organization_id, email, role")
+            .select("*")
             .eq("auth_id", auth_id)
             .limit(1)
             .execute()
@@ -640,7 +686,7 @@ class AuthService:
         if existing.data:
             user = existing.data[0]
             user_id = UUID(user["id"])
-            org_id = UUID(user["organization_id"])
+            org_id = _extract_org_id(user)
 
             org_resp = await (
                 admin_client.table("organizations")
@@ -693,6 +739,8 @@ class AuthService:
             )
 
         # -- Create org, property, user ----------------------------------------
+        created_org_id: UUID | None = None
+        created_property_id: UUID | None = None
         try:
             org_slug = generate_slug(org_name)
 
@@ -703,6 +751,7 @@ class AuthService:
             if not org_resp.data:
                 raise ValueError("Failed to create organization")
             org_id = UUID(org_resp.data[0]["id"])
+            created_org_id = org_id
             logger.info("Google signup: org created", org_id=str(org_id))
 
             prop_resp = await admin_client.table("properties").insert({
@@ -713,23 +762,63 @@ class AuthService:
             if not prop_resp.data:
                 raise ValueError("Failed to create property")
             property_id = UUID(prop_resp.data[0]["id"])
+            created_property_id = property_id
             logger.info("Google signup: property created", property_id=str(property_id))
 
-            user_resp = await admin_client.table("users").insert({
-                "auth_id": auth_id,
-                "email": email.lower(),
-                "organization_id": str(org_id),
-                "default_property_id": str(property_id),
-                "role": role,
-                "is_active": True,
-            }).execute()
-            if not user_resp.data:
-                raise ValueError("Failed to create user record")
+            insert_errors: list[str] = []
+            user_resp = None
+            for payload in _build_user_insert_payload_variants(
+                auth_id=auth_id,
+                email=email,
+                org_id=org_id,
+                property_id=property_id,
+                role=role,
+            ):
+                try:
+                    user_resp = await admin_client.table("users").insert(payload).execute()
+                    if user_resp.data:
+                        break
+                except Exception as exc:
+                    insert_errors.append(str(exc))
+                    continue
+            if not user_resp or not user_resp.data:
+                raise ValueError(
+                    "Failed to create user record"
+                    + (f": {' | '.join(insert_errors)}" if insert_errors else "")
+                )
             user_id = UUID(user_resp.data[0]["id"])
             logger.info("Google signup: user record created", user_id=str(user_id))
 
-        except Exception:
+        except Exception as exc:
             logger.error("Google signup failed", auth_id=auth_id)
+            if created_property_id is not None:
+                try:
+                    await (
+                        admin_client.table("properties")
+                        .delete()
+                        .eq("id", str(created_property_id))
+                        .execute()
+                    )
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "Google signup property cleanup failed",
+                        property_id=str(created_property_id),
+                        error=str(cleanup_exc),
+                    )
+            if created_org_id is not None:
+                try:
+                    await (
+                        admin_client.table("organizations")
+                        .delete()
+                        .eq("id", str(created_org_id))
+                        .execute()
+                    )
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "Google signup organization cleanup failed",
+                        org_id=str(created_org_id),
+                        error=str(cleanup_exc),
+                    )
             raise
 
         return ProfileResponse(

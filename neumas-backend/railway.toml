@@ -1,11 +1,11 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-dockerBuildTarget = "api"
+dockerBuildTarget = "worker"
 
 [deploy]
-# healthcheckPath is set per-service via Railway service instance settings.
-# API service: /health (configured in Railway dashboard)
-# Worker service: no healthcheck (Celery workers don't expose HTTP)
+# Railway's `neumas-worker` service is currently attached to this manifest.
+# Use the dedicated worker image target and entrypoint here.
+startCommand = "./start_worker.sh"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

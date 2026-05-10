@@ -219,10 +219,14 @@ class Settings(BaseSettings):
         host = self._safe_env("REDISHOST", "")
         if host:
             port = self._safe_env("REDISPORT", "6379")
+            username = self._safe_env("REDISUSER", "default")
             raw_password = self._safe_env("REDISPASSWORD", "")
             password = quote_plus(raw_password) if raw_password else ""
             if password:
-                url = f"redis://:{password}@{host}:{port}/0"
+                if username:
+                    url = f"redis://{username}:{password}@{host}:{port}/0"
+                else:
+                    url = f"redis://:{password}@{host}:{port}/0"
             else:
                 url = f"redis://{host}:{port}/0"
         elif self.CELERY_BROKER_URL and not self.CELERY_BROKER_URL.startswith("$"):

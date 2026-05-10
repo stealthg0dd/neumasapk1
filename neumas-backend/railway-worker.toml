@@ -1,9 +1,10 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-dockerBuildTarget = "worker"
+dockerBuildTarget = "api"
 
 [deploy]
-startCommand = "./start_worker.sh"
+# Railway's public `Neumas` API service is currently attached to this manifest.
+# Let the Docker image CMD start Gunicorn/Uvicorn for the HTTP service.
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
