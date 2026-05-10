@@ -173,14 +173,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.warning("Supabase not configured - running in degraded mode")
 
-    # Initialize Celery app (verify connection) - only if Redis is configured
+    # Initialize Celery app (best-effort broker check) - only if Redis is configured.
+    # Avoid `celery_app.control.ping()` here because a broker auth/DNS issue can
+    # block startup long enough for Railway to fail the deployment health check.
     if settings.REDIS_URL:
         try:
-            from app.core.celery_app import celery_app
-
-            # Verify Redis connection
-            celery_app.control.ping(timeout=1)
-            logger.info("Celery/Redis connection verified")
+            broker = settings.celery_broker
+            redis_client = redis_lib.from_url(
+                broker,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+            redis_client.ping()
+            logger.info("Celery/Redis broker connection verified", redis_url=settings.redis_url_redacted)
         except Exception as e:
             logger.warning("Celery connection check failed", error=str(e))
     else:
