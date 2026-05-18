@@ -202,10 +202,13 @@ async def _call_google(
     is_vision: bool,
     image_data: dict[str, str] | None,
 ) -> dict[str, Any]:
-    import google.generativeai as genai
-
     if not settings.GOOGLE_API_KEY:
         raise ProviderFailure("GOOGLE_API_KEY missing")
+
+    try:
+        import google.generativeai as genai
+    except ImportError as exc:
+        raise ProviderFailure("google.generativeai dependency missing") from exc
 
     genai.configure(api_key=settings.GOOGLE_API_KEY)
     generation_config = genai.GenerationConfig(temperature=0.1, max_output_tokens=4096)

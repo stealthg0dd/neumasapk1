@@ -17,6 +17,7 @@ from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemSummary,
+    InventoryItemUpdate,
     InventoryUpdateRequest,
     InventoryUpdateResponse,
 )
@@ -150,6 +151,30 @@ class InventoryService:
 
     async def update_item(
         self,
+        item_id: UUID,
+        updates: InventoryItemUpdate,
+        tenant: TenantContext,
+    ) -> InventoryItemResponse | None:
+        """Update an inventory item by ID for PATCH /api/inventory/{item_id}."""
+        inventory_repo = await get_inventory_repository()
+        existing = await inventory_repo.get_by_id(item_id, tenant)
+        if not existing:
+            return None
+
+        data = updates.model_dump(exclude_unset=True)
+        if not data:
+            return _item_response(existing)
+
+        if data.get("category_id") is not None:
+            data["category_id"] = str(data["category_id"])
+        if data.get("vendor_id") is not None:
+            data["vendor_id"] = str(data["vendor_id"])
+
+        await inventory_repo.update(item_id=item_id, data=data, tenant=tenant)
+        return await self.get_item(item_id, tenant)
+
+    async def upsert_item_by_name(
+        self,
         request: InventoryUpdateRequest,
         tenant: TenantContext,
     ) -> InventoryUpdateResponse:
@@ -244,6 +269,7 @@ class InventoryService:
 
         return InventoryUpdateResponse(
             item_id=item_id,
+            item_name=request.item_name,
             previous_qty=previous_qty,
             new_qty=request.new_qty,
             created=created,

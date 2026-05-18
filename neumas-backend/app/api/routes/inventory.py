@@ -209,7 +209,7 @@ async def update_inventory_item(
     Otherwise a new item is created.
     """
     try:
-        return await inventory_service.update_item(request, tenant)
+        return await inventory_service.upsert_item_by_name(request, tenant)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
