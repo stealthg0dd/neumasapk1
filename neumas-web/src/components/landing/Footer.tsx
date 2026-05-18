@@ -10,9 +10,9 @@ function scrollTo(id: string) {
 const PRODUCT_LINKS = [
   { label: "How it works", id: "how-it-works" },
   { label: "Features", id: "value-stack" },
-  { label: "Intelligence", id: "intelligence" },
-  { label: "Product", id: "product" },
-  { label: "Pilot", id: "pilot" },
+  { label: "AI intelligence", id: "intelligence" },
+  { label: "Use cases", id: "use-cases" },
+  { label: "FAQ", id: "faq" },
 ];
 
 const COMPANY_LINKS = [
@@ -37,12 +37,9 @@ export function Footer() {
               <span className="font-mono text-[14px] font-semibold tracking-[0.08em] text-[#0071a3]">
                 NEUMAS
               </span>
-              <span className="rounded bg-[#0071a3]/10 px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-widest text-[#0071a3]">
-                CONTROL
-              </span>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-gray-500">
-              AI procurement control for food operators.
+              Your AI-powered grocery autopilot. Scan receipts, track your pantry, predict stockouts, and shop smarter — across Singapore and Southeast Asia.
             </p>
             <p className="mt-4 text-[12px] text-gray-400">
               <a

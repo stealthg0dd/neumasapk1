@@ -5,36 +5,52 @@ import { ChevronDown } from "lucide-react";
 
 const FAQS = [
   {
-    q: "When is Neumas Control available?",
-    a: "Neumas Control is currently in a closed pilot phase across Singapore, Malaysia, and the UAE. The 14-day pilot is open to qualified food operators now. We are targeting a full commercial launch in Q3 2026. Book a demo to be considered for the current wave.",
+    q: "What exactly is Neumas?",
+    a: "Neumas is an AI-powered grocery autopilot for households. You scan your grocery receipts, and Neumas automatically tracks your pantry inventory, predicts when you'll run out of items, and generates a smart shopping list based on your household's real consumption patterns. No manual entry, no spreadsheets.",
   },
   {
-    q: "Do we need to change how our team works?",
-    a: "No. Neumas fits into how your team already works. Receipts and invoices are uploaded by photo, PDF, or email forward — there is nothing new to learn. The AI handles extraction and normalisation in the background. Your team reviews flagged items in a simple queue.",
+    q: "How do I add my groceries to Neumas?",
+    a: "Just take a photo of your grocery receipt — from NTUC, Cold Storage, Sheng Siong, Giant, Fairprice, or any supermarket — and upload it. Neumas reads every item, quantity, and price automatically. You can also upload PDFs or digital receipts. There's nothing to type.",
   },
   {
-    q: "Does everything get auto-posted to inventory, or can we review first?",
-    a: "Nothing posts to your inventory without a human checkpoint. Every document is processed with a confidence score. Items above your threshold are posted automatically. Items below it — or flagged for price variances — route to a review queue for your team to approve before anything changes.",
+    q: "How does Neumas predict when I'll run out of something?",
+    a: "Neumas tracks how quickly each item disappears from your pantry based on how often you buy it and how much you buy each time. Over a few weeks, it builds a consumption model specific to your household — so it knows that your family goes through 5kg of rice in about 2 weeks, and it predicts that before it runs out.",
   },
   {
-    q: "Does Neumas work across multiple outlets?",
-    a: "Yes. Neumas is built for multi-outlet operators from the ground up. Each outlet has its own inventory, document stream, and alerts. Your management team gets a consolidated view across all properties. Role-based access means outlet staff only see their own site.",
+    q: "What supermarkets and retailers does Neumas support?",
+    a: "Neumas can read receipts from any retailer in Singapore and Southeast Asia — NTUC FairPrice, Cold Storage, Sheng Siong, Giant, Fairprice Finest, Don Don Donki, Mustafa Centre, and more. If it's a printed or digital receipt, Neumas can read it. Wet market and hawker purchases can also be added manually.",
+  },
+  {
+    q: "Does Neumas work for households with dietary restrictions or special diets?",
+    a: "Yes. Neumas tracks every item you buy, so it learns your household's specific diet over time — whether you're vegetarian, halal, gluten-free, or keto. Your shopping list will reflect the foods your household actually eats, not generic suggestions.",
   },
   {
     q: "How accurate is the AI extraction?",
-    a: "Across our pilot operators, we see above 95% extraction accuracy on clean invoices and above 85% on handwritten receipts and delivery notes. Every extraction is confidence-scored. Low-confidence items always go to human review — so accuracy is never a silent risk.",
+    a: "For clean supermarket receipts, Neumas achieves above 95% accuracy on item extraction. For handwritten receipts or delivery notes, accuracy is above 85%. Every extraction is confidence-scored — lower confidence items are flagged for a quick review before they're added to your pantry.",
   },
   {
-    q: "How does the 14-day pilot work?",
-    a: "We run a structured two-week onboarding: your team is set up in Days 1–2, your first documents are processed in Days 3–5, live inventory and forecasts are active by Day 7, and you have a full weekly report and vendor spend analysis by Day 14. At the end, you decide whether to continue — no automatic charge, no pressure.",
+    q: "Can multiple people in my household use Neumas?",
+    a: "Yes. Neumas is built for shared households. Everyone in your family or flatmate group can scan receipts and see the same pantry. You can share your shopping list with the whole household — so whoever is at the supermarket can see exactly what's needed.",
   },
   {
-    q: "Is any hardware or integration required?",
-    a: "None. You upload documents by photo or PDF. There are no barcode scanners, POS integrations, or ERP connectors required to start. Integrations with existing systems are available for operators who want them, but they are never a prerequisite.",
+    q: "How does Neumas help me reduce food waste?",
+    a: "Neumas tracks expiry risk based on when you bought items and your typical usage rate. When something is close to expiring, you'll get a heads-up so you can use it before it goes bad. It also helps you avoid over-buying by showing you what you already have before you shop.",
   },
   {
-    q: "Who should be using Neumas on our team?",
-    a: "Typically your head of procurement, operations manager, or F&B director as the primary user. Outlet managers and purchasing staff use it to upload documents and action alerts. Your finance team uses it for spend reports and audit exports. No technical knowledge is required for any of these roles.",
+    q: "Can Neumas track my grocery spending?",
+    a: "Yes. Neumas builds a full picture of your household's grocery spending over time — by supermarket, by food category, and by item. You can see which retailer you spend the most at, which categories are taking up the biggest share of your budget, and where you can save.",
+  },
+  {
+    q: "Is my data private and secure?",
+    a: "Yes. Your receipt data and pantry information are private to your household. Neumas does not share or sell your personal data. We comply with PDPA (Personal Data Protection Act) in Singapore and applicable data protection regulations across Southeast Asia. You can delete your data at any time.",
+  },
+  {
+    q: "Does Neumas work in Malaysia and other Southeast Asian countries?",
+    a: "Yes. Neumas is designed for households across Southeast Asia. It works with receipts from Malaysian supermarkets (Jaya Grocer, Lotus's, Aeon, Mydin, Village Grocer) and other regional retailers. The app is available in English, with more languages coming soon.",
+  },
+  {
+    q: "Is Neumas free to use?",
+    a: "Neumas has a free tier that covers the core features — receipt scanning, pantry tracking, and basic shopping lists. A premium plan unlocks advanced analytics, spending intelligence, multi-household support, and unlimited receipt history. No credit card required to start.",
   },
 ];
 
@@ -44,6 +60,7 @@ export function FAQ() {
   return (
     <section
       id="faq"
+      aria-label="Frequently asked questions about Neumas"
       className="scroll-mt-24 bg-[#f5f5f7] px-5 py-28 sm:px-8"
     >
       <div className="mx-auto max-w-3xl">
@@ -53,8 +70,11 @@ export function FAQ() {
             FAQ
           </p>
           <h2 className="text-[36px] font-bold leading-tight tracking-tight text-gray-900 sm:text-[44px]">
-            Common questions.
+            Questions answered.
           </h2>
+          <p className="mt-3 text-[16px] leading-relaxed text-gray-500">
+            Everything you need to know about Neumas before you start.
+          </p>
         </div>
 
         {/* Accordion */}

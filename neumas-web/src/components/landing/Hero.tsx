@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, TrendingDown, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
 
@@ -13,41 +12,29 @@ function fadeUp(delay = 0) {
   };
 }
 
-/* ── Floating UI fragment: spend intelligence card ── */
-function SpendCard() {
+/* ── Floating UI fragment: pantry stock card ── */
+function PantryCard() {
   return (
     <div className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-xl shadow-black/[0.06]">
       <p className="mb-3 font-mono text-[10px] font-medium tracking-widest text-gray-400 uppercase">
-        This Week · Spend vs Budget
+        Pantry · Updated just now
       </p>
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-3xl font-bold tracking-tight text-gray-900">$14,280</p>
-          <p className="mt-0.5 text-xs text-gray-400">of $18,500 budget</p>
-        </div>
-        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-          <TrendingDown className="h-3.5 w-3.5" />
-          −8% vs last week
-        </span>
-      </div>
-      {/* spend bar */}
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-        <div
-          className="h-full rounded-full bg-[#0071a3]"
-          style={{ width: "77%" }}
-        />
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="space-y-2">
         {[
-          { label: "Protein", pct: 38, color: "bg-[#0071a3]" },
-          { label: "Produce", pct: 29, color: "bg-cyan-400" },
-          { label: "Dry goods", pct: 33, color: "bg-gray-300" },
-        ].map((c) => (
-          <div key={c.label}>
-            <div className="h-1 overflow-hidden rounded-full bg-gray-100">
-              <div className={`h-full rounded-full ${c.color}`} style={{ width: `${c.pct * 2.6}%` }} />
+          { name: "Rice (5kg)", days: "14 days left", pct: 80, color: "bg-emerald-400" },
+          { name: "Cooking Oil", days: "3 days left", pct: 18, color: "bg-red-400" },
+          { name: "Eggs (×30)", days: "6 days left", pct: 40, color: "bg-amber-400" },
+        ].map((item) => (
+          <div key={item.name} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-medium text-gray-800">{item.name}</p>
+                <p className="font-mono text-[10px] text-gray-400">{item.days}</p>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
+                <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+              </div>
             </div>
-            <p className="mt-1 text-[10px] text-gray-400">{c.label}</p>
           </div>
         ))}
       </div>
@@ -55,81 +42,77 @@ function SpendCard() {
   );
 }
 
-/* ── Floating UI fragment: AI alert card ── */
-function AlertCard() {
+/* ── Floating UI fragment: AI stockout alert ── */
+function StockoutCard() {
   return (
-    <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-4 shadow-lg shadow-amber-100/40 backdrop-blur-sm">
+    <div className="rounded-2xl border border-amber-100 bg-amber-50/90 p-4 shadow-lg shadow-amber-100/40 backdrop-blur-sm">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100">
           <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
         </div>
         <div>
-          <p className="text-[12px] font-semibold text-amber-900">Stockout forecast · High confidence</p>
+          <p className="text-[12px] font-semibold text-amber-900">Running low · Cooking Oil</p>
           <p className="mt-0.5 text-[11px] text-amber-700">
-            Chicken breast · Outlet 3 · 2 days remaining
+            ~3 days remaining based on your usage
           </p>
-          <div className="mt-2 h-1 overflow-hidden rounded-full bg-amber-200">
-            <div className="h-full w-[84%] rounded-full bg-amber-500" />
-          </div>
-          <p className="mt-1 font-mono text-[10px] text-amber-600">84% confidence</p>
+          <p className="mt-1.5 text-[11px] font-semibold text-amber-800">
+            Added to shopping list ✓
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Floating UI fragment: document extraction card ── */
+/* ── Floating UI fragment: receipt extraction card ── */
 function ExtractionCard() {
   return (
     <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-xl shadow-black/[0.05]">
       <div className="mb-3 flex items-center justify-between">
         <p className="font-mono text-[10px] font-medium tracking-widest text-gray-400 uppercase">
-          AI Extraction · Invoice
+          Receipt scanned
         </p>
         <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
           <CheckCircle2 className="h-3 w-3" />
-          97% confidence
+          12 items found
         </span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {[
-          { item: "Chicken Breast 5kg", qty: "6 units", price: "$189.00" },
-          { item: "Salmon Fillet 3kg", qty: "4 units", price: "$256.00" },
-          { item: "Premium Olive Oil", qty: "12 btl", price: "$144.00" },
+          { item: "Jasmine Rice 5kg", qty: "1 bag" },
+          { item: "Chicken Thighs", qty: "1.2 kg" },
+          { item: "Broccoli", qty: "400 g" },
         ].map((row) => (
           <div key={row.item} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-            <div>
-              <p className="text-[11px] font-medium text-gray-800">{row.item}</p>
-              <p className="text-[10px] text-gray-400">{row.qty}</p>
-            </div>
-            <p className="font-mono text-[11px] font-medium text-gray-700">{row.price}</p>
+            <p className="text-[11px] font-medium text-gray-800">{row.item}</p>
+            <p className="font-mono text-[10px] text-gray-500">{row.qty}</p>
           </div>
         ))}
       </div>
+      <p className="mt-2 font-mono text-[10px] text-[#0071a3]">Pantry updated automatically</p>
     </div>
   );
 }
 
-/* ── Floating UI fragment: reorder recommendation ── */
-function ReorderCard() {
+/* ── Floating UI fragment: smart shopping list card ── */
+function ShoppingListCard() {
   return (
     <div className="rounded-2xl border border-[#0071a3]/15 bg-[#f0f7fb] p-4 shadow-lg">
       <div className="flex items-center gap-2 mb-3">
         <BarChart3 className="h-4 w-4 text-[#0071a3]" />
-        <p className="text-[11px] font-semibold text-[#0071a3]">Reorder recommendations · 3 items</p>
+        <p className="text-[11px] font-semibold text-[#0071a3]">Smart shopping list · 5 items</p>
       </div>
       {[
-        { vendor: "Metro Wholesale", items: "4 items", saving: "Save $42" },
-        { vendor: "Fresh Direct SG", items: "2 items", saving: "Best price" },
+        { item: "Cooking Oil 2L", reason: "Running out in 3 days" },
+        { item: "Eggs ×30", reason: "Below weekly average" },
+        { item: "Soy Sauce", reason: "Not restocked in 3 weeks" },
       ].map((r) => (
-        <div key={r.vendor} className="flex items-center justify-between rounded-xl bg-white px-3 py-2 mb-1.5 shadow-sm">
+        <div key={r.item} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2 mb-1.5 shadow-sm">
+          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#0071a3]" />
           <div>
-            <p className="text-[11px] font-semibold text-gray-800">{r.vendor}</p>
-            <p className="text-[10px] text-gray-400">{r.items}</p>
+            <p className="text-[11px] font-semibold text-gray-800">{r.item}</p>
+            <p className="text-[10px] text-gray-400">{r.reason}</p>
           </div>
-          <span className="rounded-full bg-[#0071a3]/10 px-2 py-0.5 text-[10px] font-semibold text-[#0071a3]">
-            {r.saving}
-          </span>
         </div>
       ))}
     </div>
@@ -140,6 +123,7 @@ export function Hero() {
   return (
     <section
       id="hero"
+      aria-label="Neumas — Your Grocery Autopilot"
       className="relative overflow-hidden bg-white px-5 pb-28 pt-20 sm:px-8 sm:pb-32 sm:pt-24 lg:pt-28"
     >
       {/* Subtle background gradient */}
@@ -162,7 +146,7 @@ export function Hero() {
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[#0071a3]" />
               <span className="font-mono text-[11px] font-semibold tracking-widest text-[#0071a3] uppercase">
-                Neumas Control
+                AI-powered pantry intelligence
               </span>
             </motion.span>
 
@@ -170,18 +154,18 @@ export function Hero() {
               {...fadeUp(0.08)}
               className="text-[42px] font-bold leading-[1.08] tracking-tight text-gray-900 sm:text-[54px] lg:text-[60px]"
             >
-              Your procurement,
+              Your Grocery
               <br />
-              <span className="text-[#0071a3]">on autopilot.</span>
+              <span className="text-[#0071a3]">Autopilot.</span>
             </motion.h1>
 
             <motion.p
               {...fadeUp(0.16)}
               className="mt-6 max-w-lg text-[17px] leading-relaxed text-gray-500"
             >
-              Upload a receipt or invoice. Neumas extracts every line item,
-              updates your live inventory, forecasts stockouts, and surfaces
-              reorder intelligence — across every outlet, automatically.
+              Scan a receipt. Neumas reads every item, tracks your pantry
+              automatically, predicts what you&apos;ll run out of, and builds
+              your smart shopping list — before you even notice.
             </motion.p>
 
             <motion.div
@@ -189,28 +173,35 @@ export function Hero() {
               className="mt-9 flex flex-wrap items-center gap-3"
             >
               <Link
-                href="/pilot"
+                href="/auth"
                 className="group inline-flex items-center gap-2 rounded-xl bg-[#0071a3] px-7 py-3.5 text-[14px] font-semibold text-white shadow-md shadow-[#0071a3]/25 transition-all hover:bg-[#005f8a] hover:shadow-lg hover:shadow-[#0071a3]/30 hover:-translate-y-0.5"
               >
-                Book a demo
+                Start scanning receipts
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
-              <Link
-                href="/pilot"
+              <a
+                href="#how-it-works"
                 className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-7 py-3.5 text-[14px] font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5"
               >
-                Start pilot
-              </Link>
+                See how it works
+              </a>
             </motion.div>
 
-            <motion.div
+            <motion.p
               {...fadeUp(0.32)}
-              className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2"
+              className="mt-7 text-[13px] text-gray-400"
+            >
+              Built for households in Singapore and Southeast Asia
+            </motion.p>
+
+            <motion.div
+              {...fadeUp(0.38)}
+              className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2"
             >
               {[
-                "14-day pilot included",
-                "No hardware required",
-                "Multi-outlet ready",
+                "Free to start",
+                "No hardware needed",
+                "Works with any receipt",
               ].map((t) => (
                 <span key={t} className="flex items-center gap-1.5 text-[12px] text-gray-400">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -220,7 +211,7 @@ export function Hero() {
             </motion.div>
           </div>
 
-          {/* Right: product hero image with floating overlay cards */}
+          {/* Right: floating product cards */}
           <motion.div
             {...fadeUp(0.2)}
             className="relative hidden lg:block"
@@ -235,60 +226,35 @@ export function Hero() {
               className="absolute -left-8 bottom-1/4 h-48 w-48 rounded-full bg-cyan-400/10 blur-2xl"
             />
 
-            {/* Main hero image */}
-            <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] shadow-2xl shadow-black/[0.10]">
-              <Image
-                src="/Hero image.png"
-                alt="Neumas Control — procurement command center"
-                width={800}
-                height={560}
-                className="w-full object-cover object-top"
-                priority
-              />
-              {/* Floating stat pill over the image */}
-              <motion.div
-                animate={{ y: [0, -5, 0] }}
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                className="absolute bottom-5 left-5 flex items-center gap-2.5 rounded-2xl border border-white/60 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-sm"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
-                  <TrendingDown className="h-4 w-4 text-emerald-600" />
-                </span>
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-800">Week spend · −8% vs last</p>
-                  <p className="font-mono text-[10px] text-gray-400">$14,280 of $18,500 budget</p>
+            <div className="relative flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4">
+                  <PantryCard />
+                  <StockoutCard />
                 </div>
-              </motion.div>
-              {/* Alert pill top-right */}
-              <motion.div
-                animate={{ y: [0, 5, 0] }}
-                transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut", delay: 0.8 }}
-                className="absolute right-5 top-5 flex items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50/95 px-3 py-2 shadow-lg backdrop-blur-sm"
-              >
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                <p className="text-[11px] font-semibold text-amber-900">2 stockout forecasts</p>
-              </motion.div>
+                <div className="flex flex-col gap-4 pt-8">
+                  <ExtractionCard />
+                  <ShoppingListCard />
+                </div>
+              </div>
             </div>
           </motion.div>
         </div>
 
-        {/* Mobile product preview */}
+        {/* Mobile product preview — stacked single card */}
         <motion.div
           {...fadeUp(0.3)}
           className="mt-14 lg:hidden"
         >
-          <div className="overflow-hidden rounded-2xl border border-black/[0.06] shadow-xl shadow-black/[0.06]">
-            <Image
-              src="/Hero image.png"
-              alt="Neumas Control — procurement command center"
-              width={800}
-              height={560}
-              className="w-full object-cover"
-              priority
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <PantryCard />
+            <ExtractionCard />
           </div>
         </motion.div>
       </div>
     </section>
   );
 }
+
+
+

@@ -8,7 +8,7 @@ const NAV_LINKS = [
   { label: "How it works", id: "how-it-works" },
   { label: "Features", id: "value-stack" },
   { label: "Intelligence", id: "intelligence" },
-  { label: "Pricing", id: "pilot" },
+  { label: "Use cases", id: "use-cases" },
 ] as const;
 
 function scrollTo(id: string) {
@@ -35,11 +35,8 @@ export function Nav() {
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
         {/* Wordmark */}
-        <Link href="/" className="flex items-center gap-2.5 select-none" aria-label="Neumas Control">
+        <Link href="/" className="flex items-center gap-2.5 select-none" aria-label="Neumas">
           <span className="font-mono text-[15px] font-semibold tracking-[0.08em] text-[#0071a3]">NEUMAS</span>
-          <span className="hidden rounded bg-[#f0f7fb] px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-widest text-[#0071a3] sm:block">
-            CONTROL
-          </span>
         </Link>
 
         {/* Desktop links */}
@@ -71,10 +68,10 @@ export function Nav() {
             Sign in
           </Link>
           <Link
-            href="/pilot"
+            href="/auth"
             className="rounded-lg bg-[#0071a3] px-5 py-2 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-[#005f8a] hover:shadow-md"
           >
-            Book a demo
+            Get started free
           </Link>
         </div>
 

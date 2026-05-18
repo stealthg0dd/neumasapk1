@@ -1,35 +1,19 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-
+import { AuthRedirectIfLoggedIn } from "@/components/auth-redirect";
 import { LandingPage } from "@/components/landing/LandingPage";
-import { selectHasSession, useAuthStore } from "@/lib/store/auth";
 
+/**
+ * Public homepage — server component so all content is present in raw HTML
+ * for web crawlers, LLM scrapers, and social preview bots.
+ *
+ * Auth redirect is handled by the lightweight client component below,
+ * which re-hydrates on the client and pushes logged-in users to /dashboard
+ * without blocking the initial server render.
+ */
 export default function RootPage() {
-  const router = useRouter();
-  const hasSession = useAuthStore(selectHasSession);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
-
-  useEffect(() => {
-    if (hasHydrated && hasSession) {
-      router.replace("/dashboard");
-    }
-  }, [hasHydrated, hasSession, router]);
-
-  if (!hasHydrated) {
-    return (
-      <div className="min-h-screen bg-white">
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-10 w-10 animate-pulse rounded-xl bg-gray-200" />
-        </div>
-      </div>
-    );
-  }
-
-  if (hasSession) {
-    return null;
-  }
-
-  return <LandingPage />;
+  return (
+    <>
+      <AuthRedirectIfLoggedIn />
+      <LandingPage />
+    </>
+  );
 }

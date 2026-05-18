@@ -14,7 +14,7 @@ const TABS: Tab[] = [
   {
     id: "overview",
     label: "Overview",
-    description: "Your complete procurement command center — spend by category, outlet health, pending actions, and recent activity, all on a single screen.",
+    description: "Your complete household pantry command centre — what you have, what's running low, recent scans, and your smart shopping list, all on one screen.",
     visual: (
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] shadow-xl shadow-black/[0.06]">
         <Image
@@ -30,8 +30,8 @@ const TABS: Tab[] = [
   },
   {
     id: "documents",
-    label: "Document Review",
-    description: "Every receipt and invoice flows through an AI extraction pipeline with a human review step before anything posts to inventory.",
+    label: "Receipt Scanner",
+    description: "Every receipt you scan is processed by AI instantly — items extracted, quantities tracked, and your pantry updated automatically. Review anything flagged before it posts.",
     visual: (
       <div className="rounded-2xl border border-black/[0.06] bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
@@ -78,8 +78,8 @@ const TABS: Tab[] = [
   },
   {
     id: "alerts",
-    label: "Alerts Center",
-    description: "A consolidated view of every stockout forecast, expiry risk, price variance, and audit flag — prioritised by severity and outlet.",
+    label: "Stockout Alerts",
+    description: "A consolidated view of every stockout forecast, expiry risk, and restocking suggestion — sorted by urgency so you know exactly what to prioritise on your next shop.",
     visual: (
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] shadow-xl shadow-black/[0.06]">
         <Image
@@ -94,8 +94,8 @@ const TABS: Tab[] = [
   },
   {
     id: "reports",
-    label: "Weekly Report",
-    description: "Automated weekly procurement reports include spend by category, vendor breakdown, waste estimates, and variance analysis — exportable to PDF or CSV.",
+    label: "Weekly Summary",
+    description: "Your weekly household grocery summary — what you spent, what you bought most, what went to waste, and where you can save. Delivered automatically, every week.",
     visual: (
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] shadow-xl shadow-black/[0.06]">
         <Image
@@ -110,8 +110,8 @@ const TABS: Tab[] = [
   },
   {
     id: "vendors",
-    label: "Vendor Intelligence",
-    description: "See exactly how much you're spending with each vendor, how prices trend, and whether your current suppliers are still your best option.",
+    label: "Retailer Insights",
+    description: "See exactly how much you spend at each supermarket, how prices trend on your regular items, and whether you're getting the best deal across NTUC, Cold Storage, Sheng Siong, and more.",
     visual: (
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] shadow-xl shadow-black/[0.06]">
         <Image
@@ -133,21 +133,23 @@ export function ProductShowcase() {
   return (
     <section
       id="product"
+      aria-label="Neumas dashboard preview"
       className="scroll-mt-24 px-5 py-28 sm:px-8"
     >
       <div className="mx-auto max-w-7xl">
         {/* Heading */}
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <p className="mb-3 font-mono text-[11px] font-medium tracking-[0.15em] text-[#0071a3] uppercase">
-            The product
+            The dashboard
           </p>
           <h2 className="text-[36px] font-bold leading-tight tracking-tight text-gray-900 sm:text-[44px]">
-            A complete operator
+            Your household pantry
             <br />
-            control surface.
+            at a glance.
           </h2>
           <p className="mt-4 text-[16px] leading-relaxed text-gray-500">
-            Built for procurement managers, ops leads, and finance teams — not developers.
+            A single screen showing what you have, what&apos;s running low, and what to buy next
+            — always up to date, always accurate.
           </p>
         </div>
 
