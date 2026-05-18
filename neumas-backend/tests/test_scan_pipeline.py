@@ -86,7 +86,7 @@ class _FakeSupabase:
         self.scans = {
             self.scan_id: {
                 "id": self.scan_id,
-                "status": "queued",
+                "status": "uploaded",
                 "items_detected": 0,
                 "processing_time_ms": 0,
                 "processed_results": {},
@@ -174,7 +174,7 @@ async def test_upload_scan_success(monkeypatch):
     upload = UploadFile(filename="receipt.jpg", file=BytesIO(b"abc123"), headers={"content-type": "image/jpeg"})
 
     result = await service.upload_scan(upload, b"abc123", "receipt", tenant)
-    assert result.status == "queued"
+    assert result.status == "uploaded"
     scans_repo.create.assert_awaited_once()
     scans_repo.update.assert_awaited_once()
 
@@ -274,8 +274,8 @@ async def test_process_scan_ocr_failure_records_stage_error(monkeypatch):
         request_id="req-ocr-failure",
     )
 
-    assert result["status"] == "failed"
-    assert fake.scans[scan_id]["status"] == "failed"
+    assert result["status"] == "failed_provider_unavailable"
+    assert fake.scans[scan_id]["status"] == "failed_provider_unavailable"
     stage_errors = (fake.scans[scan_id].get("processed_results") or {}).get("stage_errors") or []
     assert any(e.get("stage") == "ocr" for e in stage_errors)
     stage_details = (fake.scans[scan_id].get("processed_results") or {}).get("stage_details") or {}
@@ -326,3 +326,59 @@ async def test_process_scan_success_recomputes_baseline_and_predictions(monkeypa
     assert stage_details.get("request_id") == "req-success"
     assert stage_details.get("baseline", {}).get("status") == "completed"
     assert stage_details.get("predictions", {}).get("status") == "completed"
+
+
+@pytest.mark.anyio
+async def test_scan_status_endpoint_schema_stable(monkeypatch):
+    tenant = TenantContext(
+        user_id=uuid4(),
+        org_id=uuid4(),
+        property_id=uuid4(),
+        role="staff",
+        jwt="token",
+    )
+    service = ScanService()
+    scan_id = uuid4()
+
+    repo = SimpleNamespace(
+        get_by_id=AsyncMock(
+            return_value={
+                "id": str(scan_id),
+                "status": "completed_with_partial_analysis",
+                "created_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "error_message": None,
+                "items_detected": 2,
+                "confidence_score": 0.5,
+                "processed_results": {
+                    "stage_details": {"ocr": {"status": "completed"}},
+                    "stage_errors": [],
+                    "items": [
+                        {"item_name": "Milk", "quantity": 2, "unit": "unit", "confidence": 0.9},
+                    ],
+                },
+            }
+        )
+    )
+    monkeypatch.setattr("app.services.scan_service.get_scans_repository", AsyncMock(return_value=repo))
+
+    result = await service.get_scan_status(scan_id, tenant)
+
+    payload = result.model_dump()
+    assert set(payload.keys()) == {
+        "scan_id",
+        "processed",
+        "status",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "error_message",
+        "items_detected",
+        "confidence_score",
+        "stage_details",
+        "stage_errors",
+        "extracted_items",
+    }
+    assert payload["processed"] is True
+    assert payload["status"] == "completed_with_partial_analysis"

@@ -152,20 +152,31 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
     const nextProgress = getScanPipelineProgress(s);
     setUploadProgress(nextProgress.value);
     setProgressLabel(nextProgress.label);
-    if (s.status === "completed" || s.status === "partial_failed" || s.status === "failed") {
+    if (
+      s.status === "completed" ||
+      s.status === "partial_failed" ||
+      s.status === "completed_with_partial_analysis" ||
+      s.status === "failed" ||
+      s.status === "failed_provider_unavailable" ||
+      s.status === "failed_invalid_file"
+    ) {
       stopPolling();
       setBusy(false);
-      if (s.status === "completed" || s.status === "partial_failed") {
+      if (
+        s.status === "completed" ||
+        s.status === "partial_failed" ||
+        s.status === "completed_with_partial_analysis"
+      ) {
         setDone(true);
         setPollTimedOut(false);
         setUploadProgress(100);
-        if (s.status === "partial_failed") {
-          toast.warning(`AI analysis finished with warnings. ${s.items_detected ?? 0} items were extracted.`);
+        if (s.status === "partial_failed" || s.status === "completed_with_partial_analysis") {
+          toast.warning("AI provider temporarily unavailable; showing extracted basics");
         } else {
           toast.success(`Extracted ${s.items_detected ?? 0} items — inventory updated.`);
         }
       } else {
-        toast.error(s.error_message ?? "Extraction failed.");
+        toast.error("Analysis failed; retry");
       }
       return true;
     }
@@ -211,7 +222,7 @@ function StepUpload({ onNext, onBack, onSkip }: { onNext: () => void; onBack: ()
       }
       setActiveScanId(sid);
       setUploadProgress(35);
-      setProgressLabel("Receipt queued");
+      setProgressLabel("Receipt uploaded, analysis pending");
       toast.success("Document queued — extracting line items…");
       startPolling(sid);
     } catch (err) {

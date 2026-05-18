@@ -204,7 +204,13 @@ class ScansRepository:
 
         if status == "processing":
             data["started_at"] = datetime.now(UTC).isoformat()
-        elif status in ("completed", "failed"):
+        elif status in (
+            "completed",
+            "completed_with_partial_analysis",
+            "failed",
+            "failed_provider_unavailable",
+            "failed_invalid_file",
+        ):
             data["completed_at"] = datetime.now(UTC).isoformat()
 
         if error_message:

@@ -1,16 +1,38 @@
 import type { MetadataRoute } from "next";
 
 import { BACKEND_URL } from "@/lib/backend-url";
+import { buildAbsoluteUrl, publicPages } from "@/lib/public-site";
+
+type InsightPost = {
+  slug: string;
+  created_at: string;
+};
+
+function getChangeFrequency(path: string): MetadataRoute.Sitemap[number]["changeFrequency"] {
+  return path.startsWith("/research/") ? "monthly" : "weekly";
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://neumas-web.vercel.app";
-
-  const staticPages = ["", "/insights", "/onboard"].map((path) => ({
-    url: baseUrl + path,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: path === "" ? 1.0 : 0.7,
-  }));
+  const publicEntries: MetadataRoute.Sitemap = [
+    {
+      url: buildAbsoluteUrl("/"),
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 1,
+    },
+    {
+      url: buildAbsoluteUrl("/insights"),
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    ...publicPages.map((page) => ({
+      url: buildAbsoluteUrl(page.path),
+      lastModified: new Date(),
+      changeFrequency: getChangeFrequency(page.path),
+      priority: page.path.startsWith("/features/") || page.path.startsWith("/use-cases/") ? 0.8 : 0.7,
+    })),
+  ];
 
   let insightPages: MetadataRoute.Sitemap = [];
   try {
@@ -18,12 +40,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       next: { revalidate: 3600 },
     });
     if (res.ok) {
-      const data = (await res.json()) as { posts?: { slug: string; created_at: string }[] };
-      const posts = data.posts ?? [];
-      insightPages = posts.map((p) => ({
-        url: `${baseUrl}/insights/${p.slug}`,
-        lastModified: new Date(p.created_at),
-        changeFrequency: "never" as const,
+      const data = (await res.json()) as { posts?: InsightPost[] };
+      insightPages = (data.posts ?? []).map((post) => ({
+        url: buildAbsoluteUrl(`/insights/${post.slug}`),
+        lastModified: new Date(post.created_at),
+        changeFrequency: "monthly",
         priority: 0.6,
       }));
     }
@@ -31,5 +52,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     /* insights API optional at build time */
   }
 
-  return [...staticPages, ...insightPages];
+  return [...publicEntries, ...insightPages];
 }

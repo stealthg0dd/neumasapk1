@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, TrendingDown, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
+import { ArrowRight, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
 
 function fadeUp(delay = 0) {
   return {

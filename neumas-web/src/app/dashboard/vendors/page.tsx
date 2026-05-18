@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Building2 } from "lucide-react";
 import { listVendors, listCatalogItems, type Vendor } from "@/lib/api/endpoints";
@@ -16,7 +16,7 @@ export default function VendorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  async function loadVendors() {
+  const loadVendors = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -28,13 +28,13 @@ export default function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function loadCatalog() {
+  const loadCatalog = useCallback(async (query?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const resp = await listCatalogItems({ q: searchQuery || undefined, page_size: 50 });
+      const resp = await listCatalogItems({ q: query || undefined, page_size: 50 });
       setCatalogItems(resp.items);
     } catch (err) {
       setError("We couldn't load the vendor catalog.");
@@ -42,19 +42,18 @@ export default function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     if (tab === "vendors") loadVendors();
-    else loadCatalog();
-  }, [tab]);
+  }, [tab, loadVendors]);
 
   useEffect(() => {
     if (tab === "catalog") {
-      const id = setTimeout(() => loadCatalog(), 300);
+      const id = setTimeout(() => loadCatalog(searchQuery), 300);
       return () => clearTimeout(id);
     }
-  }, [searchQuery, tab]);
+  }, [searchQuery, tab, loadCatalog]);
 
   const filteredVendors = vendors.filter(
     (v) =>

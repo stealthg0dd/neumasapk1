@@ -2,11 +2,11 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import {
   ArrowLeft, CheckCircle2, Circle, ShoppingCart,
-  ExternalLink, ThumbsUp, DollarSign, Package,
+  ExternalLink, ThumbsUp,
   GripVertical, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -199,9 +199,7 @@ export default function ShoppingDetailPage({
   // ── Instacart deep link ─────────────────────────────────────────────────────
 
   function handleInstacart() {
-    const names = items.filter((i) => !i.is_purchased).map((i) => i.name).join(", ");
     toast.info("Instacart integration coming soon.");
-    // In prod: window.open(`https://www.instacart.com/store/...?items=${encodeURIComponent(names)}`)
   }
 
   // ── Stats ───────────────────────────────────────────────────────────────────

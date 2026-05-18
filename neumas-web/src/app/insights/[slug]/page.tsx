@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { InsightsMarketingHeader } from "@/components/insights/InsightsMarketingHeader";
+import { StructuredData } from "@/components/public/StructuredData";
 import { BACKEND_URL } from "@/lib/backend-url";
+import { buildAbsoluteUrl, siteConfig } from "@/lib/public-site";
 
 type Post = {
   slug: string;
@@ -33,9 +35,35 @@ export async function generateMetadata({
   if (!post) {
     return { title: "Article | Neumas Insights" };
   }
+  const canonical = buildAbsoluteUrl(`/insights/${slug}`);
   return {
     title: `${post.title} | Neumas Insights`,
     description: post.summary,
+    keywords: ["Neumas insights", post.category, "grocery intelligence", "household grocery research"],
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title: `${post.title} | Neumas Insights`,
+      description: post.summary,
+      url: canonical,
+      type: "article",
+      siteName: siteConfig.name,
+      images: [
+        {
+          url: siteConfig.ogImagePath,
+          width: 1200,
+          height: 630,
+          alt: `${post.title} — ${siteConfig.name}`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${post.title} | Neumas Insights`,
+      description: post.summary,
+      images: [siteConfig.ogImagePath],
+    },
   };
 }
 
@@ -44,8 +72,55 @@ export default async function InsightArticlePage({ params }: { params: Promise<{
   const post = await fetchPost(slug);
   if (!post) notFound();
 
+  const canonical = buildAbsoluteUrl(`/insights/${slug}`);
+  const schema = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: post.title,
+      description: post.summary,
+      datePublished: post.created_at,
+      dateModified: post.created_at,
+      articleSection: post.category,
+      author: {
+        "@type": "Organization",
+        name: siteConfig.companyName,
+      },
+      publisher: {
+        "@type": "Organization",
+        name: siteConfig.companyName,
+      },
+      mainEntityOfPage: canonical,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: buildAbsoluteUrl("/"),
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Insights",
+          item: buildAbsoluteUrl("/insights"),
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: post.title,
+          item: canonical,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-white text-gray-900">
+      <StructuredData data={schema} />
       <InsightsMarketingHeader />
 
       <article className="mx-auto max-w-[720px] px-4 py-12 sm:px-6 sm:py-16">

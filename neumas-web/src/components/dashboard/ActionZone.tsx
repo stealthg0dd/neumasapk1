@@ -13,7 +13,7 @@ import {
 import type { Alert, Document } from "@/lib/api/endpoints";
 import type { Prediction } from "@/lib/api/types";
 import type { UrgencyLevel } from "@/lib/api/types";
-import { daysUntilStockout, confidenceToPercent } from "@/lib/prediction-display";
+import { daysUntilStockout } from "@/lib/prediction-display";
 import { requestReport } from "@/lib/api/endpoints";
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -21,13 +21,6 @@ const SEVERITY_DOT: Record<string, string> = {
   high:     "bg-orange-500",
   medium:   "bg-amber-400",
   low:      "bg-gray-300",
-};
-
-const URGENCY_LABEL: Record<UrgencyLevel, string> = {
-  critical: "Critical",
-  urgent:   "Urgent",
-  soon:     "Soon",
-  later:    "Later",
 };
 
 interface ActionZoneProps {

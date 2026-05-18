@@ -141,7 +141,7 @@ class ScanService:
                 "id": str(scan_id),
                 "property_id": str(tenant.property_id),
                 "scan_type": scan_type,
-                "status": "queued",
+                "status": "uploaded",
                 "image_urls": [],
                 "user_id": str(tenant.user_id),
                 "processed_results": {
@@ -192,7 +192,7 @@ class ScanService:
                     tenant,
                     scan_id,
                     {
-                        "status": "failed",
+                        "status": "failed_provider_unavailable",
                         "error_message": f"storage upload failed: {storage_exc}",
                         "processed_results": {
                             "stage_details": {
@@ -289,7 +289,7 @@ class ScanService:
 
         return ScanQueuedResponse(
             scan_id=scan_id,
-            status="queued",
+            status="uploaded",
         )
 
     async def get_scan_status(
@@ -318,7 +318,7 @@ class ScanService:
             raise ValueError(f"Scan {scan_id} not found")
 
         # Determine processed flag based on status
-        processed = scan.get("status") in {"completed", "partial_failed"}
+        processed = scan.get("status") in {"completed", "partial_failed", "completed_with_partial_analysis"}
 
         processed_results = scan.get("processed_results") or {}
         stage_details: dict[str, Any] | None = processed_results.get("stage_details")
@@ -531,7 +531,7 @@ class ScanService:
         from app.tasks.scan_tasks import _reprocess_scan_async
 
         asyncio.create_task(_reprocess_scan_async(task=None, scan_id=str(scan_id), user_hint=hint))
-        return {"scan_id": str(scan_id), "status": "queued", "hint": hint}
+        return {"scan_id": str(scan_id), "status": "uploaded", "hint": hint}
 
     async def list_scans(
         self,

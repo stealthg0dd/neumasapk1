@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, ArrowRight, Building2, Users, Workflow } from "lucide-react";
 
 type Step = "form" | "success";
@@ -37,7 +36,6 @@ const WORKFLOW_OPTIONS = [
 ];
 
 export default function PilotPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("form");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<PilotFormData>({

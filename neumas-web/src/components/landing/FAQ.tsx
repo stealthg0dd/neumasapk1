@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 const FAQS = [
@@ -55,8 +52,6 @@ const FAQS = [
 ];
 
 export function FAQ() {
-  const [open, setOpen] = useState<number | null>(null);
-
   return (
     <section
       id="faq"
@@ -80,31 +75,24 @@ export function FAQ() {
         {/* Accordion */}
         <div className="space-y-2">
           {FAQS.map((item, idx) => (
-            <div
+            <details
               key={idx}
-              className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.04] overflow-hidden"
+              className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.04]"
             >
-              <button
-                type="button"
-                onClick={() => setOpen(open === idx ? null : idx)}
-                className="flex w-full items-start justify-between gap-4 px-6 py-5 text-left"
-                aria-expanded={open === idx}
+              <summary
+                className="flex cursor-pointer list-none items-start justify-between gap-4 px-6 py-5 text-left [&::-webkit-details-marker]:hidden"
               >
                 <span className="text-[14px] font-semibold text-gray-900 leading-snug pr-2">
                   {item.q}
                 </span>
                 <ChevronDown
-                  className={`mt-0.5 h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${
-                    open === idx ? "rotate-180" : ""
-                  }`}
+                  className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 group-open:rotate-180"
                 />
-              </button>
-              {open === idx && (
-                <div className="border-t border-gray-100 px-6 pb-5 pt-4">
-                  <p className="text-[14px] leading-relaxed text-gray-500">{item.a}</p>
-                </div>
-              )}
-            </div>
+              </summary>
+              <div className="border-t border-gray-100 px-6 pb-5 pt-4">
+                <p className="text-[14px] leading-relaxed text-gray-500">{item.a}</p>
+              </div>
+            </details>
           ))}
         </div>
       </div>

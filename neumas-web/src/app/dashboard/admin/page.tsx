@@ -20,7 +20,6 @@ import {
   Settings2,
   Shield,
   Users,
-  XCircle,
   Zap,
 } from "lucide-react";
 import {

@@ -142,10 +142,12 @@ async def get_scan_status(
     Get the current status of a scan.
 
     Statuses:
-    - queued: Waiting to be processed
+    - uploaded: Receipt accepted and waiting for worker pickup
     - processing: Currently being analyzed
     - completed: Processing finished successfully
-    - failed: Processing failed
+    - completed_with_partial_analysis: Core extraction completed with fallback basics
+    - failed_provider_unavailable: Providers unavailable or timed out
+    - failed_invalid_file: Input file invalid or unreadable
     """
     try:
         return await scan_service.get_scan_status(scan_id, tenant)

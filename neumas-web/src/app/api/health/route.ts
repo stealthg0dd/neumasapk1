@@ -15,7 +15,7 @@
  *  }
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { BACKEND_URL } from "@/lib/backend-url";
 import { publicConfig, serverConfig } from "@/lib/config";
 import { withLogger, withErrorHandler } from "@/lib/api-handler";
@@ -60,7 +60,7 @@ function normalizeCheckStatus(value: unknown): "ok" | "error" | "not_configured"
   return "not_configured";
 }
 
-async function handler(_req: NextRequest): Promise<NextResponse> {
+async function handler(): Promise<NextResponse> {
   try {
     const backendResponse = await fetch(`${BACKEND_URL}/health`, {
       cache: "no-store",

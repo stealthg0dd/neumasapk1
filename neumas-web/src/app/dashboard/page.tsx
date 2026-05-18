@@ -133,7 +133,12 @@ export default function DashboardPage() {
 
   const scanSuccessRate = useMemo(() => {
     if (!scans.length) return 0;
-    const good = scans.filter((scan) => scan.status === "completed" || scan.status === "partial_failed").length;
+    const good = scans.filter(
+      (scan) =>
+        scan.status === "completed" ||
+        scan.status === "partial_failed" ||
+        scan.status === "completed_with_partial_analysis"
+    ).length;
     return Math.round((good / scans.length) * 100);
   }, [scans]);
 

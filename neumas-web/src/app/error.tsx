@@ -10,7 +10,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export default function RouteError({
   error,
@@ -19,15 +19,12 @@ export default function RouteError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const [traceId, setTraceId] = useState<string | null>(null);
-
   useEffect(() => {
     if (error.name === "ChunkLoadError") {
       window.location.reload();
       return;
     }
-    const eventId = Sentry.captureException(error);
-    setTraceId(eventId ?? null);
+    Sentry.captureException(error);
   }, [error]);
 
   if (error.name === "ChunkLoadError") {
@@ -51,11 +48,6 @@ export default function RouteError({
           An unexpected error occurred. Our team has been notified. If the
           problem persists, reload the page or contact support with the trace ID below.
         </p>
-        {traceId && (
-          <code className="block rounded bg-muted px-3 py-2 text-xs font-mono text-muted-foreground break-all">
-            Trace ID: {traceId}
-          </code>
-        )}
         {error.digest && (
           <code className="block rounded bg-muted px-3 py-2 text-xs font-mono text-muted-foreground">
             Digest: {error.digest}

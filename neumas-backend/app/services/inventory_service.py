@@ -37,6 +37,20 @@ def _compute_stock_status(item: dict[str, Any]) -> str:
     return "normal"
 
 
+def _extract_category_name(item: dict[str, Any]) -> str | None:
+    raw = item.get("category")
+    if isinstance(raw, dict):
+        name = raw.get("name")
+        return str(name) if name else None
+    if isinstance(raw, list) and raw:
+        first = raw[0]
+        if isinstance(first, dict):
+            name = first.get("name")
+            return str(name) if name else None
+    fallback = item.get("category_name")
+    return str(fallback) if fallback else None
+
+
 def _item_response(item: dict[str, Any]) -> InventoryItemResponse:
     """Build an InventoryItemResponse from a raw DB row dict."""
     return InventoryItemResponse(
@@ -313,14 +327,14 @@ class InventoryService:
         return [
             InventoryItemSummary(
                 id=UUID(item["id"]),
-                name=item["name"],
+                name=str(item.get("name") or "Unnamed item"),
                 sku=item.get("sku"),
                 quantity=Decimal(str(item.get("quantity", 0))),
                 unit=item.get("unit", "unit"),
                 stock_status=_compute_stock_status(item),
                 reorder_point=Decimal(str(item["reorder_point"])) if item.get("reorder_point") else None,
                 updated_at=item.get("updated_at"),
-                category_name=item.get("category", {}).get("name") if item.get("category") else None,
+                category_name=_extract_category_name(item),
                 vendor_id=UUID(item["vendor_id"]) if item.get("vendor_id") else None,
                 average_daily_usage=Decimal(str(item.get("average_daily_usage", 0))) if item.get("average_daily_usage") is not None else None,
             )

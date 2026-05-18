@@ -5,8 +5,6 @@
  */
 "use client";
 
-import { useState } from "react";
-
 export interface OnboardingStep {
   id: string;
   label: string;

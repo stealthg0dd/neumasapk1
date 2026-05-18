@@ -52,12 +52,12 @@ type SortKey = "name" | "expiry" | "recent";
 function downloadInventoryCSV(items: InventoryItem[], currencyCode: string) {
   const headers = ["Name", "Category", "Quantity", "Unit", "Unit Cost", "Total Value", "SKU", "Status", "Reorder Point", "Updated At"];
   const rows = items.map((item) => [
-    item.name,
+    item.name ?? "Unnamed item",
     item.category?.name ?? "",
-    item.quantity,
-    item.unit,
+    Number(item.quantity ?? 0),
+    item.unit ?? "unit",
     item.cost_per_unit != null ? formatCurrency(item.cost_per_unit, currencyCode) : "",
-    item.cost_per_unit != null ? formatCurrency(item.quantity * item.cost_per_unit, currencyCode) : "",
+    item.cost_per_unit != null ? formatCurrency(Number(item.quantity ?? 0) * item.cost_per_unit, currencyCode) : "",
     item.sku ?? "",
     item.stock_status ?? "",
     item.reorder_point ?? item.min_quantity ?? "",
@@ -303,10 +303,12 @@ export default function InventoryPage() {
     }
 
     if (sort === "name") {
-      rows.sort((a, b) => a.name.localeCompare(b.name));
+      rows.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     } else if (sort === "recent") {
       rows.sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        (a, b) =>
+          new Date(b.updated_at ?? 0).getTime() -
+          new Date(a.updated_at ?? 0).getTime()
       );
     } else if (sort === "expiry") {
       rows.sort((a, b) => {
@@ -530,7 +532,11 @@ export default function InventoryPage() {
                     {desktopSlice.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-4 py-16 text-center text-[var(--text-secondary)]">
-                          No items match.
+                          <div className="space-y-2">
+                            <p className="font-medium text-[var(--text-primary)]">Inventory is empty</p>
+                            <p className="text-sm text-[var(--text-secondary)]">Add your first receipt scan to populate stock automatically.</p>
+                            <Link href="/dashboard/scans/new" className="inline-flex min-h-[40px] items-center rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[#0071a3] hover:bg-[#0071a3]/5">Upload receipt</Link>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -634,7 +640,11 @@ export default function InventoryPage() {
               Swipe right to edit · swipe left to delete
             </p>
             {mobileSlice.length === 0 ? (
-              <GlassCard className="p-8 text-center text-[var(--text-secondary)]">No items.</GlassCard>
+              <GlassCard className="p-8 text-center">
+                <p className="font-medium text-[var(--text-primary)]">Inventory is empty</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">Add your first receipt scan to populate stock automatically.</p>
+                <Link href="/dashboard/scans/new" className="mt-4 inline-flex min-h-[40px] items-center rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[#0071a3] hover:bg-[#0071a3]/5">Upload receipt</Link>
+              </GlassCard>
             ) : (
               mobileSlice.map((item, i) => (
                 <motion.div

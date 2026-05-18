@@ -21,6 +21,7 @@ Even with RLS enforced at the database level, we filter in application
 code for defense-in-depth security.
 """
 
+import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -43,6 +44,31 @@ _ITEM_SELECT_COLUMNS = (
 _ITEM_SELECT_WITH_CATEGORY = (
     f"{_ITEM_SELECT_COLUMNS},category:inventory_categories(id,name)"
 )
+_MISSING_COLUMN_RE = re.compile(r"column\s+inventory_items\.([a-zA-Z0-9_]+)\s+does\s+not\s+exist", re.IGNORECASE)
+
+
+def _is_category_relation_schema_error(message: str) -> bool:
+    msg = (message or "").lower()
+    return (
+        "inventory_categories" in msg
+        and (
+            "schema cache" in msg
+            or "relationship" in msg
+            or "foreign key" in msg
+            or "pgrst" in msg
+        )
+    )
+
+
+def _extract_missing_inventory_column(message: str) -> str | None:
+    match = _MISSING_COLUMN_RE.search(message or "")
+    return match.group(1) if match else None
+
+
+def _strip_select_column(select_columns: str, column_name: str) -> str:
+    parts = [part.strip() for part in select_columns.split(",") if part.strip()]
+    filtered = [part for part in parts if part != column_name]
+    return ",".join(filtered)
 
 
 class InventoryRepository:
@@ -65,8 +91,18 @@ class InventoryRepository:
     def _normalize_item_payload(data: dict[str, Any]) -> dict[str, Any]:
         """Normalize payload values sent to PostgREST for inventory_items."""
         payload = dict(data)
+        for key, value in list(payload.items()):
+            if isinstance(value, Decimal):
+                payload[key] = str(value)
+                continue
+            if isinstance(value, UUID):
+                payload[key] = str(value)
+                continue
+
         if payload.get("vendor_id") is not None:
             payload["vendor_id"] = str(payload["vendor_id"])
+        if payload.get("category_id") is not None:
+            payload["category_id"] = str(payload["category_id"])
         return payload
 
     # =========================================================================
@@ -84,27 +120,51 @@ class InventoryRepository:
         RLS: Supabase will filter to items in user's accessible properties.
         Application filter: Explicit property_id check for defense-in-depth.
         """
-        try:
-            query = (
-                self.client.table(self.table)
-                .select(_ITEM_SELECT_WITH_CATEGORY)
-                .eq("id", str(item_id))
-            )
+        select_columns = _ITEM_SELECT_WITH_CATEGORY
+        while True:
+            try:
+                query = (
+                    self.client.table(self.table)
+                    .select(select_columns)
+                    .eq("id", str(item_id))
+                )
 
-            # Filter by property_id if set in tenant context
-            if tenant.property_id:
-                query = query.eq("property_id", str(tenant.property_id))
+                # Filter by property_id if set in tenant context
+                if tenant.property_id:
+                    query = query.eq("property_id", str(tenant.property_id))
 
-            response = await query.single().execute()
-            return response.data
-        except Exception as e:
-            logger.error(
-                "Failed to get inventory item",
-                item_id=str(item_id),
-                tenant=str(tenant),
-                error=str(e),
-            )
-            return None
+                response = await query.single().execute()
+                return response.data
+            except Exception as e:
+                err = str(e)
+                missing_column = _extract_missing_inventory_column(err)
+                if missing_column and missing_column in select_columns:
+                    next_select = _strip_select_column(select_columns, missing_column)
+                    if next_select != select_columns:
+                        logger.warning(
+                            "Inventory schema drift detected; retrying item fetch without missing column",
+                            item_id=str(item_id),
+                            missing_column=missing_column,
+                        )
+                        select_columns = next_select
+                        continue
+
+                if _is_category_relation_schema_error(err) and "category:inventory_categories" in select_columns:
+                    logger.warning(
+                        "Inventory category relation unavailable; retrying item fetch without category embed",
+                        item_id=str(item_id),
+                        error=err,
+                    )
+                    select_columns = _ITEM_SELECT_COLUMNS
+                    continue
+
+                logger.error(
+                    "Failed to get inventory item",
+                    item_id=str(item_id),
+                    tenant=str(tenant),
+                    error=err,
+                )
+                return None
 
     async def get_items_by_property(
         self,
@@ -125,28 +185,59 @@ class InventoryRepository:
             logger.warning("get_items_by_property called without property_id", tenant=str(tenant))
             return []
 
-        query = (
-            self.client.table(self.table)
-            .select(_ITEM_SELECT_WITH_CATEGORY)
-            .eq("property_id", str(tenant.property_id))
-        )
+        def _build_query(select_columns: str):
+            query = (
+                self.client.table(self.table)
+                .select(select_columns)
+                .eq("property_id", str(tenant.property_id))
+            )
 
-        if active_only:
-            query = query.eq("is_active", True)
+            if active_only:
+                query = query.eq("is_active", True)
 
-        if category_id:
-            query = query.eq("category_id", str(category_id))
+            if category_id:
+                query = query.eq("category_id", str(category_id))
 
-        if search:
-            query = query.or_(f"name.ilike.%{search}%,sku.ilike.%{search}%,barcode.eq.{search}")
+            if search:
+                query = query.or_(f"name.ilike.%{search}%,sku.ilike.%{search}%,barcode.eq.{search}")
 
-        response = await (
-            query
-            .order("name")
-            .range(offset, offset + limit - 1)
-            .execute()
-        )
-        return response.data
+            return query.order("name").range(offset, offset + limit - 1)
+
+        select_columns = _ITEM_SELECT_WITH_CATEGORY
+        while True:
+            try:
+                response = await _build_query(select_columns).execute()
+                rows = response.data or []
+                if "category:inventory_categories" not in select_columns:
+                    for row in rows:
+                        row.setdefault("category", None)
+                return rows
+            except Exception as e:
+                err = str(e)
+                missing_column = _extract_missing_inventory_column(err)
+                if missing_column and missing_column in select_columns:
+                    next_select = _strip_select_column(select_columns, missing_column)
+                    if next_select != select_columns:
+                        logger.warning(
+                            "Inventory schema drift detected; retrying list without missing column",
+                            missing_column=missing_column,
+                            property_id=str(tenant.property_id),
+                            org_id=str(tenant.org_id),
+                        )
+                        select_columns = next_select
+                        continue
+
+                if _is_category_relation_schema_error(err) and "category:inventory_categories" in select_columns:
+                    logger.warning(
+                        "Inventory category relation unavailable; falling back to flat select",
+                        error=err,
+                        property_id=str(tenant.property_id),
+                        org_id=str(tenant.org_id),
+                    )
+                    select_columns = _ITEM_SELECT_COLUMNS
+                    continue
+
+                raise
 
     async def get_low_stock_items(
         self,

@@ -11,7 +11,6 @@ import {
   Loader2,
   ScanLine,
   Sparkles,
-  TrendingUp,
   XCircle,
 } from "lucide-react";
 
@@ -69,12 +68,18 @@ function scanStatusBadge(status: string): string {
   switch (status) {
     case "completed":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "completed_with_partial_analysis":
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "partial_failed":
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "processing":
       return "border-sky-200 bg-sky-50 text-sky-700";
+    case "uploaded":
     case "queued":
       return "border-slate-200 bg-slate-50 text-slate-700";
+    case "failed_provider_unavailable":
+    case "failed_invalid_file":
+      return "border-red-200 bg-red-50 text-red-700";
     case "failed":
       return "border-red-200 bg-red-50 text-red-700";
     default:
@@ -86,10 +91,15 @@ function scanStatusIcon(status: string) {
   switch (status) {
     case "completed":
       return CheckCircle2;
+    case "completed_with_partial_analysis":
+      return AlertTriangle;
     case "partial_failed":
       return AlertTriangle;
     case "processing":
       return Loader2;
+    case "failed_provider_unavailable":
+    case "failed_invalid_file":
+      return XCircle;
     case "failed":
       return XCircle;
     default:
@@ -99,7 +109,15 @@ function scanStatusIcon(status: string) {
 
 function nextActionHref(scan: Scan | null, alerts: Alert[], predictions: Prediction[]): string {
   if (!scan) return "/dashboard/scans/new";
-  if (scan.status === "failed" || scan.status === "partial_failed") return `/dashboard/scans/${scan.id}`;
+  if (
+    scan.status === "failed" ||
+    scan.status === "partial_failed" ||
+    scan.status === "completed_with_partial_analysis" ||
+    scan.status === "failed_provider_unavailable" ||
+    scan.status === "failed_invalid_file"
+  ) {
+    return `/dashboard/scans/${scan.id}`;
+  }
   if (alerts.some((alert) => alert.alert_type === "predicted_stockout")) return "/dashboard/alerts";
   if (predictions.length > 0) return "/dashboard/predictions";
   return "/dashboard/shopping";
@@ -107,9 +125,17 @@ function nextActionHref(scan: Scan | null, alerts: Alert[], predictions: Predict
 
 function nextActionLabel(scan: Scan | null, alerts: Alert[], predictions: Prediction[]): string {
   if (!scan) return "Upload your first receipt";
-  if (scan.status === "failed") return "Review the failed scan";
-  if (scan.status === "partial_failed") return "Confirm extracted items and warnings";
-  if (scan.status === "queued" || scan.status === "processing") return "Watch the scan pipeline";
+  if (
+    scan.status === "failed" ||
+    scan.status === "failed_provider_unavailable" ||
+    scan.status === "failed_invalid_file"
+  ) {
+    return "Analysis failed; retry";
+  }
+  if (scan.status === "partial_failed" || scan.status === "completed_with_partial_analysis") {
+    return "AI provider temporarily unavailable; showing extracted basics";
+  }
+  if (scan.status === "uploaded" || scan.status === "queued" || scan.status === "processing") return "Watch the scan pipeline";
   if (alerts.some((alert) => alert.alert_type === "predicted_stockout")) return "Resolve stockout alerts";
   if (predictions.length > 0) return "Review the latest forecast";
   return "Generate a shopping list";
@@ -150,7 +176,7 @@ export default function ScansPage() {
   }, [load]);
 
   useEffect(() => {
-    const hasInFlight = scans.some((scan) => scan.status === "queued" || scan.status === "processing");
+    const hasInFlight = scans.some((scan) => scan.status === "queued" || scan.status === "uploaded" || scan.status === "processing");
     if (hasInFlight && !pollRef.current) {
       pollRef.current = setInterval(() => void load(), POLL_INTERVAL_MS);
     }
@@ -168,7 +194,7 @@ export default function ScansPage() {
 
   const latestScan = scans[0] ?? null;
   const inFlightCount = useMemo(
-    () => scans.filter((scan) => scan.status === "queued" || scan.status === "processing").length,
+    () => scans.filter((scan) => scan.status === "queued" || scan.status === "uploaded" || scan.status === "processing").length,
     [scans]
   );
 
@@ -218,7 +244,7 @@ export default function ScansPage() {
     );
   }
 
-  const LatestStatusIcon = scanStatusIcon(latestScan?.status ?? "queued");
+  const LatestStatusIcon = scanStatusIcon(latestScan?.status ?? "uploaded");
   const latestStageDetails = (latestScan?.stage_details as Record<string, unknown> | null | undefined) ?? null;
   const pipelineStages = [
     { key: "storage", label: "Storage" },
@@ -266,10 +292,10 @@ export default function ScansPage() {
                 </h2>
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                {latestScan?.created_at ? new Date(latestScan.created_at).toLocaleString() : "Recently queued"}
+                {latestScan?.created_at ? new Date(latestScan.created_at).toLocaleString() : "Recently uploaded"}
               </p>
             </div>
-            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${scanStatusBadge(latestScan?.status ?? "queued")}`}>
+            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${scanStatusBadge(latestScan?.status ?? "uploaded")}`}>
               {latestScan?.status.replace(/_/g, " ")}
             </span>
           </div>
@@ -309,7 +335,7 @@ export default function ScansPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">In-flight scans</p>
             <p className="mt-3 text-3xl font-bold text-gray-900">{inFlightCount}</p>
-            <p className="mt-1 text-xs text-gray-500">Queued or processing right now.</p>
+            <p className="mt-1 text-xs text-gray-500">Uploaded or processing right now.</p>
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Open alerts</p>

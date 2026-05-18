@@ -6,15 +6,23 @@ import type { Scan } from "@/lib/api/types";
 
 const STATUS_ICON: Record<string, LucideIcon> = {
   completed: CheckCircle2,
+  completed_with_partial_analysis: CheckCircle2,
+  failed_provider_unavailable: XCircle,
+  failed_invalid_file: XCircle,
   failed:    XCircle,
   processing: Clock,
+  uploaded:  Clock,
   queued:    Clock,
 };
 
 const STATUS_COLOR: Record<string, string> = {
   completed:  "text-emerald-500",
+  completed_with_partial_analysis: "text-amber-500",
+  failed_provider_unavailable: "text-red-500",
+  failed_invalid_file: "text-red-500",
   failed:     "text-red-500",
   processing: "text-amber-500",
+  uploaded:   "text-gray-400",
   queued:     "text-gray-400",
 };
 

@@ -47,7 +47,7 @@ async def test_predictions_route_normalizes_recommendation_fields(tenant: Tenant
 
 
 @pytest.mark.asyncio
-async def test_scan_service_rerun_with_hint_returns_queue_status(tenant: TenantContext):
+async def test_scan_service_rerun_with_hint_returns_uploaded_status(tenant: TenantContext):
     from app.services.scan_service import ScanService
 
     svc = ScanService()
@@ -64,7 +64,7 @@ async def test_scan_service_rerun_with_hint_returns_queue_status(tenant: TenantC
         response = await svc.rerun_with_hint(scan_id, tenant, "Treat sprite as 24 cans")
 
     assert response["scan_id"] == str(scan_id)
-    assert response["status"] == "queued"
+    assert response["status"] == "uploaded"
     assert response["hint"] == "Treat sprite as 24 cans"
     create_task.assert_called_once()
 

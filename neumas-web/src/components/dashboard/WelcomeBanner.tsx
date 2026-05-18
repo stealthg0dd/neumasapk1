@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Upload, FileCheck, BarChart2, UserPlus, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
@@ -55,23 +55,24 @@ function loadCompleted(): MilestoneId[] {
 }
 
 export function WelcomeBanner({ scanCount }: { scanCount: number }) {
-  const [show, setShow] = useState(false);
-  const [completed, setCompleted] = useState<MilestoneId[]>([]);
+  const [show, setShow] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(STORAGE_KEY) !== "1";
+  });
+  const [completed] = useState<MilestoneId[]>(() => loadCompleted());
+
+  const effectiveCompleted = useMemo(() => {
+    if (scanCount > 0 && !completed.includes("upload")) {
+      return [...completed, "upload"] as MilestoneId[];
+    }
+    return completed;
+  }, [completed, scanCount]);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem(STORAGE_KEY) === "1";
-    setShow(!dismissed);
-    setCompleted(loadCompleted());
-    // Auto-mark upload if scans already exist
-    if (scanCount > 0) {
-      const prev = loadCompleted();
-      if (!prev.includes("upload")) {
-        const next = [...prev, "upload"] as MilestoneId[];
-        setCompleted(next);
-        localStorage.setItem(COMPLETED_KEY, JSON.stringify(next));
-      }
+    if (effectiveCompleted.length !== completed.length) {
+      localStorage.setItem(COMPLETED_KEY, JSON.stringify(effectiveCompleted));
     }
-  }, [scanCount]);
+  }, [completed.length, effectiveCompleted]);
 
   function dismiss() {
     localStorage.setItem(STORAGE_KEY, "1");
@@ -80,8 +81,8 @@ export function WelcomeBanner({ scanCount }: { scanCount: number }) {
 
   if (!show) return null;
 
-  const remaining = MILESTONES.filter((m) => !completed.includes(m.id));
-  const doneCount = completed.length;
+  const remaining = MILESTONES.filter((m) => !effectiveCompleted.includes(m.id));
+  const doneCount = effectiveCompleted.length;
 
   return (
     <div className="rounded-2xl border border-[#0071a3]/15 bg-gradient-to-br from-[#f0f7fb] to-white p-6 shadow-sm">
@@ -141,9 +142,9 @@ export function WelcomeBanner({ scanCount }: { scanCount: number }) {
         </div>
       )}
 
-      {completed.length > 0 && (
+      {effectiveCompleted.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {MILESTONES.filter((m) => completed.includes(m.id)).map((m) => (
+          {MILESTONES.filter((m) => effectiveCompleted.includes(m.id)).map((m) => (
             <span
               key={m.id}
               className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700"

@@ -30,6 +30,13 @@ function statusConfig(s: string) {
         badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
         label: "Completed",
       };
+    case "completed_with_partial_analysis":
+      return {
+        Icon: AlertCircle,
+        iconClass: "text-amber-500",
+        badge: "bg-amber-100 text-amber-800 border-amber-200",
+        label: "Completed with partial analysis",
+      };
     case "processing":
       return {
         Icon: Loader2,
@@ -37,12 +44,27 @@ function statusConfig(s: string) {
         badge: "bg-blue-100 text-blue-800 border-blue-200",
         label: "Processing",
       };
+    case "uploaded":
     case "queued":
       return {
         Icon: Clock,
         iconClass: "text-amber-500",
         badge: "bg-amber-100 text-amber-800 border-amber-200",
-        label: "Queued",
+        label: "Uploaded",
+      };
+    case "failed_provider_unavailable":
+      return {
+        Icon: AlertCircle,
+        iconClass: "text-red-500",
+        badge: "bg-red-100 text-red-800 border-red-200",
+        label: "Failed: provider unavailable",
+      };
+    case "failed_invalid_file":
+      return {
+        Icon: AlertCircle,
+        iconClass: "text-red-500",
+        badge: "bg-red-100 text-red-800 border-red-200",
+        label: "Failed: invalid file",
       };
     case "failed":
       return {
@@ -127,7 +149,7 @@ function ScanRow({ scan }: { scan: Scan }) {
               </p>
             )}
 
-            {(scan.status === "failed" || scan.status === "partial_failed") && scan.error_message && (
+            {(scan.status === "failed" || scan.status === "partial_failed" || scan.status === "failed_provider_unavailable" || scan.status === "failed_invalid_file") && scan.error_message && (
               <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
                 <p className="text-xs font-medium text-red-700">Error</p>
                 <p className="mt-0.5 text-xs text-red-600 break-words">
@@ -173,7 +195,7 @@ export default function ScansHistoryPage() {
   // Auto-poll while any scan is in-flight; stop when all settle
   useEffect(() => {
     const hasInFlight = scans.some(
-      (s) => s.status === "queued" || s.status === "processing"
+      (s) => s.status === "queued" || s.status === "uploaded" || s.status === "processing"
     );
 
     if (hasInFlight && !pollRef.current) {
@@ -216,7 +238,7 @@ export default function ScansHistoryPage() {
   }
 
   const inFlight = scans.filter(
-    (s) => s.status === "queued" || s.status === "processing"
+    (s) => s.status === "queued" || s.status === "uploaded" || s.status === "processing"
   );
 
   return (

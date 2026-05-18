@@ -281,20 +281,23 @@ async def _process_scan_async(
 
         if vision_result.get("error"):
             error_msg: str = vision_result["error"]
+            reason_code = str(vision_result.get("reason_code") or "provider_unavailable")
+            failed_status = "failed_invalid_file" if reason_code == "invalid_file" else "failed_provider_unavailable"
             stage_details["ocr"] = {
                 "status": "failed",
                 "elapsed_ms": stage_details["ocr_ms"],
             }
             logger.error("VisionAgent failed", scan_id=scan_id, error=error_msg)
-            stage_errors = [{"stage": "ocr", "error": error_msg}]
+            stage_errors = [{"stage": "ocr", "error": error_msg, "reason_code": reason_code}]
             await _mark_failed(
                 supabase,
                 scan_id,
                 error_msg,
+                status=failed_status,
                 stage_details=stage_details,
                 stage_errors=stage_errors,
             )
-            result["status"] = "failed"
+            result["status"] = failed_status
             result["errors"].append({"stage": "vision", "error": error_msg})
             return result
 
@@ -530,7 +533,7 @@ async def _process_scan_async(
         total_ms = int((time.perf_counter() - wall_start) * 1000)
         logger.info(f"DEBUG: Attempting final inventory commit for Scan ID: {scan_id}")
 
-        final_status = "partial_failed" if result["errors"] else "completed"
+        final_status = "completed_with_partial_analysis" if result["errors"] else "completed"
         stage_details["total_pipeline_ms"] = total_ms
         await supabase.table("scans").update({
             "status":             final_status,
@@ -613,6 +616,7 @@ async def _process_scan_async(
                 supabase,
                 scan_id,
                 error_msg,
+                status="failed_provider_unavailable",
                 stage_details=stage_details,
                 stage_errors=result.get("errors", []) + [{"stage": "pipeline", "error": error_msg}],
             )
@@ -622,7 +626,7 @@ async def _process_scan_async(
                 scan_id=scan_id,
                 error=str(db_exc),
             )
-        result["status"] = "failed"
+        result["status"] = "failed_provider_unavailable"
         result["errors"].append({"stage": "pipeline", "error": error_msg})
         if task is not None:
             raise   # triggers Celery retry
@@ -819,12 +823,13 @@ async def _mark_failed(
     supabase: Any,
     scan_id: str,
     error_msg: str,
+    status: str = "failed_provider_unavailable",
     stage_details: dict[str, Any] | None = None,
     stage_errors: list[dict[str, Any]] | None = None,
 ) -> None:
     """Set scan status to failed and persist the error message."""
     await supabase.table("scans").update({
-        "status":        "failed",
+        "status":        status,
         "error_message": error_msg[:2000],   # guard against very long traces
         "completed_at":  datetime.now(UTC).isoformat(),
         "processed_results": {
@@ -1154,6 +1159,7 @@ async def _reprocess_scan_async(
     user_hint: str | None = None,
 ) -> dict[str, Any]:
     """Fetch the original scan record and re-run the pipeline."""
+    from app.core.config import settings
     from app.db.supabase_client import get_async_supabase_admin
 
     supabase = await get_async_supabase_admin()
@@ -1180,6 +1186,19 @@ async def _reprocess_scan_async(
     image_urls = scan.get("image_urls") or []
     if image_urls:
         image_url = image_urls[0]
+        if image_url and not (image_url.startswith("http://") or image_url.startswith("https://") or image_url.startswith("data:")):
+            try:
+                if settings.STORAGE_PUBLIC_RECEIPTS:
+                    image_url = supabase.storage.from_(settings.STORAGE_BUCKET_RECEIPTS).get_public_url(image_url)
+                else:
+                    signed = await supabase.storage.from_(settings.STORAGE_BUCKET_RECEIPTS).create_signed_url(
+                        image_url,
+                        settings.STORAGE_SIGNED_URL_EXPIRY,
+                    )
+                    if isinstance(signed, dict):
+                        image_url = signed.get("signedURL") or signed.get("signedUrl") or image_url
+            except Exception as exc:
+                logger.warning("Could not resolve signed URL for rerun", scan_id=scan_id, error=str(exc))
     elif (scan.get("raw_results") or {}).get("image_url"):
         image_url = scan["raw_results"]["image_url"]
 

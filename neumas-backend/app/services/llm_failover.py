@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -21,6 +23,25 @@ PROVIDER_LABEL = {
 class ProviderFailure(Exception):
     """Internal signal for provider-level failure that should trigger fallback."""
 
+    def __init__(self, message: str, code: str = "provider_error", best_effort_text: str | None = None):
+        super().__init__(message)
+        self.code = code
+        self.best_effort_text = best_effort_text
+
+
+class AllProvidersFailed(RuntimeError):
+    """Raised when all configured providers fail in the chain."""
+
+    def __init__(
+        self,
+        message: str,
+        failures: list[dict[str, str]],
+        best_effort_text: str | None = None,
+    ):
+        super().__init__(message)
+        self.failures = failures
+        self.best_effort_text = best_effort_text
+
 
 def _extract_status_code(exc: Exception) -> int | None:
     status_code = getattr(exc, "status_code", None)
@@ -38,6 +59,53 @@ def _extract_status_code(exc: Exception) -> int | None:
 
 def _safe_message(exc: Exception) -> str:
     return str(exc).strip() or type(exc).__name__
+
+
+def _classify_error(message: str, status: int | None = None) -> str:
+    lower = message.lower()
+    if "malformed" in lower and "json" in lower:
+        return "malformed_json"
+    if "timeout" in lower:
+        return "timeout"
+    if "import" in lower or "module named" in lower or "dependency missing" in lower:
+        return "import_failure"
+    if "api key" in lower or "missing" in lower or "not configured" in lower:
+        return "missing_provider_config"
+    if "insufficient" in lower or "credit" in lower or "quota" in lower or "rate" in lower:
+        return "quota_exceeded"
+    if status == 429:
+        return "quota_exceeded"
+    if status and status >= 500:
+        return "provider_unavailable"
+    return "provider_error"
+
+
+def _extract_json_payload(text: str) -> dict[str, Any] | None:
+    stripped = text.strip()
+    if not stripped:
+        return None
+
+    try:
+        payload = json.loads(stripped)
+        if isinstance(payload, dict):
+            return payload
+    except json.JSONDecodeError:
+        pass
+
+    for marker in ("```json", "```"):
+        if marker in stripped:
+            start = stripped.find(marker)
+            tail = stripped[start + len(marker):]
+            end = tail.find("```")
+            snippet = tail[:end] if end >= 0 else tail
+            try:
+                payload = json.loads(snippet.strip())
+                if isinstance(payload, dict):
+                    return payload
+            except json.JSONDecodeError:
+                continue
+
+    return None
 
 
 def _extract_vision_text_and_url(
@@ -121,18 +189,10 @@ async def _call_anthropic(
         }
     except Exception as exc:
         status = _extract_status_code(exc)
-        name = type(exc).__name__
         msg = _safe_message(exc)
-        is_failover = (
-            name in {"InsufficientCreditsError", "RateLimitError"}
-            or status in {400, 429}
-            or "insufficient" in msg.lower()
-            or "credit" in msg.lower()
-            or "quota" in msg.lower()
-            or "rate" in msg.lower()
-        )
-        if is_failover:
-            raise ProviderFailure(msg) from exc
+        code = _classify_error(msg, status)
+        if code in {"quota_exceeded", "missing_provider_config", "import_failure", "provider_unavailable"}:
+            raise ProviderFailure(msg, code=code) from exc
         raise
 
 
@@ -182,16 +242,10 @@ async def _call_openai(
         }
     except Exception as exc:
         msg = _safe_message(exc)
-        lower = msg.lower()
         status = _extract_status_code(exc)
-        if (
-            "rate" in lower
-            or "quota" in lower
-            or "insufficient" in lower
-            or "credit" in lower
-            or status in {400, 429}
-        ):
-            raise ProviderFailure(msg) from exc
+        code = _classify_error(msg, status)
+        if code in {"quota_exceeded", "missing_provider_config", "import_failure", "provider_unavailable"}:
+            raise ProviderFailure(msg, code=code) from exc
         raise
 
 
@@ -207,8 +261,47 @@ async def _call_google(
 
     try:
         import google.generativeai as genai
-    except ImportError as exc:
-        raise ProviderFailure("google.generativeai dependency missing") from exc
+    except ImportError:
+        genai = None
+
+    if genai is None:
+        try:
+            from google import genai as google_genai
+        except ImportError as exc:
+            raise ProviderFailure("Google GenAI dependency missing", code="import_failure") from exc
+
+        client = google_genai.Client(api_key=settings.GOOGLE_API_KEY)
+        try:
+            if is_vision and image_data and image_data.get("data"):
+                prompt_text, _ = _extract_vision_text_and_url(user_content)
+                image_bytes = base64.b64decode(image_data["data"])
+                response = await client.aio.models.generate_content(
+                    model=model,
+                    contents=[
+                        prompt_text,
+                        {
+                            "mime_type": image_data.get("media_type", "image/jpeg"),
+                            "data": image_bytes,
+                        },
+                    ],
+                )
+            elif is_vision:
+                prompt_text, image_url = _extract_vision_text_and_url(user_content)
+                combined = prompt_text if not image_url else f"{prompt_text}\n\nImage URL: {image_url}"
+                response = await client.aio.models.generate_content(model=model, contents=combined)
+            else:
+                response = await client.aio.models.generate_content(
+                    model=model,
+                    contents=user_content if isinstance(user_content, str) else str(user_content),
+                )
+
+            response_text = getattr(response, "text", "") or ""
+            return {"text": response_text, "usage": {}}
+        except Exception as exc:
+            msg = _safe_message(exc)
+            status = _extract_status_code(exc)
+            code = _classify_error(msg, status)
+            raise ProviderFailure(msg, code=code) from exc
 
     genai.configure(api_key=settings.GOOGLE_API_KEY)
     generation_config = genai.GenerationConfig(temperature=0.1, max_output_tokens=4096)
@@ -246,9 +339,10 @@ async def _call_google(
         }
     except Exception as exc:
         msg = _safe_message(exc)
-        lower = msg.lower()
-        if "rate" in lower or "quota" in lower or "limit" in lower or "429" in lower:
-            raise ProviderFailure(msg) from exc
+        status = _extract_status_code(exc)
+        code = _classify_error(msg, status)
+        if code in {"quota_exceeded", "missing_provider_config", "import_failure", "provider_unavailable"}:
+            raise ProviderFailure(msg, code=code) from exc
         raise
 
 
@@ -258,6 +352,8 @@ async def get_completion_with_failover(
     is_vision: bool = False,
     image_data: dict[str, str] | None = None,
     metadata: Mapping[str, Any] | None = None,
+    expect_json: bool = False,
+    provider_timeout_seconds: float = 30,
 ) -> dict[str, Any]:
     """Try Anthropic -> OpenAI -> Gemini and return first successful completion."""
 
@@ -270,16 +366,30 @@ async def get_completion_with_failover(
     ]
 
     failures: list[str] = []
+    failure_details: list[dict[str, str]] = []
+    best_effort_text: str | None = None
 
     for idx, (provider, model, fn) in enumerate(chain):
         try:
-            result = await fn(
-                model=model,
-                system_prompt=system_prompt,
-                user_content=user_content,
-                is_vision=is_vision,
-                image_data=image_data,
+            result = await asyncio.wait_for(
+                fn(
+                    model=model,
+                    system_prompt=system_prompt,
+                    user_content=user_content,
+                    is_vision=is_vision,
+                    image_data=image_data,
+                ),
+                timeout=provider_timeout_seconds,
             )
+            text = result.get("text", "")
+
+            if expect_json and _extract_json_payload(text) is None:
+                raise ProviderFailure(
+                    "Malformed JSON from provider",
+                    code="malformed_json",
+                    best_effort_text=text,
+                )
+
             fallback = idx > 0
             if fallback:
                 logger.info(
@@ -297,16 +407,33 @@ async def get_completion_with_failover(
                 )
 
             return {
-                "text": result.get("text", ""),
+                "text": text,
                 "provider": provider,
                 "model": model,
                 "usage": result.get("usage", {}),
                 "fallback_used": fallback,
+                "parsed_json": _extract_json_payload(text) if expect_json else None,
             }
+
+        except TimeoutError:
+            reason = f"provider timeout after {provider_timeout_seconds}s"
+            failures.append(f"{provider}: {reason}")
+            failure_details.append({"provider": provider, "reason": reason, "code": "timeout"})
+            logger.warning(
+                "Provider timed out, attempting fallback",
+                provider=provider,
+                model=model,
+                timeout_s=provider_timeout_seconds,
+                **context,
+            )
+            continue
 
         except ProviderFailure as exc:
             reason = _safe_message(exc)
             failures.append(f"{provider}: {reason}")
+            failure_details.append({"provider": provider, "reason": reason, "code": exc.code})
+            if exc.best_effort_text and not best_effort_text:
+                best_effort_text = exc.best_effort_text
 
             if provider == "anthropic":
                 logger.warning(
@@ -337,6 +464,7 @@ async def get_completion_with_failover(
         except Exception as exc:
             reason = _safe_message(exc)
             failures.append(f"{provider}: {reason}")
+            failure_details.append({"provider": provider, "reason": reason, "code": "provider_error"})
             logger.error(
                 "Provider call failed with non-retryable error",
                 provider=provider,
@@ -345,4 +473,8 @@ async def get_completion_with_failover(
                 **context,
             )
 
-    raise RuntimeError(f"All providers failed: {' | '.join(failures)}")
+    raise AllProvidersFailed(
+        f"All providers failed: {' | '.join(failures)}",
+        failures=failure_details,
+        best_effort_text=best_effort_text,
+    )

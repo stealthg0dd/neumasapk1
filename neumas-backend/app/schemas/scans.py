@@ -164,8 +164,8 @@ class ScanQueuedResponse(BaseModel):
     """Response when scan is queued for processing."""
 
     scan_id: UUID
-    status: str = "queued"
-    message: str = "Scan uploaded and queued for processing"
+    status: str = "uploaded"
+    message: str = "Receipt uploaded, analysis pending"
 
 
 class ScanStatusResponse(BaseModel):

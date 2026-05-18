@@ -19,7 +19,7 @@ export default function EditableLineItems({ documentId, lineItems }: EditableLin
     setError(null);
     try {
       await updateDocumentLineItem(documentId, item.id, { [key]: value });
-    } catch (e) {
+    } catch {
       setError("Failed to save. Try again.");
     } finally {
       setSavingId(null);

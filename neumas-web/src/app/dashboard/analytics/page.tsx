@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { getAnalyticsSummary } from "@/lib/api/endpoints";
 import type { AnalyticsSummary } from "@/lib/api/types";
@@ -149,12 +149,6 @@ function ChartCard({
       <div className="min-h-[300px]">{children}</div>
     </motion.div>
   );
-}
-
-// ── Skeleton shimmer ─────────────────────────────────────────────────────────
-
-function SkeletonCard() {
-  return <div className="h-28 rounded-2xl shimmer" />;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────

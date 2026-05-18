@@ -15,7 +15,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services.llm_failover import get_completion_with_failover
+from app.services.llm_failover import AllProvidersFailed, get_completion_with_failover
 
 logger = get_logger(__name__)
 
@@ -120,7 +120,7 @@ class VisionAgent:
                 # Fetch image and convert to base64
                 image_data = await self._fetch_image(image_url)
                 if not image_data:
-                    return self._error_response("Failed to fetch image from URL")
+                    return self._error_response("Failed to fetch image from URL", reason_code="invalid_file")
 
             # Call LLM with provider failover
             result = await self._call_with_failover(
@@ -131,6 +131,17 @@ class VisionAgent:
             )
 
             if "error" in result:
+                fallback = self._deterministic_fallback_from_text(
+                    str(result.get("ocr_text") or result.get("raw_text") or "")
+                )
+                if fallback:
+                    logger.warning(
+                        "Returning deterministic fallback receipt parsing",
+                        request_id=request_id,
+                        scan_id=scan_id,
+                        fallback_items=len(fallback.get("items", [])),
+                    )
+                    return fallback
                 return result
 
             # Post-process and validate
@@ -226,17 +237,24 @@ class VisionAgent:
                     is_vision=True,
                     image_data=image_data,
                     metadata={"request_id": request_id, "scan_id": scan_id},
+                    expect_json=True,
                 ),
                 timeout=60,
             )
 
             response_text = completion.get("text", "")
 
-            # Parse JSON from response
-            parsed = self._parse_json_response(response_text)
+            parsed = completion.get("parsed_json") or self._parse_json_response(response_text)
 
             if parsed is None:
-                return self._error_response("Failed to parse LLM response as JSON")
+                fallback = self._deterministic_fallback_from_text(response_text)
+                if fallback:
+                    return fallback
+                return self._error_response(
+                    "Failed to parse LLM response as JSON",
+                    reason_code="malformed_json",
+                    raw_text=response_text,
+                )
 
             # Add LLM metadata
             parsed["llm_provider"] = completion.get("provider")
@@ -248,6 +266,15 @@ class VisionAgent:
 
             return parsed
 
+        except AllProvidersFailed as e:
+            fallback = self._deterministic_fallback_from_text(e.best_effort_text or "")
+            if fallback:
+                return fallback
+            return self._error_response(
+                str(e),
+                reason_code="provider_unavailable",
+                raw_text=e.best_effort_text,
+            )
         except TimeoutError:
             logger.error(
                 "OCR provider timed out",
@@ -255,11 +282,14 @@ class VisionAgent:
                 request_id=request_id,
                 scan_id=scan_id,
             )
-            return self._error_response("OCR provider timeout after 60 seconds")
+            return self._error_response(
+                "OCR provider timeout after 60 seconds",
+                reason_code="timeout",
+            )
         except Exception as e:
             error_message = str(e)
             logger.exception("Vision failover call failed", error=error_message, request_id=request_id, scan_id=scan_id)
-            return self._error_response(error_message)
+            return self._error_response(error_message, reason_code="provider_unavailable")
 
     def _parse_json_response(self, response_text: str) -> dict[str, Any] | None:
         """
@@ -331,6 +361,8 @@ class VisionAgent:
             "items": processed_items,
             "receipt_metadata": result.get("receipt_metadata", {}),
             "confidence": float(result.get("confidence", 0.8)),
+            "partial_analysis": bool(result.get("partial_analysis", False)),
+            "partial_reason": result.get("partial_reason"),
             "llm_provider": result.get("llm_provider"),
             "llm_model": result.get("llm_model"),
             "usage": result.get("usage"),
@@ -400,10 +432,94 @@ class VisionAgent:
 
         return item
 
-    def _error_response(self, message: str) -> dict[str, Any]:
+    def _infer_category(self, name: str) -> str:
+        lowered = name.lower()
+        mapping = {
+            "Dairy": ["milk", "cheese", "yogurt", "butter"],
+            "Produce": ["apple", "banana", "vegetable", "tomato", "spinach", "broccoli"],
+            "Meat": ["chicken", "beef", "pork", "fish", "salmon"],
+            "Dry Goods": ["rice", "pasta", "flour", "sugar", "noodle", "lentil"],
+            "Beverages": ["juice", "water", "coffee", "tea", "soda"],
+            "Alcohol": ["beer", "wine", "whisky", "vodka"],
+            "Cleaning": ["detergent", "bleach", "soap", "cleaner", "tissue"],
+        }
+        for category, terms in mapping.items():
+            if any(term in lowered for term in terms):
+                return category
+        return "Other"
+
+    def _deterministic_fallback_from_text(self, text: str) -> dict[str, Any] | None:
+        cleaned = text.strip()
+        if not cleaned:
+            return None
+
+        lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        item_pattern = re.compile(
+            r"^(?P<name>[A-Za-z][A-Za-z0-9\s\-\(\)\./,&]{2,}?)\s+(?P<qty>\d+(?:\.\d+)?)\s*(?P<unit>kg|g|l|ml|unit|pcs|pc|pack|case|bottle|can)?\s*(?:x)?\s*(?P<price>\d+(?:\.\d{1,2})?)?$",
+            re.IGNORECASE,
+        )
+
+        items: list[dict[str, Any]] = []
+        for line in lines:
+            if len(items) >= 25:
+                break
+            match = item_pattern.match(line)
+            if not match:
+                continue
+            name = match.group("name").strip()
+            qty = self._normalize_quantity(match.group("qty"))
+            unit = (match.group("unit") or "unit").strip().lower()
+            unit_price = self._normalize_price(match.group("price"))
+            total_price = unit_price * qty if unit_price is not None else None
+            items.append(
+                {
+                    "item_name": name,
+                    "quantity": qty,
+                    "unit": unit,
+                    "unit_price": unit_price,
+                    "total_price": total_price,
+                    "category": self._infer_category(name),
+                }
+            )
+
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{2}-\d{2}-\d{4})", cleaned)
+        total_match = re.search(r"(?:total|amount due|grand total)[:\s]*([\d]+(?:\.[\d]{1,2})?)", cleaned, re.IGNORECASE)
+        vendor_name = lines[0][:120] if lines else None
+
+        if not items and not total_match and not date_match:
+            return None
+
+        return {
+            "items": items,
+            "receipt_metadata": {
+                "vendor_name": vendor_name,
+                "receipt_date": date_match.group(1) if date_match else None,
+                "receipt_total": self._normalize_price(total_match.group(1)) if total_match else None,
+                "currency": "SGD",
+            },
+            "confidence": 0.45,
+            "partial_analysis": True,
+            "partial_reason": "deterministic_fallback",
+            "llm_provider": "fallback",
+            "llm_model": "regex-parser",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+        }
+
+    def _error_response(
+        self,
+        message: str,
+        *,
+        reason_code: str = "analysis_failed",
+        raw_text: str | None = None,
+    ) -> dict[str, Any]:
         """Create standardized error response."""
         return {
             "error": message,
+            "reason_code": reason_code,
+            "raw_text": raw_text,
             "items": [],
             "confidence": 0.0,
         }

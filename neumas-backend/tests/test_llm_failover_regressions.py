@@ -20,6 +20,8 @@ async def test_google_provider_missing_dependency_is_failover_error(monkeypatch)
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "google.generativeai":
             raise ImportError("No module named google.generativeai")
+        if name == "google" and "genai" in fromlist:
+            raise ImportError("No module named google.genai")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
@@ -54,6 +56,8 @@ async def test_failover_chain_reports_google_dependency_issue_cleanly(monkeypatc
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "google.generativeai":
             raise ImportError("No module named google.generativeai")
+        if name == "google" and "genai" in fromlist:
+            raise ImportError("No module named google.genai")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
@@ -68,4 +72,4 @@ async def test_failover_chain_reports_google_dependency_issue_cleanly(monkeypatc
     message = str(exc_info.value)
     assert "anthropic: anthropic quota" in message
     assert "openai: openai quota" in message
-    assert "google: google.generativeai dependency missing" in message
+    assert "google: Google GenAI dependency missing" in message

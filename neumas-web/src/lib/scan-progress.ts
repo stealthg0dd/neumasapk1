@@ -15,7 +15,7 @@ export function getScanPipelineProgress(
   scan: Pick<ScanStatusResponse, "status" | "stage_details"> | null | undefined
 ): { value: number; label: string } {
   if (!scan) {
-    return { value: 35, label: "Receipt queued" };
+    return { value: 35, label: "Receipt uploaded, analysis pending" };
   }
 
   if (scan.status === "completed") {
@@ -26,12 +26,24 @@ export function getScanPipelineProgress(
     return { value: 100, label: "Analysis complete with warnings" };
   }
 
+  if (scan.status === "completed_with_partial_analysis") {
+    return { value: 100, label: "AI provider temporarily unavailable; showing extracted basics" };
+  }
+
+  if (scan.status === "failed_provider_unavailable" || scan.status === "failed_invalid_file") {
+    return { value: 100, label: "Analysis failed; retry" };
+  }
+
   if (scan.status === "failed") {
     return { value: 100, label: "Analysis failed" };
   }
 
   if (scan.status === "queued") {
-    return { value: 35, label: "Receipt queued" };
+    return { value: 35, label: "Receipt uploaded, analysis pending" };
+  }
+
+  if (scan.status === "uploaded") {
+    return { value: 35, label: "Receipt uploaded, analysis pending" };
   }
 
   const stageDetails = scan.stage_details;

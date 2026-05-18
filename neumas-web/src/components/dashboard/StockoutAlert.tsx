@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, ShoppingCart, Clock } from "lucide-react";
 import Link from "next/link";
 import type { Prediction, UrgencyLevel } from "@/lib/api/types";
-import { scaleOnHover } from "@/lib/design-system";
 
 // ── Urgency config ────────────────────────────────────────────────────────────
 
@@ -50,13 +50,20 @@ interface AlertRowProps {
 }
 
 function AlertRow({ prediction, index }: AlertRowProps) {
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const level   = prediction.stockout_risk_level ?? "later";
   const cfg     = URGENCY_CONFIG[level];
   const itemName = prediction.inventory_item?.name ?? "Unknown item";
   const daysLeft = Math.max(
     0,
     Math.ceil(
-      (new Date(prediction.prediction_date).getTime() - Date.now()) /
+      (new Date(prediction.prediction_date).getTime() - nowTs) /
         (1000 * 60 * 60 * 24)
     )
   );

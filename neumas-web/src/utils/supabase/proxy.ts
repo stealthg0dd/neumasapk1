@@ -7,6 +7,8 @@ import { getCanonicalAppUrl, isLegacyAppHost } from "@/lib/app-url";
 import { getSupabaseCookieOptions, getSupabasePublishableKey, getSupabaseUrl } from "./shared";
 
 export async function updateSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
   const host = request.headers.get("host");
   if (host && isLegacyAppHost(host)) {
     const canonical = new URL(getCanonicalAppUrl());
@@ -16,7 +18,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 308);
   }
 
-  let response = NextResponse.next({
+  const isProtectedPath =
+    pathname.startsWith("/dashboard") || pathname.startsWith("/app") || pathname.startsWith("/admin");
+  if (isProtectedPath) {
+    const hasSupabaseSessionCookie = request.cookies
+      .getAll()
+      .some(({ name }) => name.startsWith("sb-") && name.endsWith("-auth-token"));
+    if (!hasSupabaseSessionCookie) {
+      const loginUrl = new URL("/auth", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl, 307);
+    }
+  }
+
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },

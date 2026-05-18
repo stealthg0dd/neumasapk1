@@ -23,6 +23,7 @@ interface Props {
 }
 
 export function ReorderWidget({ propertyName }: Props) {
+  const headingLabel = propertyName ? `Reorder recommendations for ${propertyName}` : "Reorder recommendations";
   const [recs, setRecs] = useState<ReorderRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +52,7 @@ export function ReorderWidget({ propertyName }: Props) {
 
   return (
     <div className="space-y-2">
+      <p className="sr-only">{headingLabel}</p>
       {recs.map((rec) => (
         <div
           key={rec.item_id}

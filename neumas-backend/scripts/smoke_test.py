@@ -341,8 +341,17 @@ async def run(client) -> bool:
     # ------------------------------------------------------------------
     print("\n[7] Scan -- wait for completion")
     if scan_id:
+        terminal_statuses = {
+            "completed",
+            "completed_with_partial_analysis",
+            "failed",
+            "failed_provider_unavailable",
+            "failed_invalid_file",
+        }
+        success_statuses = {"completed", "completed_with_partial_analysis"}
+
         def _scan_done(b: Any) -> bool:
-            return b.get("status") in ("completed", "failed")
+            return b.get("status") in terminal_statuses
 
         completed, last = await _poll(
             client,
@@ -352,16 +361,16 @@ async def run(client) -> bool:
             label="scan",
         )
         final_status = last.get("status", "unknown") if isinstance(last, dict) else "?"
-        # We pass if status is reachable (queued/processing/completed/failed all OK;
-        # the Celery worker may not be running in this environment)
-        poll_ok = isinstance(last, dict) and "status" in last
+        poll_ok = completed and final_status in success_statuses
         note = f"final_status={final_status}"
         if completed and final_status == "completed":
             note += " (processing complete)"
-        elif completed and final_status == "failed":
+        elif completed and final_status == "completed_with_partial_analysis":
+            note += " (partial analysis fallback)"
+        elif completed and final_status in {"failed", "failed_provider_unavailable", "failed_invalid_file"}:
             note += f" error={last.get('error_message', '?')[:60]}"
         else:
-            note += " (worker not running -- status unchanged)"
+            note += " (timed out waiting for terminal status)"
         _record(f"scan {scan_id[:8]}... status", poll_ok, note)
     else:
         _skip("scan status poll", "no scan_id from upload step")

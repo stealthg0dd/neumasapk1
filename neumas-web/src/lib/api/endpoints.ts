@@ -13,37 +13,59 @@ import apiClient, { get, post, patch, del } from "./client";
 function normalizeInventoryListPayload(
   data: InventoryListResponse | Record<string, unknown>[]
 ): InventoryListResponse {
+  const toStringOr = (value: unknown, fallback: string): string =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  const toNumberOr = (value: unknown, fallback = 0): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const toNullableString = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0 ? value : null;
+  const normalizeCategory = (
+    value: unknown,
+    categoryNameFallback: unknown
+  ): { id: string; name: string } | null => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const record = value as Record<string, unknown>;
+      const name = toNullableString(record.name);
+      if (name) return { id: toStringOr(record.id, ""), name };
+    }
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object" && value[0] !== null) {
+      const first = value[0] as Record<string, unknown>;
+      const name = toNullableString(first.name);
+      if (name) return { id: toStringOr(first.id, ""), name };
+    }
+    const fallbackName = toNullableString(categoryNameFallback);
+    return fallbackName ? { id: "", name: fallbackName } : null;
+  };
+
   if (Array.isArray(data)) {
     const items: InventoryItem[] = (data as Record<string, unknown>[]).map((item) => ({
-      id: item.id as string,
-      property_id: (item.property_id as string) ?? "",
-      name: item.name as string,
+      id: toStringOr(item.id, ""),
+      property_id: toStringOr(item.property_id, ""),
+      name: toStringOr(item.name, "Unnamed item"),
       description: null,
-      sku: (item.sku as string | null) ?? null,
+      sku: toNullableString(item.sku),
       barcode: null,
-      unit: (item.unit as string) ?? "unit",
-      quantity: Number(item.quantity ?? 0),
-      min_quantity: Number(item.min_quantity ?? 0),
+      unit: toStringOr(item.unit, "unit"),
+      quantity: toNumberOr(item.quantity),
+      min_quantity: toNumberOr(item.min_quantity),
       max_quantity: null,
       reorder_point: null,
-      cost_per_unit: (item.cost_per_unit as number | null) ?? null,
+      cost_per_unit: item.cost_per_unit != null ? toNumberOr(item.cost_per_unit) : null,
       supplier_info: {},
       metadata: (item.metadata as Record<string, unknown>) ?? {},
       is_active: true,
       last_scanned_at: null,
-      created_at: (item.created_at as string) ?? new Date().toISOString(),
-      updated_at: (item.updated_at as string) ?? new Date().toISOString(),
-      category: item.category
-        ? (item.category as { id: string; name: string })
-        : item.category_name
-          ? { id: "", name: item.category_name as string }
-          : null,
-      stock_status: (item.stock_status as string) ?? "normal",
-      vendor_id: (item.vendor_id as string | null) ?? null,
+      created_at: toStringOr(item.created_at, new Date().toISOString()),
+      updated_at: toStringOr(item.updated_at, new Date().toISOString()),
+      category: normalizeCategory(item.category, item.category_name),
+      stock_status: toStringOr(item.stock_status, "normal"),
+      vendor_id: toNullableString(item.vendor_id),
       average_daily_usage:
-        item.average_daily_usage != null ? Number(item.average_daily_usage) : null,
+        item.average_daily_usage != null ? toNumberOr(item.average_daily_usage) : null,
       auto_reorder_enabled: Boolean(item.auto_reorder_enabled ?? false),
-      safety_buffer: Number(item.safety_buffer ?? 0),
+      safety_buffer: toNumberOr(item.safety_buffer),
     }));
     return {
       items,

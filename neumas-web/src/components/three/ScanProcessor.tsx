@@ -5,6 +5,16 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
 import * as THREE from "three";
 
+function createSeededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ── Ring + core ───────────────────────────────────────────────────────────────
 
 function ProcessorCore({ state }: { state: "uploading" | "processing" | "done" | "error" }) {
@@ -12,6 +22,7 @@ function ProcessorCore({ state }: { state: "uploading" | "processing" | "done" |
   const ring1Ref  = useRef<THREE.Mesh>(null);
   const ring2Ref  = useRef<THREE.Mesh>(null);
   const coreRef   = useRef<THREE.Mesh>(null);
+  const timerRef = useRef(new THREE.Timer());
 
   const color = state === "done"
     ? "#22d3ee"  // cyan
@@ -21,13 +32,14 @@ function ProcessorCore({ state }: { state: "uploading" | "processing" | "done" |
 
   useFrame((_, delta) => {
     if (!groupRef.current || !ring1Ref.current || !ring2Ref.current) return;
+    timerRef.current.update();
     const speed = state === "processing" ? 1.4 : state === "uploading" ? 0.8 : 0.2;
     ring1Ref.current.rotation.z += delta * speed;
     ring2Ref.current.rotation.z -= delta * speed * 0.6;
     ring2Ref.current.rotation.x += delta * 0.3;
 
     if (coreRef.current) {
-      const scale = 1 + Math.sin(Date.now() / 600) * (state === "processing" ? 0.1 : 0.04);
+      const scale = 1 + Math.sin(timerRef.current.getElapsed() * 1.67) * (state === "processing" ? 0.1 : 0.04);
       coreRef.current.scale.setScalar(scale);
     }
   });
@@ -68,11 +80,12 @@ function OrbitalParticles({ active }: { active: boolean }) {
   const count = 600;
 
   const positions = useMemo(() => {
+    const random = createSeededRandom(count + 11);
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const r     = 1.8 + Math.random() * 1.2;
-      const theta = Math.random() * Math.PI * 2;
-      const phi   = Math.acos(2 * Math.random() - 1);
+      const r     = 1.8 + random() * 1.2;
+      const theta = random() * Math.PI * 2;
+      const phi   = Math.acos(2 * random() - 1);
       arr[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
       arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       arr[i * 3 + 2] = r * Math.cos(phi);

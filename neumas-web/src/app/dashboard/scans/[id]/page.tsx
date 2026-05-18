@@ -64,15 +64,28 @@ function scanStatusIcon(status: string) {
   switch (status) {
     case "completed":
       return CheckCircle2;
+    case "completed_with_partial_analysis":
     case "partial_failed":
       return AlertTriangle;
     case "processing":
       return Loader2;
+    case "failed_provider_unavailable":
+    case "failed_invalid_file":
     case "failed":
       return XCircle;
     default:
       return Clock3;
   }
+}
+
+function scanStatusSummary(status: string): string {
+  if (status === "completed_with_partial_analysis" || status === "partial_failed") {
+    return "AI provider temporarily unavailable; showing extracted basics";
+  }
+  if (status === "failed_provider_unavailable" || status === "failed_invalid_file") {
+    return "Analysis failed; retry";
+  }
+  return status.replace(/_/g, " ");
 }
 
 export default function ScanDetailPage({
@@ -129,7 +142,7 @@ export default function ScanDetailPage({
   );
   const stageErrors = status?.stage_errors ?? [];
   const extractedItems = status?.extracted_items ?? [];
-  const StatusIcon = scanStatusIcon(status?.status ?? "queued");
+  const StatusIcon = scanStatusIcon(status?.status ?? "uploaded");
 
   if (loading) {
     return <PageLoadingState title="Loading scan" message="Fetching OCR, inventory, and baseline progress." />;
@@ -174,12 +187,12 @@ export default function ScanDetailPage({
               </h1>
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              {status.status.replace(/_/g, " ")} • {status.items_detected ?? 0} extracted items
+              {scanStatusSummary(status.status)} • {status.items_detected ?? 0} extracted items
               {status.confidence_score != null ? ` • ${Math.round(Number(status.confidence_score) * 100)}% confidence` : ""}
             </p>
           </div>
           <div className="grid gap-2 text-right text-sm text-slate-600">
-            <span>{scan.created_at ? new Date(scan.created_at).toLocaleString() : "Recently queued"}</span>
+            <span>{scan.created_at ? new Date(scan.created_at).toLocaleString() : "Recently uploaded"}</span>
             {status.started_at && <span>Started {new Date(status.started_at).toLocaleString()}</span>}
             {status.completed_at && <span>Completed {new Date(status.completed_at).toLocaleString()}</span>}
           </div>

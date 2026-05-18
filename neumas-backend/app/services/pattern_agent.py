@@ -235,7 +235,7 @@ async def _fetch_scans(
         .select("id, created_at, scan_type, processed_results")
         .eq("property_id", str(property_id))
         .in_("scan_type", ["receipt", "manual"])
-        .eq("status", "completed")
+        .in_("status", ["completed", "completed_with_partial_analysis", "partial_failed"])
         .gte("created_at", from_date.isoformat())
         .order("created_at")
         .execute()

@@ -16,10 +16,20 @@
  * ```
  */
 
-import { useRef, useMemo } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Points, PointMaterial, Sphere } from "@react-three/drei";
+import { useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { PerspectiveCamera, Points, PointMaterial } from "@react-three/drei";
 import * as THREE from "three";
+
+function createSeededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 // ── Floating particles ─────────────────────────────────────────────────────
 
@@ -27,12 +37,13 @@ function Particles({ count = 2000 }: { count?: number }) {
   const ref = useRef<THREE.Points>(null!);
 
   const positions = useMemo(() => {
+    const random = createSeededRandom(count + 7);
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       // Distribute in a sphere of radius 5
-      const r = 5 * Math.cbrt(Math.random()); // uniform sphere distribution
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 5 * Math.cbrt(random()); // uniform sphere distribution
+      const theta = random() * Math.PI * 2;
+      const phi = Math.acos(2 * random() - 1);
       arr[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
       arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       arr[i * 3 + 2] = r * Math.cos(phi);
@@ -93,26 +104,26 @@ function Orb({ position, color, speed, radius }: OrbProps) {
 // ── Mouse-drift camera ─────────────────────────────────────────────────────
 
 function CameraDrift() {
-  const { camera, gl } = useThree();
+  const cameraRef = useRef<THREE.PerspectiveCamera>(null);
   const mouse = useRef({ x: 0, y: 0 });
 
-  useMemo(() => {
-    const el = gl.domElement;
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       mouse.current.x = (e.clientX / window.innerWidth - 0.5) * 2;
       mouse.current.y = (e.clientY / window.innerHeight - 0.5) * 2;
     };
-    el.addEventListener("mousemove", handler);
-    return () => el.removeEventListener("mousemove", handler);
-  }, [gl]);
+    window.addEventListener("mousemove", handler);
+    return () => window.removeEventListener("mousemove", handler);
+  }, []);
 
   useFrame(() => {
-    camera.position.x += (mouse.current.x * 0.3 - camera.position.x) * 0.02;
-    camera.position.y += (-mouse.current.y * 0.2 - camera.position.y) * 0.02;
-    camera.lookAt(0, 0, 0);
+    if (!cameraRef.current) return;
+    cameraRef.current.position.x += (mouse.current.x * 0.3 - cameraRef.current.position.x) * 0.02;
+    cameraRef.current.position.y += (-mouse.current.y * 0.2 - cameraRef.current.position.y) * 0.02;
+    cameraRef.current.lookAt(0, 0, 0);
   });
 
-  return null;
+  return <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 0, 4]} fov={65} near={0.1} far={50} />;
 }
 
 // ── Scene ──────────────────────────────────────────────────────────────────
@@ -138,7 +149,6 @@ function Scene() {
 export default function ParticleField() {
   return (
     <Canvas
-      camera={{ position: [0, 0, 4], fov: 65, near: 0.1, far: 50 }}
       gl={{ antialias: false, powerPreference: "low-power", alpha: true }}
       style={{ background: "transparent" }}
       dpr={[1, 1.5]} // cap pixel ratio for performance

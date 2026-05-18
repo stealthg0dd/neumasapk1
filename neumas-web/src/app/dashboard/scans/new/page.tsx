@@ -194,7 +194,7 @@ export default function NewScanPage() {
       const sid = res.scan_id ?? res.id ?? null;
       setScanId(sid);
       setUploadProgress(35);
-      setProgressLabel("Receipt queued");
+      setProgressLabel("Receipt uploaded, analysis pending");
       toast.success("Scan queued — analyzing…");
     } catch (err) {
       captureUIError("scan_post", err);
@@ -218,7 +218,7 @@ export default function NewScanPage() {
         const nextProgress = getScanPipelineProgress(s);
         setUploadProgress(nextProgress.value);
         setProgressLabel(nextProgress.label);
-        if (s.status === "completed" || s.status === "partial_failed") {
+        if (s.status === "completed" || s.status === "partial_failed" || s.status === "completed_with_partial_analysis") {
           clearTimeout(t);
           if (pollRef.current) clearInterval(pollRef.current);
           const raw = s.extracted_items ?? [];
@@ -227,16 +227,20 @@ export default function NewScanPage() {
           setCubes(rows.map((r, i) => itemToCube(r.id, i, r.name)));
           setBusy(false);
           setUploadProgress(100);
-          if (s.status === "partial_failed") {
-            toast.warning(`Scan finished with warnings. ${rows.length} item${rows.length === 1 ? "" : "s"} extracted.`);
+          if (s.status === "partial_failed" || s.status === "completed_with_partial_analysis") {
+            toast.warning("AI provider temporarily unavailable; showing extracted basics");
           } else {
             toast.success(`Found ${rows.length} item${rows.length === 1 ? "" : "s"}.`);
           }
-        } else if (s.status === "failed") {
+        } else if (
+          s.status === "failed" ||
+          s.status === "failed_provider_unavailable" ||
+          s.status === "failed_invalid_file"
+        ) {
           clearTimeout(t);
           if (pollRef.current) clearInterval(pollRef.current);
           setBusy(false);
-          toast.error(s.error_message ?? "Scan failed.");
+          toast.error("Analysis failed; retry");
         }
       } catch {
         /* keep polling */

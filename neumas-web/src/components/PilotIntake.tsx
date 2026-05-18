@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import Link from "next/link";
 
 const businessTypes = [
   "Restaurant",
@@ -44,7 +45,7 @@ export default function PilotIntake() {
         body: JSON.stringify(form),
       });
       setSubmitted(true);
-    } catch (err) {
+    } catch {
       setError("Submission failed. Please try again.");
     }
   };
@@ -54,7 +55,7 @@ export default function PilotIntake() {
       <div className="max-w-xl mx-auto mt-16 bg-white/90 rounded-xl shadow p-8 flex flex-col items-center">
         <h2 className="text-2xl font-bold mb-2 text-gray-900">Thank you!</h2>
         <p className="text-gray-700 mb-4 text-center">Your pilot request has been received. Our team will reach out to you soon to schedule your onboarding and answer any questions.</p>
-        <a href="/" className="px-5 py-2 rounded bg-black text-white font-semibold hover:bg-gray-900 transition">Back to Home</a>
+        <Link href="/" className="px-5 py-2 rounded bg-black text-white font-semibold hover:bg-gray-900 transition">Back to Home</Link>
       </div>
     );
   }

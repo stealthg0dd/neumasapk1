@@ -242,7 +242,17 @@ export interface VendorOrderExportResponse {
 // Scans
 // ============================================================================
 
-export type ScanStatus = "pending" | "queued" | "processing" | "completed" | "partial_failed" | "failed";
+export type ScanStatus =
+  | "pending"
+  | "uploaded"
+  | "queued"
+  | "processing"
+  | "completed"
+  | "completed_with_partial_analysis"
+  | "partial_failed"
+  | "failed"
+  | "failed_provider_unavailable"
+  | "failed_invalid_file";
 export type ScanType = "receipt" | "barcode" | "full";
 
 export interface Scan {

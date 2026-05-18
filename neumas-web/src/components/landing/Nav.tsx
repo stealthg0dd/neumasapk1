@@ -121,7 +121,7 @@ export function Nav() {
               className="rounded-lg bg-[#0071a3] px-4 py-3 text-center text-sm font-semibold text-white"
               onClick={() => setOpen(false)}
             >
-              Book a demo
+              Start free
             </Link>
           </div>
         </div>

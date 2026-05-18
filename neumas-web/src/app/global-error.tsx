@@ -15,7 +15,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import NextError from "next/error";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export default function GlobalError({
   error,
@@ -24,15 +24,12 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const [traceId, setTraceId] = useState<string | null>(null);
-
   useEffect(() => {
     if (error.name === "ChunkLoadError") {
       window.location.reload();
       return;
     }
-    const eventId = Sentry.captureException(error);
-    setTraceId(eventId ?? null);
+    Sentry.captureException(error);
   }, [error]);
 
   if (error.name === "ChunkLoadError") {
@@ -56,11 +53,6 @@ export default function GlobalError({
             notified. If the problem persists, please contact support and
             include the trace ID below.
           </p>
-          {traceId && (
-            <code className="block rounded bg-[oklch(0.18_0.008_240)] px-3 py-2 text-xs font-mono text-[oklch(0.65_0.01_240)] break-all">
-              Trace ID: {traceId}
-            </code>
-          )}
           {error.digest && (
             <code className="block rounded bg-[oklch(0.18_0.008_240)] px-3 py-2 text-xs font-mono text-[oklch(0.65_0.01_240)]">
               Digest: {error.digest}

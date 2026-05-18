@@ -121,7 +121,7 @@ class RestockService:
             .select("processed_results")
             .eq("organization_id", str(tenant.org_id))
             .eq("property_id", str(tenant.property_id))
-            .in_("status", ["completed", "partial_failed"])
+            .in_("status", ["completed", "partial_failed", "completed_with_partial_analysis"])
             .gte("created_at", cutoff)
             .execute()
         )

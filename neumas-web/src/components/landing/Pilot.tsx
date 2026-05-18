@@ -75,7 +75,7 @@ export function Pilot() {
           {/* Included */}
           <div className="rounded-2xl bg-white p-7 shadow-sm ring-1 ring-black/[0.05]">
             <p className="mb-5 font-mono text-[11px] font-medium tracking-widest text-gray-400 uppercase">
-              What's included
+              What&apos;s included
             </p>
             <ul className="space-y-3">
               {INCLUDED.map((item) => (
@@ -90,7 +90,7 @@ export function Pilot() {
                 At the end of 14 days, you decide.
               </p>
               <p className="mt-1 text-[12px] text-gray-500">
-                No automatic charge. No pressure. We're confident the results speak for themselves.
+                No automatic charge. No pressure. We&apos;re confident the results speak for themselves.
               </p>
             </div>
             <a

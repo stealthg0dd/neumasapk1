@@ -7,13 +7,13 @@
  * Returns 200 on success, 503 if AGENT_OS_URL is not configured.
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { serverConfig } from "@/lib/config";
 import { withLogger, withErrorHandler } from "@/lib/api-handler";
 
 export const runtime = "nodejs";
 
-async function handler(_req: NextRequest): Promise<NextResponse> {
+async function handler(): Promise<NextResponse> {
   const { agentOsUrl, agentOsApiKey } = serverConfig;
 
   if (!agentOsUrl) {

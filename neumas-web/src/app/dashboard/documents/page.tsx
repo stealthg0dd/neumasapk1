@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FileText } from "lucide-react";
 import {
@@ -29,7 +29,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -46,9 +46,9 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [tab]);
 
-  useEffect(() => { load(); }, [tab]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleApprove(doc: Document) {
     setApprovingId(doc.id);
