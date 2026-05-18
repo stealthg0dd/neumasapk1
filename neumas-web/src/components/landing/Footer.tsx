@@ -1,11 +1,4 @@
-/* Server component */
 import Link from "next/link";
-
-function scrollTo(id: string) {
-  if (typeof document !== "undefined") {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-  }
-}
 
 const PRODUCT_LINKS = [
   { label: "How it works", id: "how-it-works" },
@@ -16,14 +9,21 @@ const PRODUCT_LINKS = [
 ];
 
 const COMPANY_LINKS = [
+  { label: "About", href: "/about" },
   { label: "Insights", href: "/insights" },
-  { label: "Contact", href: "mailto:info@neumas.ai" },
+  { label: "Research", href: "/research/ai-grocery-intelligence" },
+  { label: "Responsible AI", href: "/responsible-ai" },
+  { label: "Data Processing", href: "/data-processing" },
+  { label: "Crawler Readiness", href: "/crawler-readiness" },
+  { label: "Contact", href: "/contact" },
 ];
 
 const LEGAL_LINKS = [
   { label: "Privacy policy", href: "/privacy" },
   { label: "Terms of service", href: "/terms" },
   { label: "Security", href: "/security" },
+  { label: "Sitemap", href: "/sitemap.xml" },
+  { label: "llms.txt", href: "/llms.txt" },
 ];
 
 export function Footer() {
@@ -39,7 +39,7 @@ export function Footer() {
               </span>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-gray-500">
-              Your AI-powered grocery autopilot. Scan receipts, track your pantry, predict stockouts, and shop smarter — across Singapore and Southeast Asia.
+              Neumas is an early-stage but serious household grocery intelligence company building receipt-native pantry automation for Singapore and Southeast Asia.
             </p>
             <p className="mt-4 text-[12px] text-gray-400">
               <a
@@ -78,12 +78,12 @@ export function Footer() {
             <ul className="space-y-2.5">
               {COMPANY_LINKS.map((l) => (
                 <li key={l.label}>
-                  <a
+                  <Link
                     href={l.href}
                     className="text-[13px] text-gray-500 transition-colors hover:text-gray-900"
                   >
                     {l.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
